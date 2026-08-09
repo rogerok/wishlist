@@ -1,5 +1,6 @@
 import { NodeRuntime } from '@effect/platform-node';
+import { Layer } from 'effect';
 
-import { program } from './app.js';
+import { HttpLive } from '#server.js';
 
-NodeRuntime.runMain(program);
+// NodeRuntime.runMain(Layer.launch(HttpLive));
