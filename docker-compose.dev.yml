@@ -1,0 +1,12 @@
+services:
+  postgres:
+    image: postgres:16.3-alpine3.19
+    restart: on-failure
+    env_file: .env.development
+    container_name: ${APP_NAME}_postgres
+    volumes:
+      - data_postgres:/var/lib/postgresql/data
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+volumes:
+  data_postgres:
