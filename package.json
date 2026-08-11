@@ -9,7 +9,11 @@
     "check-types": "turbo run check-types",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:up": "pnpm --filter @wishlist/api db:up",
+    "db:down": "pnpm --filter @wishlist/api db:down",
+    "db:logs": "pnpm --filter @wishlist/api db:logs",
+    "db:ready": "pnpm --filter @wishlist/api db:ready"
   },
   "devDependencies": {
     "husky": "^9.1.7",

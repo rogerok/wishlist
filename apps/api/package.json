@@ -10,7 +10,11 @@
     }
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --env-file=.env.development src/main.ts",
+    "db:up": "docker compose --env-file .env.development -f docker-compose.dev.yml up -d --wait postgres",
+    "db:down": "docker compose --env-file .env.development -f docker-compose.dev.yml down",
+    "db:logs": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres",
+    "db:ready": "docker compose --env-file .env.development -f docker-compose.dev.yml exec postgres pg_isready -U postgres -d wishlist",
     "build": "tsc -p tsconfig.json",
     "start": "node --enable-source-maps dist/main.js",
     "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
@@ -21,6 +25,10 @@
   "dependencies": {
     "@effect/platform": "0.97.1",
     "@effect/platform-node": "0.108.1",
+    "@effect/sql": "^0.52.1",
+    "@effect/sql-drizzle": "^0.51.0",
+    "@effect/sql-pg": "^0.53.0",
+    "drizzle-orm": "0.45.2",
     "effect": "3.22.1"
   },
   "devDependencies": {
@@ -29,6 +37,7 @@
     "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.15.3",
+    "drizzle-kit": "0.31.10",
     "eslint": "^9.39.1",
     "tsx": "^4.23.11",
     "typescript": "5.9.2",
