@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 
 import {
+  NullableUserNameSchema,
   UserEmailSchema,
   UserIdSchema,
   UserNameSchema,
@@ -8,8 +9,8 @@ import {
 
 export const UserSchema = Schema.Struct({
   id: UserIdSchema,
-  lastName: Schema.optional(UserNameSchema),
-  middleName: Schema.optional(UserNameSchema),
-  firstName: Schema.optional(UserNameSchema),
+  lastName: NullableUserNameSchema,
+  middleName: NullableUserNameSchema,
+  firstName: NullableUserNameSchema,
   email: UserEmailSchema,
 });

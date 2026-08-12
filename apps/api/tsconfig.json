@@ -8,9 +8,6 @@
     "declaration": false,
     "declarationMap": false,
     "types": ["node"],
-    "paths": {
-      "#*": ["./src/*"]
-    },
     "plugins": [
       {
         "name": "@effect/language-service"

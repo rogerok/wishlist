@@ -2,7 +2,7 @@ import type { SqlClient } from '@effect/sql';
 
 import * as PgDrizzle from '@effect/sql-drizzle/Pg';
 import { PgClient } from '@effect/sql-pg';
-import { Effect, Layer, ManagedRuntime, String } from 'effect';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 
 import { PgConfig } from '#config/config.js';
 
@@ -11,8 +11,6 @@ export const PgClientLive = Layer.unwrapEffect(
     const config = yield* PgConfig;
 
     return PgClient.layer({
-      transformQueryNames: String.camelToSnake,
-      transformResultNames: String.snakeToCamel,
       url: config.postgresUrl,
       maxConnections: config.maxConnections,
       idleTimeout: config.idleTimeout,

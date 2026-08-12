@@ -1,19 +1,24 @@
 {
-  "name": "whishlist",
+  "name": "wishlist",
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "test": "turbo run test",
-    "test:watch": "turbo run test:watch",
-    "prepare": "husky",
-    "db:up": "pnpm --filter @wishlist/api db:up",
+    "db:check": "pnpm --filter @wishlist/api db:check",
     "db:down": "pnpm --filter @wishlist/api db:down",
+    "db:generate": "pnpm --filter @wishlist/api db:generate",
     "db:logs": "pnpm --filter @wishlist/api db:logs",
-    "db:ready": "pnpm --filter @wishlist/api db:ready"
+    "db:migrate": "pnpm --filter @wishlist/api db:migrate",
+    "db:push": "pnpm --filter @wishlist/api db:push",
+    "db:ready": "pnpm --filter @wishlist/api db:ready",
+    "db:studio": "pnpm --filter @wishlist/api db:studio",
+    "db:up": "pnpm --filter @wishlist/api db:up",
+    "dev": "turbo run dev",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "lint": "turbo run lint",
+    "prepare": "husky",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch"
   },
   "devDependencies": {
     "husky": "^9.1.7",

@@ -3,6 +3,7 @@ import { Schema } from 'effect';
 import { makeBrandedSchema } from '#schemas/utils.js';
 
 export const EmailSchema = Schema.String.pipe(
+  Schema.maxLength(255),
   Schema.filter(
     (value) => {
       const at = value.indexOf('@');

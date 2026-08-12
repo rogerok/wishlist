@@ -10,15 +10,20 @@
     }
   },
   "scripts": {
-    "dev": "tsx watch --env-file=.env.development src/main.ts",
-    "db:up": "docker compose --env-file .env.development -f docker-compose.dev.yml up -d --wait postgres",
-    "db:down": "docker compose --env-file .env.development -f docker-compose.dev.yml down",
-    "db:logs": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres",
-    "db:ready": "docker compose --env-file .env.development -f docker-compose.dev.yml exec postgres pg_isready -U postgres -d wishlist",
     "build": "tsc -p tsconfig.json",
-    "start": "node --enable-source-maps dist/main.js",
     "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "db:down": "docker compose --env-file .env.development -f docker-compose.dev.yml down",
+    "db:generate": "drizzle-kit generate",
+    "db:logs": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres",
+    "db:migrate": "drizzle-kit migrate",
+    "db:ready": "docker compose --env-file .env.development -f docker-compose.dev.yml exec postgres pg_isready -U postgres -d wishlist",
+    "db:up": "docker compose --env-file .env.development -f docker-compose.dev.yml up -d --wait postgres",
+    "db:check": "drizzle-kit check",
+    "db:studio": "drizzle-kit studio",
+    "db:push": "drizzle-kit push",
+    "dev": "tsx watch --env-file=.env.development src/main.ts",
     "lint": "eslint",
+    "start": "node --enable-source-maps dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -28,8 +33,9 @@
     "@effect/sql": "^0.52.1",
     "@effect/sql-drizzle": "^0.51.0",
     "@effect/sql-pg": "^0.53.0",
-    "drizzle-orm": "0.45.2",
-    "effect": "3.22.1"
+    "drizzle-orm": "1.0.0-rc.4",
+    "effect": "3.22.1",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.2",
@@ -37,7 +43,8 @@
     "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.15.3",
-    "drizzle-kit": "0.31.10",
+    "@types/pg": "^8.21.0",
+    "drizzle-kit": "1.0.0-rc.4",
     "eslint": "^9.39.1",
     "tsx": "^4.23.11",
     "typescript": "5.9.2",
