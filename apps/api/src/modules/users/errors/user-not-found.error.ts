@@ -1,4 +1,3 @@
-import { HttpApiSchema } from '@effect/platform';
 import { Schema } from 'effect';
 
 import { UserId, UserIdSchema } from '#modules/users/schemas/user.schema.js';
@@ -20,15 +19,17 @@ export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()(
     code: Schema.Literal(definition.code),
     instance: Schema.optional(Schema.String),
     requestId: Schema.optional(Schema.String),
+    cause: Schema.optional(Schema.Unknown),
   },
-  HttpApiSchema.annotations({
-    status: definition.status,
+  {
+    httpApiStatus: definition.status,
     description: 'User not found',
-  }),
+  },
 ) {}
 
 export interface MakeUserNotFoundErrorOptions {
   readonly id: UserId;
+  readonly cause?: unknown;
   readonly instance?: string;
   readonly requestId?: string;
 }

@@ -5,8 +5,8 @@ import { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 export type UserRepositoryOperation =
   | 'create'
   | 'delete'
-  | 'findAll'
-  | 'findById'
+  | 'getAll'
+  | 'getById'
   | 'update';
 
 export class UserMissing extends Data.TaggedError('UserMissing')<{

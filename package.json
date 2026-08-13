@@ -9,7 +9,6 @@
     "db:generate": "pnpm --filter @wishlist/api db:generate",
     "db:logs": "pnpm --filter @wishlist/api db:logs",
     "db:migrate": "pnpm --filter @wishlist/api db:migrate",
-    "db:push": "pnpm --filter @wishlist/api db:push",
     "db:ready": "pnpm --filter @wishlist/api db:ready",
     "db:studio": "pnpm --filter @wishlist/api db:studio",
     "db:up": "pnpm --filter @wishlist/api db:up",
@@ -25,7 +24,7 @@
     "lint-staged": "^17.3.0",
     "prettier": "^3.7.4",
     "turbo": "^2.10.9",
-    "typescript": "5.9.2"
+    "typescript": "7.0.2"
   },
   "lint-staged": {
     "apps/api/**/*.{js,mjs,cjs,ts,mts,cts}": [

@@ -10,8 +10,8 @@ export type UserId = Schema.Schema.Type<typeof UserIdSchema>;
 export const UserEmailSchema = makeEmailBrandedSchema('UserEmail');
 export type UserEmail = Schema.Schema.Type<typeof UserEmailSchema>;
 export const UserNameSchema = Schema.String.pipe(
-  Schema.minLength(1),
-  Schema.maxLength(255),
+  Schema.check(Schema.isMinLength(1)),
+  Schema.check(Schema.isMaxLength(255)),
 );
 
 export const NullableUserNameSchema = makeNullableStringSchema(UserNameSchema);
