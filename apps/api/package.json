@@ -21,26 +21,23 @@
     "db:up": "docker compose --env-file .env.development -f docker-compose.dev.yml up -d --wait postgres",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "db:push": "drizzle-kit push",
     "dev": "tsx watch --conditions=development --env-file=.env.development src/main.ts",
     "lint": "eslint",
     "start": "node --enable-source-maps dist/main.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "effect-tsgo patch --typescript --no-oxlint"
   },
   "dependencies": {
-    "@effect/platform": "0.97.1",
-    "@effect/platform-node": "0.108.1",
-    "@effect/sql": "^0.52.1",
-    "@effect/sql-drizzle": "^0.51.0",
-    "@effect/sql-pg": "^0.53.0",
-    "drizzle-orm": "1.0.0-rc.4",
-    "effect": "3.22.1",
+    "@effect/platform-node": "4.0.0-rc.108",
+    "@effect/sql-pg": "4.0.0-rc.108",
+    "drizzle-orm": "1.0.0-rc.5-169397b",
+    "effect": "4.0.0-rc.108",
     "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@effect/language-service": "^0.87.2",
-    "@effect/vitest": "0.30.0",
+    "@effect/tsgo": "^0.36.4",
+    "@effect/vitest": "4.0.0-rc.108",
     "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.15.3",
@@ -48,7 +45,7 @@
     "drizzle-kit": "1.0.0-rc.4",
     "eslint": "^9.39.1",
     "tsx": "^4.23.11",
-    "typescript": "5.9.2",
-    "vitest": "^3.2.4"
+    "typescript": "7.0.2",
+    "vitest": "^4.1.10"
   }
 }
