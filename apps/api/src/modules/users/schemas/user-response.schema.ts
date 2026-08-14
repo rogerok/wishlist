@@ -1,16 +1,18 @@
 import { Schema } from 'effect';
 
 import {
-  NullableUserNameSchema,
   UserEmailSchema,
   UserIdSchema,
+  UserNameSchema,
 } from '#modules/users/schemas/user.schema.js';
+
+const NameSchema = Schema.NullOr(UserNameSchema);
 
 export const UserResponseSchema = Schema.Struct({
   id: UserIdSchema,
-  lastName: NullableUserNameSchema,
-  middleName: NullableUserNameSchema,
-  firstName: NullableUserNameSchema,
+  lastName: NameSchema,
+  middleName: NameSchema,
+  firstName: NameSchema,
   email: UserEmailSchema,
 });
 

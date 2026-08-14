@@ -1,8 +1,8 @@
-import { Schema } from 'effect';
+import { Schema, SchemaTransformation } from 'effect';
 
 import { makeBrandedSchema } from '#schemas/utils.js';
 
-export const EmailSchema = Schema.String.pipe(
+const ValidEmailSchema = Schema.String.pipe(
   Schema.check(Schema.isMaxLength(255)),
   Schema.check(
     Schema.makeFilter<string>(
@@ -18,8 +18,20 @@ export const EmailSchema = Schema.String.pipe(
           !/\s/u.test(value)
         );
       },
-      { description: 'an email address' },
+      {
+        description: 'an email address',
+      },
     ),
+  ),
+);
+
+export const EmailSchema = Schema.String.pipe(
+  Schema.decodeTo(
+    ValidEmailSchema,
+    SchemaTransformation.transform({
+      encode: (value) => value,
+      decode: (value) => value.trim().toLowerCase(),
+    }),
   ),
 );
 

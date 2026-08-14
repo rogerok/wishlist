@@ -1,12 +1,18 @@
 import { Schema } from 'effect';
+import { HttpApiSchema } from 'effect/unstable/httpapi';
 
-import { UserEmailSchema, UserNameSchema } from './user.schema.js';
+import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 
-export const CreateUserBodySchema = Schema.TaggedStruct('CreateUserBody', {
-  middleName: Schema.NullOr(UserNameSchema),
-  firstName: Schema.NullOr(UserNameSchema),
-  lastName: Schema.NullOr(UserNameSchema),
+import { UserEmailSchema, UserNameInputSchema } from './user.schema.js';
+
+export const CreateUserBodySchema = Schema.Struct({
+  middleName: Schema.optionalKey(UserNameInputSchema),
+  firstName: Schema.optionalKey(UserNameInputSchema),
+  lastName: Schema.optionalKey(UserNameInputSchema),
   email: UserEmailSchema,
-  createdAt: Schema.DateTimeUtcFromDate,
-  updatedAt: Schema.DateTimeUtcFromDate,
 });
+export type CreateUserBody = Schema.Schema.Type<typeof CreateUserBodySchema>;
+
+export const CreateUserResponseSchema = UserResponseSchema.pipe(
+  HttpApiSchema.status(201),
+);

@@ -3,13 +3,11 @@ import { Layer } from 'effect';
 
 import { PgClientLive } from '#db/config.js';
 import { DBLive } from '#db/db.service.js';
-import { UsersRepositoryLive } from '#modules/users/repository/users.repository.js';
-import { UsersServiceLive } from '#modules/users/users.service.js';
+import { UsersModuleLive } from '#modules/users/users.module.js';
 import { HttpLive } from '#server.js';
 
 const MainLive = HttpLive.pipe(
-  Layer.provide(UsersServiceLive),
-  Layer.provide(UsersRepositoryLive),
+  Layer.provide(UsersModuleLive),
   Layer.provide(DBLive),
   Layer.provide(PgClientLive),
 );

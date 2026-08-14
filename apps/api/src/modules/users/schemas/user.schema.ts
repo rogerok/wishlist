@@ -14,4 +14,4 @@ export const UserNameSchema = Schema.String.pipe(
   Schema.check(Schema.isMaxLength(255)),
 );
 
-export const NullableUserNameSchema = makeNullableStringSchema(UserNameSchema);
+export const UserNameInputSchema = makeNullableStringSchema(UserNameSchema);
