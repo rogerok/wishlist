@@ -11,7 +11,7 @@ import {
 import { SqlError } from 'effect/unstable/sql';
 
 import { DB } from '#db/db.service.js';
-import { users } from '#db/schema/users.js';
+import { users, USERS_EMAIL_UNIQUE_CONSTRAINT } from '#db/schema/users.js';
 import {
   makeInvalidUserRecordError,
   makeUserEmailAlreadyExistsError,
@@ -50,7 +50,7 @@ const isUsersEmailUniqueViolation = (error: unknown): boolean => {
       Cause.isFailReason(reason) &&
       SqlError.isSqlError(reason.error) &&
       reason.error.reason._tag === 'UniqueViolation' &&
-      reason.error.reason.constraint === 'users_email_key',
+      reason.error.reason.constraint === USERS_EMAIL_UNIQUE_CONSTRAINT,
   );
 };
 
@@ -91,9 +91,7 @@ export const UsersRepositoryLive = Layer.effect(
         const [row] = yield* db
           .insert(users)
           .values(input)
-          .onConflictDoNothing({
-            target: users.email,
-          })
+          .onConflictDoNothing()
           .returning(userSelection)
           .pipe(
             Effect.mapError((cause) =>
