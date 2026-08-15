@@ -23,6 +23,15 @@ import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 // TODO: нужен middleware для ошибок валидации
 
 export const usersGroup = HttpApiGroup.make('users').add(
+  HttpApiEndpoint.post('create', '/api/users', {
+    payload: CreateUserBodySchema,
+    success: CreateUserResponseSchema,
+    error: [
+      UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
+      UsersInternalHttpError.pipe(asProblemJson),
+      UsersUnavailableHttpError.pipe(asProblemJson),
+    ],
+  }),
   HttpApiEndpoint.get('getAll', '/api/users', {
     success: Schema.Array(UserResponseSchema),
     error: [
@@ -39,24 +48,15 @@ export const usersGroup = HttpApiGroup.make('users').add(
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  HttpApiEndpoint.post('create', '/api/users', {
-    payload: CreateUserBodySchema,
-    success: CreateUserResponseSchema,
-    error: [
-      UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      UsersInternalHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
-    ],
-  }),
   HttpApiEndpoint.put('update', '/api/users/:id', {
     params: { id: UserIdSchema },
     payload: UpdateUserBodySchema,
     success: UserResponseSchema,
     error: [
       UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
+      UserNotFoundHttpError.pipe(asProblemJson),
       UsersInternalHttpError.pipe(asProblemJson),
       UsersUnavailableHttpError.pipe(asProblemJson),
-      UserNotFoundHttpError.pipe(asProblemJson),
     ],
   }),
   HttpApiEndpoint.delete('delete', '/api/users/:id', {

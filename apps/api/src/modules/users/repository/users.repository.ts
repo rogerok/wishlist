@@ -55,16 +55,13 @@ const isUsersEmailUniqueViolation = (error: unknown): boolean => {
 };
 
 export interface UsersRepositoryShape {
+  readonly create: (
+    input: CreateUserBody,
+  ) => Effect.Effect<UserResponse, UsersRepositoryCreateError>;
   readonly getAll: Effect.Effect<
     ReadonlyArray<UserResponse>,
     UsersRepositoryGetAllError
   >;
-  readonly create: (
-    input: CreateUserBody,
-  ) => Effect.Effect<UserResponse, UsersRepositoryCreateError>;
-  readonly deleteById: (
-    id: UserId,
-  ) => Effect.Effect<boolean, UsersRepositoryDeleteError>;
   readonly getById: (
     id: UserId,
   ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByIdError>;
@@ -72,6 +69,9 @@ export interface UsersRepositoryShape {
     id: UserId,
     input: UpdateUserBody,
   ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryUpdateError>;
+  readonly deleteById: (
+    id: UserId,
+  ) => Effect.Effect<boolean, UsersRepositoryDeleteError>;
 }
 
 export class UsersRepository extends Context.Service<
@@ -117,41 +117,6 @@ export const UsersRepositoryLive = Layer.effect(
             }),
           ),
         );
-      });
-
-    const update: UsersRepositoryShape['update'] = (id, input) =>
-      Effect.gen(function* () {
-        const [row] = yield* db
-          .update(users)
-          .set(input)
-          .where(eq(users.id, id))
-          .returning(userSelection)
-          .pipe(
-            Effect.mapError((cause) =>
-              isUsersEmailUniqueViolation(cause)
-                ? makeUserEmailAlreadyExistsError({
-                    email: input.email,
-                    operation: 'update',
-                  })
-                : makeUsersRepositoryError({ cause, operation: 'update' }),
-            ),
-          );
-
-        if (row === undefined) {
-          return Option.none();
-        }
-
-        const user = yield* decodeUser(row).pipe(
-          Effect.mapError((cause) =>
-            makeInvalidUserRecordError({
-              cause,
-              id: row.id,
-              operation: 'update',
-            }),
-          ),
-        );
-
-        return Option.some(user);
       });
 
     const getAll: UsersRepositoryShape['getAll'] = db
@@ -209,6 +174,40 @@ export const UsersRepositoryLive = Layer.effect(
 
         return Option.some(user);
       });
+    const update: UsersRepositoryShape['update'] = (id, input) =>
+      Effect.gen(function* () {
+        const [row] = yield* db
+          .update(users)
+          .set(input)
+          .where(eq(users.id, id))
+          .returning(userSelection)
+          .pipe(
+            Effect.mapError((cause) =>
+              isUsersEmailUniqueViolation(cause)
+                ? makeUserEmailAlreadyExistsError({
+                    email: input.email,
+                    operation: 'update',
+                  })
+                : makeUsersRepositoryError({ cause, operation: 'update' }),
+            ),
+          );
+
+        if (row === undefined) {
+          return Option.none();
+        }
+
+        const user = yield* decodeUser(row).pipe(
+          Effect.mapError((cause) =>
+            makeInvalidUserRecordError({
+              cause,
+              id: row.id,
+              operation: 'update',
+            }),
+          ),
+        );
+
+        return Option.some(user);
+      });
 
     const deleteById: UsersRepositoryShape['deleteById'] = (id) =>
       db
@@ -223,11 +222,11 @@ export const UsersRepositoryLive = Layer.effect(
         );
 
     return {
+      create,
       getAll,
       getById,
-      deleteById,
-      create,
       update,
+      deleteById,
     };
   }),
 );

@@ -27,25 +27,25 @@ class UsersRepositoryError extends Data.TaggedError('UsersRepositoryError')<{
   readonly operation: UserRepositoryOperation;
 }> {}
 
-export type UsersRepositoryGetByIdError =
+export type UsersRepositoryCreateError =
   | InvalidUserRecord
+  | UserEmailAlreadyExists
   | UsersRepositoryError;
 
 export type UsersRepositoryGetAllError =
   | InvalidUserRecord
   | UsersRepositoryError;
 
-export type UsersRepositoryCreateError =
+export type UsersRepositoryGetByIdError =
   | InvalidUserRecord
-  | UserEmailAlreadyExists
   | UsersRepositoryError;
-
-export type UsersRepositoryDeleteError = UsersRepositoryError;
 
 export type UsersRepositoryUpdateError =
   | InvalidUserRecord
   | UserEmailAlreadyExists
   | UsersRepositoryError;
+
+export type UsersRepositoryDeleteError = UsersRepositoryError;
 
 interface MakeInvalidUserRecordErrorOptions {
   readonly cause: InvalidUserRecord['cause'];

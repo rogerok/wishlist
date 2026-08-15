@@ -13,11 +13,10 @@ import {
 import { UserId } from '#modules/users/schemas/user.schema.js';
 import { UsersService } from '#modules/users/service/users.service.js';
 
-const logGetByIdFailure = (message: string, cause: unknown, id: UserId) =>
+const logCreateFailure = (message: string, cause: unknown) =>
   Effect.logError(message, cause).pipe(
     Effect.annotateLogs({
-      operation: 'users.getById',
-      userId: id,
+      operation: 'users.create',
     }),
   );
 
@@ -28,18 +27,11 @@ const logGetAllFailure = (message: string, cause: unknown) =>
     }),
   );
 
-const logDeleteByIdFailure = (message: string, cause: unknown, id: UserId) =>
+const logGetByIdFailure = (message: string, cause: unknown, id: UserId) =>
   Effect.logError(message, cause).pipe(
     Effect.annotateLogs({
-      operation: 'users.deleteById',
+      operation: 'users.getById',
       userId: id,
-    }),
-  );
-
-const logCreateFailure = (message: string, cause: unknown) =>
-  Effect.logError(message, cause).pipe(
-    Effect.annotateLogs({
-      operation: 'users.create',
     }),
   );
 
@@ -47,6 +39,14 @@ const logUpdateFailure = (message: string, cause: unknown) =>
   Effect.logError(message, cause).pipe(
     Effect.annotateLogs({
       operation: 'users.update',
+    }),
+  );
+
+const logDeleteByIdFailure = (message: string, cause: unknown, id: UserId) =>
+  Effect.logError(message, cause).pipe(
+    Effect.annotateLogs({
+      operation: 'users.deleteById',
+      userId: id,
     }),
   );
 
@@ -61,43 +61,19 @@ export const UsersHandlersLive = HttpApiBuilder.group(
             Effect.catchTags({
               UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
 
-              UsersUnavailableError: (cause) =>
-                logCreateFailure('Failed to create user', cause).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(usersCollectionInstance),
-                  ),
-                ),
-
               UserDataIntegrityError: (cause) =>
                 logCreateFailure('Invalid created user record', cause).pipe(
                   Effect.andThen(
                     makeUsersInternalHttpError(usersCollectionInstance),
                   ),
                 ),
-            }),
-          ),
-        ),
-      )
-      .handle('update', ({ params: { id }, payload }) =>
-        UsersService.use((service) =>
-          service.update(id, payload).pipe(
-            Effect.catchTags({
-              UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
+
               UsersUnavailableError: (cause) =>
-                logUpdateFailure('Failed to update user', cause).pipe(
+                logCreateFailure('Failed to create user', cause).pipe(
                   Effect.andThen(
                     makeUsersUnavailableHttpError(usersCollectionInstance),
                   ),
                 ),
-
-              UserDataIntegrityError: (cause) =>
-                logUpdateFailure('Invalid updated user record', cause).pipe(
-                  Effect.andThen(
-                    makeUsersInternalHttpError(usersCollectionInstance),
-                  ),
-                ),
-
-              UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
             }),
           ),
         ),
@@ -106,17 +82,17 @@ export const UsersHandlersLive = HttpApiBuilder.group(
         UsersService.use((service) =>
           service.getAll.pipe(
             Effect.catchTags({
-              UsersUnavailableError: (cause) =>
-                logGetAllFailure('Failed to get users', cause).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(usersCollectionInstance),
-                  ),
-                ),
-
               UserDataIntegrityError: (cause) =>
                 logGetAllFailure('Invalid user records', cause).pipe(
                   Effect.andThen(
                     makeUsersInternalHttpError(usersCollectionInstance),
+                  ),
+                ),
+
+              UsersUnavailableError: (cause) =>
+                logGetAllFailure('Failed to get users', cause).pipe(
+                  Effect.andThen(
+                    makeUsersUnavailableHttpError(usersCollectionInstance),
                   ),
                 ),
             }),
@@ -129,17 +105,42 @@ export const UsersHandlersLive = HttpApiBuilder.group(
             Effect.catchTags({
               UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
 
+              UserDataIntegrityError: (cause) =>
+                logGetByIdFailure('Invalid user record', cause, id).pipe(
+                  Effect.andThen(
+                    makeUsersInternalHttpError(makeByIdInstance(id)),
+                  ),
+                ),
+
               UsersUnavailableError: (cause) =>
                 logGetByIdFailure('Failed to get user', cause, id).pipe(
                   Effect.andThen(
                     makeUsersUnavailableHttpError(makeByIdInstance(id)),
                   ),
                 ),
+            }),
+          ),
+        ),
+      )
+      .handle('update', ({ params: { id }, payload }) =>
+        UsersService.use((service) =>
+          service.update(id, payload).pipe(
+            Effect.catchTags({
+              UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
+
+              UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
 
               UserDataIntegrityError: (cause) =>
-                logGetByIdFailure('Invalid user record', cause, id).pipe(
+                logUpdateFailure('Invalid updated user record', cause).pipe(
                   Effect.andThen(
-                    makeUsersInternalHttpError(makeByIdInstance(id)),
+                    makeUsersInternalHttpError(usersCollectionInstance),
+                  ),
+                ),
+
+              UsersUnavailableError: (cause) =>
+                logUpdateFailure('Failed to update user', cause).pipe(
+                  Effect.andThen(
+                    makeUsersUnavailableHttpError(usersCollectionInstance),
                   ),
                 ),
             }),
@@ -150,14 +151,14 @@ export const UsersHandlersLive = HttpApiBuilder.group(
         UsersService.use((service) =>
           service.deleteById(id).pipe(
             Effect.catchTags({
+              UserNotFound: () => makeUserNotFoundHttpError(id),
+
               UsersUnavailableError: (cause) =>
                 logDeleteByIdFailure('Failed to delete user', cause, id).pipe(
                   Effect.andThen(
                     makeUsersUnavailableHttpError(makeByIdInstance(id)),
                   ),
                 ),
-
-              UserNotFound: () => makeUserNotFoundHttpError(id),
             }),
           ),
         ),

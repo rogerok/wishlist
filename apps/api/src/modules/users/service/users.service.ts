@@ -18,17 +18,13 @@ import {
 } from '#modules/users/service/users.service.errors.js';
 
 export interface UsersServiceShape {
+  readonly create: (
+    input: CreateUserBody,
+  ) => Effect.Effect<UserResponse, UsersServiceCreateError>;
   readonly getAll: Effect.Effect<
     ReadonlyArray<UserResponse>,
     UsersServiceGetAllError
   >;
-
-  readonly create: (
-    input: CreateUserBody,
-  ) => Effect.Effect<UserResponse, UsersServiceCreateError>;
-  readonly deleteById: (
-    id: UserId,
-  ) => Effect.Effect<void, UserServiceDeleteByIdError>;
   readonly getById: (
     id: UserId,
   ) => Effect.Effect<UserResponse, UsersServiceGetByIdError>;
@@ -36,6 +32,9 @@ export interface UsersServiceShape {
     id: UserId,
     input: UpdateUserBody,
   ) => Effect.Effect<UserResponse, UserServiceUpdateError>;
+  readonly deleteById: (
+    id: UserId,
+  ) => Effect.Effect<void, UserServiceDeleteByIdError>;
 }
 
 export class UsersService extends Context.Service<
@@ -58,6 +57,22 @@ export const UsersServiceLive = Layer.effect(
         }),
       );
 
+    const getAll: UsersServiceShape['getAll'] = repository.getAll.pipe(
+      Effect.catchTags({
+        InvalidUserRecord: makeUserDataIntegrityError,
+        UsersRepositoryError: makeUsersUnavailableError,
+      }),
+    );
+
+    const getById: UsersServiceShape['getById'] = (id) =>
+      repository.getById(id).pipe(
+        Effect.catchTags({
+          InvalidUserRecord: makeUserDataIntegrityError,
+          UsersRepositoryError: makeUsersUnavailableError,
+        }),
+        Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
+      );
+
     const update: UsersServiceShape['update'] = (id, input) =>
       repository.update(id, input).pipe(
         Effect.catchTags({
@@ -69,22 +84,6 @@ export const UsersServiceLive = Layer.effect(
         Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
       );
 
-    const getById: UsersServiceShape['getById'] = (id) =>
-      repository.getById(id).pipe(
-        Effect.catchTags({
-          InvalidUserRecord: makeUserDataIntegrityError,
-          UsersRepositoryError: makeUsersUnavailableError,
-        }),
-        Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
-      );
-
-    const getAll: UsersServiceShape['getAll'] = repository.getAll.pipe(
-      Effect.catchTags({
-        InvalidUserRecord: makeUserDataIntegrityError,
-        UsersRepositoryError: makeUsersUnavailableError,
-      }),
-    );
-
     const deleteById: UsersServiceShape['deleteById'] = (id: UserId) =>
       repository.deleteById(id).pipe(
         Effect.mapError(makeUsersUnavailableError),
@@ -95,10 +94,10 @@ export const UsersServiceLive = Layer.effect(
 
     return {
       create,
-      deleteById,
       getAll,
       getById,
       update,
+      deleteById,
     };
   }),
 );
