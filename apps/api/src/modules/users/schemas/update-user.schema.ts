@@ -11,3 +11,5 @@ export const UpdateUserBodySchema = Schema.Struct({
   lastName: UserNameInputSchema,
   email: UserEmailSchema,
 });
+
+export type UpdateUserBody = Schema.Schema.Type<typeof UpdateUserBodySchema>;

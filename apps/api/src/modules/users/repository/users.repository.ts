@@ -1,17 +1,29 @@
 import { desc, eq } from 'drizzle-orm';
-import { Context, Effect, Layer, Option, Schema } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Schema,
+} from 'effect';
+import { SqlError } from 'effect/unstable/sql';
 
 import { DB } from '#db/db.service.js';
 import { users } from '#db/schema/users.js';
 import {
-  InvalidUserRecord,
-  UserEmailAlreadyExists,
-  UserRepositoryCreateError,
-  UsersRepositoryError,
+  makeInvalidUserRecordError,
+  makeUserEmailAlreadyExistsError,
+  makeUsersRepositoryError,
+  UsersRepositoryCreateError,
+  UsersRepositoryDeleteError,
   UsersRepositoryGetAllError,
   UsersRepositoryGetByIdError,
+  UsersRepositoryUpdateError,
 } from '#modules/users/repository/users.repository.errors.js';
 import { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
+import { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import {
   UserResponse,
   UserResponseSchema,
@@ -26,6 +38,20 @@ const userSelection = {
   firstName: users.firstName,
   lastName: users.lastName,
   middleName: users.middleName,
+} as const;
+
+const isUsersEmailUniqueViolation = (error: unknown): boolean => {
+  if (!Predicate.hasProperty(error, 'cause') || !Cause.isCause(error.cause)) {
+    return false;
+  }
+
+  return error.cause.reasons.some(
+    (reason) =>
+      Cause.isFailReason(reason) &&
+      SqlError.isSqlError(reason.error) &&
+      reason.error.reason._tag === 'UniqueViolation' &&
+      reason.error.reason.constraint === 'users_email_key',
+  );
 };
 
 export interface UsersRepositoryShape {
@@ -35,13 +61,17 @@ export interface UsersRepositoryShape {
   >;
   readonly create: (
     input: CreateUserBody,
-  ) => Effect.Effect<UserResponse, UserRepositoryCreateError>;
+  ) => Effect.Effect<UserResponse, UsersRepositoryCreateError>;
   readonly deleteById: (
     id: UserId,
-  ) => Effect.Effect<boolean, UsersRepositoryError>;
+  ) => Effect.Effect<boolean, UsersRepositoryDeleteError>;
   readonly getById: (
     id: UserId,
   ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByIdError>;
+  readonly update: (
+    id: UserId,
+    input: UpdateUserBody,
+  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryUpdateError>;
 }
 
 export class UsersRepository extends Context.Service<
@@ -66,32 +96,62 @@ export const UsersRepositoryLive = Layer.effect(
           })
           .returning(userSelection)
           .pipe(
-            Effect.mapError(
-              (cause) =>
-                new UsersRepositoryError({
-                  cause,
-                  operation: 'create',
-                }),
+            Effect.mapError((cause) =>
+              makeUsersRepositoryError({ cause, operation: 'create' }),
             ),
           );
 
         if (row === undefined) {
-          return yield* new UserEmailAlreadyExists({
+          return yield* makeUserEmailAlreadyExistsError({
             email: input.email,
             operation: 'create',
           });
         }
 
         return yield* decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                cause,
-                id: row.id,
-                operation: 'create',
-              }),
+          Effect.mapError((cause) =>
+            makeInvalidUserRecordError({
+              cause,
+              id: row.id,
+              operation: 'create',
+            }),
           ),
         );
+      });
+
+    const update: UsersRepositoryShape['update'] = (id, input) =>
+      Effect.gen(function* () {
+        const [row] = yield* db
+          .update(users)
+          .set(input)
+          .where(eq(users.id, id))
+          .returning(userSelection)
+          .pipe(
+            Effect.mapError((cause) =>
+              isUsersEmailUniqueViolation(cause)
+                ? makeUserEmailAlreadyExistsError({
+                    email: input.email,
+                    operation: 'update',
+                  })
+                : makeUsersRepositoryError({ cause, operation: 'update' }),
+            ),
+          );
+
+        if (row === undefined) {
+          return Option.none();
+        }
+
+        const user = yield* decodeUser(row).pipe(
+          Effect.mapError((cause) =>
+            makeInvalidUserRecordError({
+              cause,
+              id: row.id,
+              operation: 'update',
+            }),
+          ),
+        );
+
+        return Option.some(user);
       });
 
     const getAll: UsersRepositoryShape['getAll'] = db
@@ -99,19 +159,18 @@ export const UsersRepositoryLive = Layer.effect(
       .from(users)
       .orderBy(desc(users.createdAt), desc(users.id))
       .pipe(
-        Effect.mapError(
-          (cause) => new UsersRepositoryError({ cause, operation: 'getAll' }),
+        Effect.mapError((cause) =>
+          makeUsersRepositoryError({ cause, operation: 'getAll' }),
         ),
         Effect.flatMap((rows) =>
           Effect.forEach(rows, (row) =>
             decodeUser(row).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new InvalidUserRecord({
-                    cause,
-                    id: row.id,
-                    operation: 'getAll',
-                  }),
+              Effect.mapError((cause) =>
+                makeInvalidUserRecordError({
+                  cause,
+                  id: row.id,
+                  operation: 'getAll',
+                }),
               ),
             ),
           ),
@@ -126,12 +185,11 @@ export const UsersRepositoryLive = Layer.effect(
           .where(eq(users.id, id))
           .limit(1)
           .pipe(
-            Effect.mapError(
-              (cause) =>
-                new UsersRepositoryError({
-                  cause,
-                  operation: 'getById',
-                }),
+            Effect.mapError((cause) =>
+              makeUsersRepositoryError({
+                cause,
+                operation: 'getById',
+              }),
             ),
           );
 
@@ -140,13 +198,12 @@ export const UsersRepositoryLive = Layer.effect(
         }
 
         const user = yield* decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                cause,
-                id,
-                operation: 'getById',
-              }),
+          Effect.mapError((cause) =>
+            makeInvalidUserRecordError({
+              cause,
+              id,
+              operation: 'getById',
+            }),
           ),
         );
 
@@ -159,8 +216,8 @@ export const UsersRepositoryLive = Layer.effect(
         .where(eq(users.id, id))
         .returning({ id: users.id })
         .pipe(
-          Effect.mapError(
-            (cause) => new UsersRepositoryError({ cause, operation: 'delete' }),
+          Effect.mapError((cause) =>
+            makeUsersRepositoryError({ cause, operation: 'delete' }),
           ),
           Effect.map((rows) => !!rows.length),
         );
@@ -170,6 +227,7 @@ export const UsersRepositoryLive = Layer.effect(
       getById,
       deleteById,
       create,
+      update,
     };
   }),
 );

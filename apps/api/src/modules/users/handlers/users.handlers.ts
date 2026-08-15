@@ -43,6 +43,13 @@ const logCreateFailure = (message: string, cause: unknown) =>
     }),
   );
 
+const logUpdateFailure = (message: string, cause: unknown) =>
+  Effect.logError(message, cause).pipe(
+    Effect.annotateLogs({
+      operation: 'users.update',
+    }),
+  );
+
 export const UsersHandlersLive = HttpApiBuilder.group(
   AppApi,
   'users',
@@ -67,6 +74,30 @@ export const UsersHandlersLive = HttpApiBuilder.group(
                     makeUsersInternalHttpError(usersCollectionInstance),
                   ),
                 ),
+            }),
+          ),
+        ),
+      )
+      .handle('update', ({ params: { id }, payload }) =>
+        UsersService.use((service) =>
+          service.update(id, payload).pipe(
+            Effect.catchTags({
+              UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
+              UsersUnavailableError: (cause) =>
+                logUpdateFailure('Failed to update user', cause).pipe(
+                  Effect.andThen(
+                    makeUsersUnavailableHttpError(usersCollectionInstance),
+                  ),
+                ),
+
+              UserDataIntegrityError: (cause) =>
+                logUpdateFailure('Invalid updated user record', cause).pipe(
+                  Effect.andThen(
+                    makeUsersInternalHttpError(usersCollectionInstance),
+                  ),
+                ),
+
+              UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
             }),
           ),
         ),

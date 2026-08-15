@@ -16,8 +16,11 @@ import {
   CreateUserBodySchema,
   CreateUserResponseSchema,
 } from '#modules/users/schemas/create-user.schema.js';
+import { UpdateUserBodySchema } from '#modules/users/schemas/update-user.schema.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
+
+// TODO: нужен middleware для ошибок валидации
 
 export const usersGroup = HttpApiGroup.make('users').add(
   HttpApiEndpoint.get('getAll', '/api/users', {
@@ -45,12 +48,17 @@ export const usersGroup = HttpApiGroup.make('users').add(
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  // HttpApiEndpoint.put('update', '/api/users/:id', {
-  //   params: { id: UserIdSchema },
-  //   payload: UpdateUserBodySchema,
-  //   success: UserSchema,
-  //   error: UserNotFoundError,
-  // }),
+  HttpApiEndpoint.put('update', '/api/users/:id', {
+    params: { id: UserIdSchema },
+    payload: UpdateUserBodySchema,
+    success: UserResponseSchema,
+    error: [
+      UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
+      UsersInternalHttpError.pipe(asProblemJson),
+      UsersUnavailableHttpError.pipe(asProblemJson),
+      UserNotFoundHttpError.pipe(asProblemJson),
+    ],
+  }),
   HttpApiEndpoint.delete('delete', '/api/users/:id', {
     params: { id: UserIdSchema },
     success: HttpApiSchema.NoContent,

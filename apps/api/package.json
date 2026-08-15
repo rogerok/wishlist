@@ -14,7 +14,7 @@
     "build": "tsc -p tsconfig.json",
     "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "db:down": "docker compose --env-file .env.development -f docker-compose.dev.yml down",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "NODE_OPTIONS=--conditions=development drizzle-kit generate",
     "db:logs": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres",
     "db:migrate": "drizzle-kit migrate",
     "db:ready": "docker compose --env-file .env.development -f docker-compose.dev.yml exec postgres pg_isready -U postgres -d wishlist",

@@ -39,6 +39,12 @@ export type UsersServiceGetByIdError =
   | UserNotFound
   | UsersUnavailableError;
 
+export type UserServiceUpdateError =
+  | UserDataIntegrityError
+  | UserEmailAlreadyExists
+  | UserNotFound
+  | UsersUnavailableError;
+
 export type UserServiceDeleteByIdError = UserNotFound | UsersUnavailableError;
 
 export const makeUserNotFoundError = (id: UserNotFound['id']) =>

@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from 'effect';
 
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
 import { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
+import { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import { UserResponse } from '#modules/users/schemas/user-response.schema.js';
 import { UserId } from '#modules/users/schemas/user.schema.js';
 import {
@@ -10,6 +11,7 @@ import {
   makeUserNotFoundError,
   makeUsersUnavailableError,
   UserServiceDeleteByIdError,
+  UserServiceUpdateError,
   UsersServiceCreateError,
   UsersServiceGetAllError,
   UsersServiceGetByIdError,
@@ -20,6 +22,7 @@ export interface UsersServiceShape {
     ReadonlyArray<UserResponse>,
     UsersServiceGetAllError
   >;
+
   readonly create: (
     input: CreateUserBody,
   ) => Effect.Effect<UserResponse, UsersServiceCreateError>;
@@ -29,6 +32,10 @@ export interface UsersServiceShape {
   readonly getById: (
     id: UserId,
   ) => Effect.Effect<UserResponse, UsersServiceGetByIdError>;
+  readonly update: (
+    id: UserId,
+    input: UpdateUserBody,
+  ) => Effect.Effect<UserResponse, UserServiceUpdateError>;
 }
 
 export class UsersService extends Context.Service<
@@ -49,6 +56,17 @@ export const UsersServiceLive = Layer.effect(
           UserEmailAlreadyExists: (cause) =>
             makeUserEmailAlreadyExistsError(input.email, cause),
         }),
+      );
+
+    const update: UsersServiceShape['update'] = (id, input) =>
+      repository.update(id, input).pipe(
+        Effect.catchTags({
+          InvalidUserRecord: makeUserDataIntegrityError,
+          UsersRepositoryError: makeUsersUnavailableError,
+          UserEmailAlreadyExists: (cause) =>
+            makeUserEmailAlreadyExistsError(input.email, cause),
+        }),
+        Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
       );
 
     const getById: UsersServiceShape['getById'] = (id) =>
@@ -80,6 +98,7 @@ export const UsersServiceLive = Layer.effect(
       deleteById,
       getAll,
       getById,
+      update,
     };
   }),
 );
