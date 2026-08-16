@@ -7,6 +7,37 @@ import tseslint from 'typescript-eslint';
 import onlyWarn from 'eslint-plugin-only-warn';
 import noComplexInlineType from './no-complex-inline-type.mjs';
 
+const operationGroups = [
+  'operation-create',
+  'operation-get-all',
+  'operation-get-by-id',
+  'operation-update',
+  'operation-delete',
+];
+
+const operationCustomGroups = [
+  {
+    groupName: 'operation-create',
+    elementNamePattern: '^create$',
+  },
+  {
+    groupName: 'operation-get-all',
+    elementNamePattern: '^getAll$',
+  },
+  {
+    groupName: 'operation-get-by-id',
+    elementNamePattern: '^getById$',
+  },
+  {
+    groupName: 'operation-update',
+    elementNamePattern: '^update$',
+  },
+  {
+    groupName: 'operation-delete',
+    elementNamePattern: '^delete(?:ById)?$',
+  },
+];
+
 /**
  * A shared ESLint configuration for the repository.
  *
@@ -90,6 +121,26 @@ export const config = [
       'sonarjs/no-duplicated-branches': 'warn',
       'sonarjs/todo-tag': 'off',
       'sonarjs/no-empty-test-file': 'off',
+    },
+  },
+  {
+    files: ['**/*.service.ts', '**/*.repository.ts'],
+    rules: {
+      'perfectionist/sort-interfaces': [
+        'warn',
+        {
+          useConfigurationIf: {
+            declarationMatchesPattern:
+              '^[A-Za-z0-9_]+(?:Service|Repository)Shape$',
+          },
+          groups: [...operationGroups, 'unknown'],
+          customGroups: operationCustomGroups,
+        },
+        {
+          groups: ['required-property', 'optional-property'],
+          order: 'asc',
+        },
+      ],
     },
   },
 ];

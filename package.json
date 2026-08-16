@@ -1,22 +1,30 @@
 {
-  "name": "whishlist",
+  "name": "wishlist",
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
+    "db:check": "pnpm --filter @wishlist/api db:check",
+    "db:down": "pnpm --filter @wishlist/api db:down",
+    "db:generate": "pnpm --filter @wishlist/api db:generate",
+    "db:logs": "pnpm --filter @wishlist/api db:logs",
+    "db:migrate": "pnpm --filter @wishlist/api db:migrate",
+    "db:ready": "pnpm --filter @wishlist/api db:ready",
+    "db:studio": "pnpm --filter @wishlist/api db:studio",
+    "db:up": "pnpm --filter @wishlist/api db:up",
+    "dev": "turbo run dev",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "lint": "turbo run lint",
+    "prepare": "husky",
     "test": "turbo run test",
-    "test:watch": "turbo run test:watch",
-    "prepare": "husky"
+    "test:watch": "turbo run test:watch"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "prettier": "^3.7.4",
     "turbo": "^2.10.9",
-    "typescript": "5.9.2"
+    "typescript": "7.0.2"
   },
   "lint-staged": {
     "apps/api/**/*.{js,mjs,cjs,ts,mts,cts}": [
