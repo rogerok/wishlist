@@ -56,6 +56,7 @@ export class UserNotFoundHttpError extends Schema.Error<UserNotFoundHttpError>(
   },
 ) {}
 
+// TODO:  делать сразу схему с литералали. константы definition убрать
 export class UsersUnavailableHttpError extends Schema.Error<UsersUnavailableHttpError>(
   'UsersUnavailableHttpError',
 )(
@@ -92,6 +93,7 @@ export class UserEmailAlreadyExistsHttpError extends Schema.Error<UserEmailAlrea
   },
 ) {}
 
+// TOOD: убрать фабрики
 export const makeUserNotFoundHttpError = (id: UserId) =>
   new UserNotFoundHttpError({
     id,

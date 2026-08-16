@@ -2,7 +2,7 @@ import { Data } from 'effect';
 
 import { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 
-export class UserNotFound extends Data.TaggedError('UserNotFound')<{
+export class UserNotFoundError extends Data.TaggedError('UserNotFoundError')<{
   readonly id: UserId;
 }> {}
 
@@ -18,8 +18,8 @@ export class UserDataIntegrityError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-export class UserEmailAlreadyExists extends Data.TaggedError(
-  'UserEmailAlreadyExists',
+export class UserEmailAlreadyExistsError extends Data.TaggedError(
+  'UserEmailAlreadyExistsError',
 )<{
   readonly cause: unknown;
   readonly email: UserEmail;
@@ -27,7 +27,7 @@ export class UserEmailAlreadyExists extends Data.TaggedError(
 
 export type UsersServiceCreateError =
   | UserDataIntegrityError
-  | UserEmailAlreadyExists
+  | UserEmailAlreadyExistsError
   | UsersUnavailableError;
 
 export type UsersServiceGetAllError =
@@ -36,26 +36,15 @@ export type UsersServiceGetAllError =
 
 export type UsersServiceGetByIdError =
   | UserDataIntegrityError
-  | UserNotFound
+  | UserNotFoundError
   | UsersUnavailableError;
 
 export type UserServiceUpdateError =
   | UserDataIntegrityError
-  | UserEmailAlreadyExists
-  | UserNotFound
+  | UserEmailAlreadyExistsError
+  | UserNotFoundError
   | UsersUnavailableError;
 
-export type UserServiceDeleteByIdError = UserNotFound | UsersUnavailableError;
-
-export const makeUserNotFoundError = (id: UserNotFound['id']) =>
-  new UserNotFound({ id });
-export const makeUsersUnavailableError = (
-  cause: UsersUnavailableError['cause'],
-) => new UsersUnavailableError({ cause });
-export const makeUserDataIntegrityError = (
-  cause: UserDataIntegrityError['cause'],
-) => new UserDataIntegrityError({ cause });
-export const makeUserEmailAlreadyExistsError = (
-  email: UserEmailAlreadyExists['email'],
-  cause: UserEmailAlreadyExists['cause'],
-) => new UserEmailAlreadyExists({ email, cause });
+export type UserServiceDeleteByIdError =
+  | UserNotFoundError
+  | UsersUnavailableError;

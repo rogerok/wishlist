@@ -16,6 +16,7 @@ import { UsersService } from '#modules/users/service/users.service.js';
 const logCreateFailure = (message: string, cause: unknown) =>
   Effect.logError(message, cause).pipe(
     Effect.annotateLogs({
+      // TODO: операции в схемы
       operation: 'users.create',
     }),
   );
@@ -50,117 +51,143 @@ const logDeleteByIdFailure = (message: string, cause: unknown, id: UserId) =>
     }),
   );
 
+// TODO:вынести логирование в абстракцию
+
 export const UsersHandlersLive = HttpApiBuilder.group(
   AppApi,
   'users',
   (handlers) =>
     handlers
       .handle('create', ({ payload }) =>
-        UsersService.use((service) =>
-          service.create(payload).pipe(
+        Effect.gen(function* () {
+          const service = yield* UsersService;
+
+          return yield* service.create(payload).pipe(
             Effect.catchTags({
-              UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
+              UserEmailAlreadyExistsError: makeUserEmailAlreadyExistsHttpError,
 
               UserDataIntegrityError: (cause) =>
-                logCreateFailure('Invalid created user record', cause).pipe(
-                  Effect.andThen(
-                    makeUsersInternalHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logCreateFailure('Invalid created user record', cause);
+                  return yield* makeUsersInternalHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
 
               UsersUnavailableError: (cause) =>
-                logCreateFailure('Failed to create user', cause).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logCreateFailure('Failed to create user', cause);
+                  return yield* makeUsersUnavailableHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
             }),
-          ),
-        ),
+          );
+        }),
       )
       .handle('getAll', () =>
-        UsersService.use((service) =>
-          service.getAll.pipe(
+        Effect.gen(function* () {
+          const service = yield* UsersService;
+
+          return yield* service.getAll.pipe(
             Effect.catchTags({
               UserDataIntegrityError: (cause) =>
-                logGetAllFailure('Invalid user records', cause).pipe(
-                  Effect.andThen(
-                    makeUsersInternalHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logGetAllFailure('Invalid user records', cause);
+                  return yield* makeUsersInternalHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
 
               UsersUnavailableError: (cause) =>
-                logGetAllFailure('Failed to get users', cause).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logGetAllFailure('Failed to get users', cause);
+                  return yield* makeUsersUnavailableHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
             }),
-          ),
-        ),
+          );
+        }),
       )
       .handle('getById', ({ params: { id } }) =>
-        UsersService.use((service) =>
-          service.getById(id).pipe(
+        Effect.gen(function* () {
+          const service = yield* UsersService;
+
+          return yield* service.getById(id).pipe(
             Effect.catchTags({
-              UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
+              UserNotFoundError: ({ id }) => makeUserNotFoundHttpError(id),
 
               UserDataIntegrityError: (cause) =>
-                logGetByIdFailure('Invalid user record', cause, id).pipe(
-                  Effect.andThen(
-                    makeUsersInternalHttpError(makeByIdInstance(id)),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logGetByIdFailure('Invalid user record', cause, id);
+                  return yield* makeUsersInternalHttpError(
+                    makeByIdInstance(id),
+                  );
+                }),
 
               UsersUnavailableError: (cause) =>
-                logGetByIdFailure('Failed to get user', cause, id).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(makeByIdInstance(id)),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logGetByIdFailure('Failed to get user', cause, id);
+
+                  return yield* makeUsersUnavailableHttpError(
+                    makeByIdInstance(id),
+                  );
+                }),
             }),
-          ),
-        ),
+          );
+        }),
       )
       .handle('update', ({ params: { id }, payload }) =>
-        UsersService.use((service) =>
-          service.update(id, payload).pipe(
-            Effect.catchTags({
-              UserEmailAlreadyExists: makeUserEmailAlreadyExistsHttpError,
+        Effect.gen(function* () {
+          const service = yield* UsersService;
 
-              UserNotFound: ({ id }) => makeUserNotFoundHttpError(id),
+          return yield* service.update(id, payload).pipe(
+            Effect.catchTags({
+              UserEmailAlreadyExistsError: makeUserEmailAlreadyExistsHttpError,
+
+              UserNotFoundError: ({ id }) => makeUserNotFoundHttpError(id),
 
               UserDataIntegrityError: (cause) =>
-                logUpdateFailure('Invalid updated user record', cause).pipe(
-                  Effect.andThen(
-                    makeUsersInternalHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logUpdateFailure('Invalid updated user record', cause);
+                  return yield* makeUsersInternalHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
 
               UsersUnavailableError: (cause) =>
-                logUpdateFailure('Failed to update user', cause).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(usersCollectionInstance),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logUpdateFailure('Failed to update user', cause);
+                  return yield* makeUsersUnavailableHttpError(
+                    usersCollectionInstance,
+                  );
+                }),
             }),
-          ),
-        ),
+          );
+        }),
       )
       .handle('delete', ({ params: { id } }) =>
-        UsersService.use((service) =>
-          service.deleteById(id).pipe(
+        Effect.gen(function* () {
+          const service = yield* UsersService;
+
+          return yield* service.deleteById(id).pipe(
             Effect.catchTags({
-              UserNotFound: () => makeUserNotFoundHttpError(id),
+              UserNotFoundError: () => makeUserNotFoundHttpError(id),
 
               UsersUnavailableError: (cause) =>
-                logDeleteByIdFailure('Failed to delete user', cause, id).pipe(
-                  Effect.andThen(
-                    makeUsersUnavailableHttpError(makeByIdInstance(id)),
-                  ),
-                ),
+                Effect.gen(function* () {
+                  yield* logDeleteByIdFailure(
+                    'Failed to delete user',
+                    cause,
+                    id,
+                  );
+                  return yield* makeUsersUnavailableHttpError(
+                    makeByIdInstance(id),
+                  );
+                }),
             }),
-          ),
-        ),
+          );
+        }),
       ),
 );

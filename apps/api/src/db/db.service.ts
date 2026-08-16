@@ -1,14 +1,15 @@
-import { defineRelations } from 'drizzle-orm';
-import * as PgDrizzle from 'drizzle-orm/effect-postgres';
+import * as PgKysely from '@repo/sql-kysely/pg';
 import { Context, Effect, Layer } from 'effect';
+import { CamelCasePlugin } from 'kysely';
 
-import { users } from '#db/schema/users.js';
+import type { DB as Database } from '#db/generated/database.js';
 
-const relations = defineRelations({ users });
+const dbEffect = PgKysely.make<Database>({
+  plugins: [new CamelCasePlugin()],
+});
 
-const dbEffect = PgDrizzle.makeWithDefaults({ relations });
-export type DBDrizzle = Effect.Success<typeof dbEffect>;
+export type DBKysely = Effect.Success<typeof dbEffect>;
 
-export class DB extends Context.Service<DB, DBDrizzle>()('app/DB') {}
+export class DB extends Context.Service<DB, DBKysely>()('app/DB') {}
 
 export const DBLive = Layer.effect(DB, dbEffect);
