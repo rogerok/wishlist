@@ -6,15 +6,15 @@ import { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import { UserResponse } from '#modules/users/schemas/user-response.schema.js';
 import { UserId } from '#modules/users/schemas/user.schema.js';
 import {
-  makeUserDataIntegrityError,
-  makeUserEmailAlreadyExistsError,
-  makeUserNotFoundError,
-  makeUsersUnavailableError,
+  UserDataIntegrityError,
+  UserEmailAlreadyExistsError,
+  UserNotFoundError,
   UserServiceDeleteByIdError,
   UserServiceUpdateError,
   UsersServiceCreateError,
   UsersServiceGetAllError,
   UsersServiceGetByIdError,
+  UsersUnavailableError,
 } from '#modules/users/service/users.service.errors.js';
 
 export interface UsersServiceShape {
@@ -41,7 +41,7 @@ export class UsersService extends Context.Service<
   UsersService,
   UsersServiceShape
 >()('app/UsersService') {}
-
+// TODO: сделать работу repl вместо апи клиента
 export const UsersServiceLive = Layer.effect(
   UsersService,
   Effect.gen(function* () {
@@ -50,47 +50,66 @@ export const UsersServiceLive = Layer.effect(
     const create: UsersServiceShape['create'] = (input) =>
       repository.create(input).pipe(
         Effect.catchTags({
-          InvalidUserRecord: makeUserDataIntegrityError,
-          UsersRepositoryError: makeUsersUnavailableError,
+          InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
+          UsersRepositoryError: (cause) => new UsersUnavailableError({ cause }),
           UserEmailAlreadyExists: (cause) =>
-            makeUserEmailAlreadyExistsError(input.email, cause),
+            new UserEmailAlreadyExistsError({ email: input.email, cause }),
         }),
       );
 
     const getAll: UsersServiceShape['getAll'] = repository.getAll.pipe(
       Effect.catchTags({
-        InvalidUserRecord: makeUserDataIntegrityError,
-        UsersRepositoryError: makeUsersUnavailableError,
+        InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
+        UsersRepositoryError: (cause) => new UsersUnavailableError({ cause }),
       }),
     );
 
     const getById: UsersServiceShape['getById'] = (id) =>
-      repository.getById(id).pipe(
-        Effect.catchTags({
-          InvalidUserRecord: makeUserDataIntegrityError,
-          UsersRepositoryError: makeUsersUnavailableError,
-        }),
-        Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
-      );
+      Effect.gen(function* () {
+        const option = yield* repository.getById(id).pipe(
+          Effect.catchTags({
+            InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
+            UsersRepositoryError: (cause) =>
+              new UsersUnavailableError({ cause }),
+          }),
+        );
+
+        return yield* Effect.fromOption(
+          option,
+          () => new UserNotFoundError({ id }),
+        );
+      });
 
     const update: UsersServiceShape['update'] = (id, input) =>
-      repository.update(id, input).pipe(
-        Effect.catchTags({
-          InvalidUserRecord: makeUserDataIntegrityError,
-          UsersRepositoryError: makeUsersUnavailableError,
-          UserEmailAlreadyExists: (cause) =>
-            makeUserEmailAlreadyExistsError(input.email, cause),
-        }),
-        Effect.flatMap(Effect.fromOption(() => makeUserNotFoundError(id))),
-      );
+      Effect.gen(function* () {
+        const option = yield* repository.update(id, input).pipe(
+          Effect.catchTags({
+            InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
+            UsersRepositoryError: (cause) =>
+              new UsersUnavailableError({ cause }),
+            UserEmailAlreadyExists: (cause) =>
+              new UserEmailAlreadyExistsError({ email: input.email, cause }),
+          }),
+        );
 
-    const deleteById: UsersServiceShape['deleteById'] = (id: UserId) =>
-      repository.deleteById(id).pipe(
-        Effect.mapError(makeUsersUnavailableError),
-        Effect.flatMap((deleted) =>
-          deleted ? Effect.void : makeUserNotFoundError(id),
-        ),
-      );
+        return yield* Effect.fromOption(
+          option,
+          () => new UserNotFoundError({ id }),
+        );
+      });
+
+    const deleteById: UsersServiceShape['deleteById'] = (id) =>
+      Effect.gen(function* () {
+        const deleted = yield* repository
+          .deleteById(id)
+          .pipe(
+            Effect.mapError((cause) => new UsersUnavailableError({ cause })),
+          );
+
+        if (!deleted) {
+          return yield* new UserNotFoundError({ id });
+        }
+      });
 
     return {
       create,

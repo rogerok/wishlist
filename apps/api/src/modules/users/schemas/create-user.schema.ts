@@ -6,9 +6,9 @@ import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.
 import { UserEmailSchema, UserNameInputSchema } from './user.schema.js';
 
 export const CreateUserBodySchema = Schema.Struct({
-  middleName: Schema.optionalKey(UserNameInputSchema),
-  firstName: Schema.optionalKey(UserNameInputSchema),
-  lastName: Schema.optionalKey(UserNameInputSchema),
+  middleName: UserNameInputSchema,
+  firstName: UserNameInputSchema,
+  lastName: UserNameInputSchema,
   email: UserEmailSchema,
 });
 export type CreateUserBody = Schema.Schema.Type<typeof CreateUserBodySchema>;
