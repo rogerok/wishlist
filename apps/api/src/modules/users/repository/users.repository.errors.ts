@@ -1,33 +1,26 @@
 import { Data } from 'effect';
 
 import { UserEmail } from '#modules/users/schemas/user.schema.js';
-
-// TODO: operation описать через схемы
-type UserRepositoryOperation =
-  | 'create'
-  | 'delete'
-  | 'getAll'
-  | 'getById'
-  | 'update';
+import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
 export class InvalidUserRecord extends Data.TaggedError('InvalidUserRecord')<{
   cause: unknown;
   id: string;
-  operation: UserRepositoryOperation;
+  operation: UserOperation;
 }> {}
 
 export class UserEmailAlreadyExists extends Data.TaggedError(
   'UserEmailAlreadyExists',
 )<{
   readonly email: UserEmail;
-  readonly operation: UserRepositoryOperation;
+  readonly operation: UserOperation;
 }> {}
 
 export class UsersRepositoryError extends Data.TaggedError(
   'UsersRepositoryError',
 )<{
   readonly cause: unknown;
-  readonly operation: UserRepositoryOperation;
+  readonly operation: UserOperation;
 }> {}
 
 export type UsersRepositoryCreateError =

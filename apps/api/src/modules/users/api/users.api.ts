@@ -7,6 +7,11 @@ import {
 
 import { asProblemJson } from '#errors/http-problem.js';
 import {
+  userByIdPath,
+  usersCollectionPath,
+  usersGroupIdentifier,
+} from '#modules/users/api/users.api.constants.js';
+import {
   UserEmailAlreadyExistsHttpError,
   UserNotFoundHttpError,
   UsersInternalHttpError,
@@ -19,11 +24,12 @@ import {
 import { UpdateUserBodySchema } from '#modules/users/schemas/update-user.schema.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
+import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
 // TODO: нужен middleware для ошибок валидации
 // put переписать на патч.
-export const usersGroup = HttpApiGroup.make('users').add(
-  HttpApiEndpoint.post('create', '/api/users', {
+export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
+  HttpApiEndpoint.post(UserOperation.create, usersCollectionPath, {
     payload: CreateUserBodySchema,
     success: CreateUserResponseSchema,
     error: [
@@ -32,14 +38,14 @@ export const usersGroup = HttpApiGroup.make('users').add(
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  HttpApiEndpoint.get('getAll', '/api/users', {
+  HttpApiEndpoint.get(UserOperation.getAll, usersCollectionPath, {
     success: Schema.Array(UserResponseSchema),
     error: [
       UsersInternalHttpError.pipe(asProblemJson),
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  HttpApiEndpoint.get('getById', '/api/users/:id', {
+  HttpApiEndpoint.get(UserOperation.getById, userByIdPath, {
     params: { id: UserIdSchema },
     success: UserResponseSchema,
     error: [
@@ -48,7 +54,7 @@ export const usersGroup = HttpApiGroup.make('users').add(
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  HttpApiEndpoint.put('update', '/api/users/:id', {
+  HttpApiEndpoint.put(UserOperation.update, userByIdPath, {
     params: { id: UserIdSchema },
     payload: UpdateUserBodySchema,
     success: UserResponseSchema,
@@ -59,7 +65,7 @@ export const usersGroup = HttpApiGroup.make('users').add(
       UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
-  HttpApiEndpoint.delete('delete', '/api/users/:id', {
+  HttpApiEndpoint.delete(UserOperation.delete, userByIdPath, {
     params: { id: UserIdSchema },
     success: HttpApiSchema.NoContent,
     error: [
