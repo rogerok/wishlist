@@ -1,71 +1,51 @@
 import { Schema } from 'effect';
 
-import {
-  HttpProblemDefinition,
-  makeHttpProblemFields,
-} from '#errors/http-problem.js';
+import { usersCollectionPath } from '#modules/users/api/users.api.constants.js';
 import { UserId, UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
-export const usersCollectionInstance = '/api/users';
+export const UserByIdInstanceSchema = Schema.TemplateLiteral([
+  usersCollectionPath,
+  '/',
+  UserIdSchema,
+]);
+export const UserInstanceSchema = Schema.Union([
+  Schema.Literal(usersCollectionPath),
+  UserByIdInstanceSchema,
+]);
 
 export const makeByIdInstance = (id: UserId) =>
-  `${usersCollectionInstance}/${id}`;
-
-const notFoundDefinition: HttpProblemDefinition = {
-  code: 'USER_NOT_FOUND',
-  detail: 'The requested user does not exist',
-  status: 404,
-  title: 'User not found',
-  type: '/errors/user-not-found',
-} as const;
-
-const unavailableDefinition: HttpProblemDefinition = {
-  code: 'USERS_UNAVAILABLE',
-  detail: 'Unable to process the request',
-  status: 503,
-  title: 'Users service is unavailable',
-  type: '/errors/users-unavailable',
-} as const;
-
-const internalDefinition: HttpProblemDefinition = {
-  code: 'USERS_INTERNAL_ERROR',
-  detail: 'Unable to process the request',
-  status: 500,
-  title: 'Internal users service error',
-  type: '/errors/users-internal-error',
-} as const;
-
-const emailAlreadyExistsDefinition: HttpProblemDefinition = {
-  code: 'USER_EMAIL_ALREADY_EXISTS',
-  detail: 'A user with this email already exists',
-  status: 409,
-  title: 'User email already exists',
-  type: '/errors/user-email-already-exists',
-} as const;
+  `${usersCollectionPath}/${id}` as const;
 
 export class UserNotFoundHttpError extends Schema.Error<UserNotFoundHttpError>(
   'UserNotFoundHttpError',
 )(
   {
-    ...makeHttpProblemFields(notFoundDefinition),
+    code: Schema.tag('USER_NOT_FOUND'),
+    detail: Schema.tag('The requested user does not exist'),
+    status: Schema.tag(404),
+    title: Schema.tag('User not found'),
+    type: Schema.tag('/errors/user-not-found'),
     id: UserIdSchema,
-    instance: Schema.String,
+    instance: UserByIdInstanceSchema,
   },
   {
-    httpApiStatus: notFoundDefinition.status,
+    httpApiStatus: 404,
   },
 ) {}
 
-// TODO:  делать сразу схему с литералали. константы definition убрать
 export class UsersUnavailableHttpError extends Schema.Error<UsersUnavailableHttpError>(
   'UsersUnavailableHttpError',
 )(
   {
-    ...makeHttpProblemFields(unavailableDefinition),
-    instance: Schema.String,
+    code: Schema.tag('USERS_UNAVAILABLE'),
+    detail: Schema.tag('Unable to process the request'),
+    status: Schema.tag(503),
+    title: Schema.tag('Users service is unavailable'),
+    type: Schema.tag('/errors/users-unavailable'),
+    instance: UserInstanceSchema,
   },
   {
-    httpApiStatus: unavailableDefinition.status,
+    httpApiStatus: 503,
   },
 ) {}
 
@@ -73,11 +53,15 @@ export class UsersInternalHttpError extends Schema.Error<UsersInternalHttpError>
   'UsersInternalHttpError',
 )(
   {
-    ...makeHttpProblemFields(internalDefinition),
-    instance: Schema.String,
+    code: Schema.tag('USERS_INTERNAL_ERROR'),
+    detail: Schema.tag('Unable to process the request'),
+    status: Schema.tag(500),
+    title: Schema.tag('Internal users service error'),
+    type: Schema.tag('/errors/users-internal-error'),
+    instance: UserInstanceSchema,
   },
   {
-    httpApiStatus: internalDefinition.status,
+    httpApiStatus: 500,
   },
 ) {}
 
@@ -85,30 +69,14 @@ export class UserEmailAlreadyExistsHttpError extends Schema.Error<UserEmailAlrea
   'UserEmailAlreadyExistsHttpError',
 )(
   {
-    ...makeHttpProblemFields(emailAlreadyExistsDefinition),
-    instance: Schema.String,
+    code: Schema.tag('USER_EMAIL_ALREADY_EXISTS'),
+    detail: Schema.tag('A user with this email already exists'),
+    status: Schema.tag(409),
+    title: Schema.tag('User email already exists'),
+    type: Schema.tag('/errors/user-email-already-exists'),
+    instance: Schema.tag(usersCollectionPath),
   },
   {
-    httpApiStatus: emailAlreadyExistsDefinition.status,
+    httpApiStatus: 409,
   },
 ) {}
-
-// TOOD: убрать фабрики
-export const makeUserNotFoundHttpError = (id: UserId) =>
-  new UserNotFoundHttpError({
-    id,
-    instance: makeByIdInstance(id),
-  });
-export const makeUsersUnavailableHttpError = (instance: string) =>
-  new UsersUnavailableHttpError({
-    instance,
-  });
-export const makeUsersInternalHttpError = (instance: string) =>
-  new UsersInternalHttpError({
-    instance,
-  });
-
-export const makeUserEmailAlreadyExistsHttpError = () =>
-  new UserEmailAlreadyExistsHttpError({
-    instance: usersCollectionInstance,
-  });

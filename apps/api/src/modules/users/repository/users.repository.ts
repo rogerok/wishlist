@@ -20,6 +20,7 @@ import {
   UserResponseSchema,
 } from '#modules/users/schemas/user-response.schema.js';
 import { UserId } from '#modules/users/schemas/user.schema.js';
+import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
 const decodeUser = Schema.decodeUnknownEffect(UserResponseSchema);
 const USERS_EMAIL_LOWER_UNIQUE_INDEX = 'users_email_lower_unique_idx';
@@ -84,14 +85,17 @@ export const UsersRepositoryLive = Layer.effect(
           .pipe(
             Effect.mapError(
               (cause) =>
-                new UsersRepositoryError({ cause, operation: 'create' }),
+                new UsersRepositoryError({
+                  cause,
+                  operation: UserOperation.create,
+                }),
             ),
           );
 
         if (row === undefined) {
           return yield* new UserEmailAlreadyExists({
             email: input.email,
-            operation: 'create',
+            operation: UserOperation.create,
           });
         }
 
@@ -101,7 +105,7 @@ export const UsersRepositoryLive = Layer.effect(
               new InvalidUserRecord({
                 cause,
                 id: row.id,
-                operation: 'create',
+                operation: UserOperation.create,
               }),
           ),
         );
@@ -115,7 +119,11 @@ export const UsersRepositoryLive = Layer.effect(
         .orderBy('id', 'desc')
         .pipe(
           Effect.mapError(
-            (cause) => new UsersRepositoryError({ cause, operation: 'getAll' }),
+            (cause) =>
+              new UsersRepositoryError({
+                cause,
+                operation: UserOperation.getAll,
+              }),
           ),
         );
 
@@ -124,7 +132,7 @@ export const UsersRepositoryLive = Layer.effect(
           Effect.mapError(
             (cause) =>
               new InvalidUserRecord({
-                operation: 'getAll',
+                operation: UserOperation.getAll,
                 id: row.id,
                 cause,
               }),
@@ -145,7 +153,7 @@ export const UsersRepositoryLive = Layer.effect(
               (cause) =>
                 new UsersRepositoryError({
                   cause,
-                  operation: 'getById',
+                  operation: UserOperation.getById,
                 }),
             ),
           );
@@ -160,7 +168,7 @@ export const UsersRepositoryLive = Layer.effect(
               new InvalidUserRecord({
                 cause,
                 id,
-                operation: 'getById',
+                operation: UserOperation.getById,
               }),
           ),
         );
@@ -179,11 +187,14 @@ export const UsersRepositoryLive = Layer.effect(
               if (isUsersEmailUniqueViolation(cause)) {
                 return new UserEmailAlreadyExists({
                   email: input.email,
-                  operation: 'update',
+                  operation: UserOperation.update,
                 });
               }
 
-              return new UsersRepositoryError({ cause, operation: 'update' });
+              return new UsersRepositoryError({
+                cause,
+                operation: UserOperation.update,
+              });
             }),
           );
 
@@ -197,7 +208,7 @@ export const UsersRepositoryLive = Layer.effect(
               new InvalidUserRecord({
                 cause,
                 id: row.id,
-                operation: 'update',
+                operation: UserOperation.update,
               }),
           ),
         );
@@ -212,7 +223,11 @@ export const UsersRepositoryLive = Layer.effect(
         .returning('id')
         .pipe(
           Effect.mapError(
-            (cause) => new UsersRepositoryError({ cause, operation: 'delete' }),
+            (cause) =>
+              new UsersRepositoryError({
+                cause,
+                operation: UserOperation.delete,
+              }),
           ),
           Effect.map((rows) => !!rows.length),
         );
