@@ -10,7 +10,6 @@
     "db:logs": "pnpm --filter @wishlist/api db:logs",
     "db:migrate": "pnpm --filter @wishlist/api db:migrate",
     "db:ready": "pnpm --filter @wishlist/api db:ready",
-    "db:studio": "pnpm --filter @wishlist/api db:studio",
     "db:up": "pnpm --filter @wishlist/api db:up",
     "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
