@@ -23,17 +23,18 @@
     "dev": "tsx watch --conditions=development --env-file=.env.development src/main.ts",
     "lint": "eslint",
     "start": "node --enable-source-maps dist/main.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config ../vitest.config.ts",
+    "test:watch": "vitest --config ../vitest.config.ts",
     "prepare": "effect-tsgo patch --typescript --no-oxlint"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.108",
     "@effect/sql-pg": "4.0.0-rc.108",
+    "@repo/sql-kysely": "workspace:^",
     "effect": "4.0.0-rc.108",
     "kysely": "0.29.5",
     "pg": "^8.23.0",
-    "@repo/sql-kysely": "workspace:^"
+    "ts-pattern": "^5.9.0"
   },
   "devDependencies": {
     "@effect/tsgo": "^0.36.4",

@@ -43,6 +43,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      ts-pattern:
+        specifier: ^5.9.0
+        version: 5.9.0
     devDependencies:
       '@effect/tsgo':
         specifier: ^0.36.4
@@ -4416,6 +4419,12 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4'
 
+  ts-pattern@5.9.0:
+    resolution:
+      {
+        integrity: sha512-6s5V71mX8qBUmlgbrfL33xDUwO0fq48rxAu2LBE11WBeGdpCPOsXksQbZJHvHwhrd3QjUusd3mAOM5Gg0mFBLg==,
+      }
+
   tsx@4.23.11:
     resolution:
       {
@@ -7403,6 +7412,8 @@ snapshots:
   ts-api-utils@2.5.0(typescript@5.9.2):
     dependencies:
       typescript: 5.9.2
+
+  ts-pattern@5.9.0: {}
 
   tsx@4.23.11:
     dependencies:

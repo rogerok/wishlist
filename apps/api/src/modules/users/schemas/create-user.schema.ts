@@ -2,6 +2,7 @@ import { Schema } from 'effect';
 import { HttpApiSchema } from 'effect/unstable/httpapi';
 
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
+import { withRequestParseOptions } from '#schemas/utils.js';
 
 import { UserEmailSchema, UserNameInputSchema } from './user.schema.js';
 
@@ -10,7 +11,7 @@ export const CreateUserBodySchema = Schema.Struct({
   firstName: UserNameInputSchema,
   lastName: UserNameInputSchema,
   email: UserEmailSchema,
-});
+}).pipe(withRequestParseOptions);
 export type CreateUserBody = Schema.Schema.Type<typeof CreateUserBodySchema>;
 
 export const CreateUserResponseSchema = UserResponseSchema.pipe(
