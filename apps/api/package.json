@@ -23,8 +23,8 @@
     "dev": "tsx watch --conditions=development --env-file=.env.development src/main.ts",
     "lint": "eslint",
     "start": "node --enable-source-maps dist/main.js",
-    "test": "vitest run --config ../vitest.config.ts",
-    "test:watch": "vitest --config ../vitest.config.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
     "prepare": "effect-tsgo patch --typescript --no-oxlint"
   },
   "dependencies": {
