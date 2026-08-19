@@ -41,3 +41,13 @@ export const makeLiteralUnionSchema = <
     values: Object.freeze(values),
   });
 };
+
+export const withRequestParseOptions = <S extends Schema.Top>(
+  schema: S,
+): S['Rebuild'] =>
+  schema.annotate({
+    parseOptions: {
+      errors: 'all',
+      onExcessProperty: 'error',
+    },
+  });

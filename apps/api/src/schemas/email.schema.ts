@@ -19,7 +19,7 @@ const ValidEmailSchema = Schema.String.pipe(
         );
       },
       {
-        description: 'an email address',
+        expected: 'an email address',
       },
     ),
   ),

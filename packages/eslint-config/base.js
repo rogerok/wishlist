@@ -121,6 +121,7 @@ export const config = [
       'sonarjs/no-duplicated-branches': 'warn',
       'sonarjs/todo-tag': 'off',
       'sonarjs/no-empty-test-file': 'off',
+      'sonarjs/no-unused-vars': 'off',
     },
   },
   {

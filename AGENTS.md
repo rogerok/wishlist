@@ -10,7 +10,7 @@ The current primary stack is:
 
 - strict TypeScript, ESM, and Node.js;
 - a pnpm workspace and Turborepo;
-- the API in `../apps/api`;
+- the API in `apps/api`;
 - Effect and Effect Platform for the application and HTTP;
 - PostgreSQL, Kysely, and Effect SQL for data access;
 - Vitest and `@effect/vitest` for testing.
