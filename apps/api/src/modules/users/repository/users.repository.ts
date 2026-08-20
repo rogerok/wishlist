@@ -2,24 +2,25 @@ import { Context, Effect, Layer, Option, Schema } from 'effect';
 import { SqlError } from 'effect/unstable/sql';
 import { sql } from 'kysely';
 
-import { DB } from '#db/db.service.js';
-import {
-  InvalidUserRecord,
-  UserEmailAlreadyExists,
+import type {
   UsersRepositoryCreateError,
   UsersRepositoryDeleteError,
-  UsersRepositoryError,
   UsersRepositoryGetAllError,
   UsersRepositoryGetByIdError,
   UsersRepositoryUpdateError,
 } from '#modules/users/repository/users.repository.errors.js';
-import { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
-import { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
+import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
+import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
+import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
+import type { UserId } from '#modules/users/schemas/user.schema.js';
+
+import { DB } from '#db/db.service.js';
 import {
-  UserResponse,
-  UserResponseSchema,
-} from '#modules/users/schemas/user-response.schema.js';
-import { UserId } from '#modules/users/schemas/user.schema.js';
+  InvalidUserRecord,
+  UserEmailAlreadyExists,
+  UsersRepositoryError,
+} from '#modules/users/repository/users.repository.errors.js';
+import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
 const decodeUser = Schema.decodeUnknownEffect(UserResponseSchema);

@@ -1,6 +1,6 @@
 import { Data } from 'effect';
 
-import { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
+import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 
 export class UserNotFoundError extends Data.TaggedError('UserNotFoundError')<{
   readonly id: UserId;

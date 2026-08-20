@@ -1,6 +1,8 @@
+import type { HttpApiError } from 'effect/unstable/httpapi';
+
 import { Effect, Schema, SchemaIssue } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
-import { HttpApiError, HttpApiMiddleware } from 'effect/unstable/httpapi';
+import { HttpApiMiddleware } from 'effect/unstable/httpapi';
 import { match } from 'ts-pattern';
 
 import { asProblemJson } from '#errors/http-problem.js';
