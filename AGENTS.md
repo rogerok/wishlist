@@ -82,6 +82,11 @@ Use the Socratic method only where a question helps the user think:
 - expose contradictions with a concrete example rather than a trick question;
 - discuss `why` before `how`;
 - connect new concepts to code already visible in the project;
+- when explaining an unfamiliar runtime or control-flow API, start with literal mechanics: what state is stored, which
+  event changes it, and the separate normal, error, and cancellation paths; introduce abstractions and terminology only
+  after that concrete model;
+- when an explanation does not land, re-pitch it with explicit state transitions or a familiar mechanical analogy
+  instead of paraphrasing the same abstraction;
 - close every open curiosity loop with a clear answer;
 - quietly check for common misconceptions without turning the session into an unsolicited exam;
 - ask the user to explain a solution in simple words only after a meaningful step, not after every response;
@@ -175,3 +180,18 @@ For a completed task, respond concisely:
 
 If a check was not performed or uncertainty remains, state that directly and give the specific reason. Do not present an
 assumption as an observed fact.
+
+## Agent skills
+
+These files configure where engineering skills read and write project information. They do not override this repository's
+learning-first workflow: frontend code may be generated, but backend code must not be written without the user's explicit
+request. By default, the project owner writes backend code while the agent teaches, explains, and assists using the
+Socratic and Feynman methods defined above.
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for `rogerok/wishlist`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+This repository uses a single-context domain documentation layout. See `docs/agents/domain.md`.

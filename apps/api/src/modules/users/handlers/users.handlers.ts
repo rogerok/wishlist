@@ -1,5 +1,9 @@
-import { Cause, Effect } from 'effect';
+import type { Cause } from 'effect';
+
+import { Effect } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
+
+import type { UserFailureLogAnnotation } from '#modules/users/schemas/user-logs.schema.js';
 
 import { AppApi } from '#api/api.js';
 import {
@@ -14,7 +18,6 @@ import {
   UsersUnavailableHttpError,
 } from '#modules/users/api/users.api.errors.js';
 import {
-  UserFailureLogAnnotation,
   UserFailureReason,
   UserLogEvent,
 } from '#modules/users/schemas/user-logs.schema.js';

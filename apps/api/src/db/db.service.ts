@@ -1,5 +1,7 @@
+import type { Effect } from 'effect';
+
 import * as PgKysely from '@repo/sql-kysely/pg';
-import { Context, Effect, Layer } from 'effect';
+import { Context, Layer } from 'effect';
 import { CamelCasePlugin } from 'kysely';
 
 import type { DB as Database } from '#db/generated/database.js';

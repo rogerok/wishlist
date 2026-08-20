@@ -1,19 +1,22 @@
 import { Context, Effect, Layer } from 'effect';
 
-import { UsersRepository } from '#modules/users/repository/users.repository.js';
-import { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
-import { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
-import { UserResponse } from '#modules/users/schemas/user-response.schema.js';
-import { UserId } from '#modules/users/schemas/user.schema.js';
-import {
-  UserDataIntegrityError,
-  UserEmailAlreadyExistsError,
-  UserNotFoundError,
+import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
+import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
+import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
+import type { UserId } from '#modules/users/schemas/user.schema.js';
+import type {
   UserServiceDeleteByIdError,
   UserServiceUpdateError,
   UsersServiceCreateError,
   UsersServiceGetAllError,
   UsersServiceGetByIdError,
+} from '#modules/users/service/users.service.errors.js';
+
+import { UsersRepository } from '#modules/users/repository/users.repository.js';
+import {
+  UserDataIntegrityError,
+  UserEmailAlreadyExistsError,
+  UserNotFoundError,
   UsersUnavailableError,
 } from '#modules/users/service/users.service.errors.js';
 

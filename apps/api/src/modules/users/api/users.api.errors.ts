@@ -1,7 +1,9 @@
 import { Schema } from 'effect';
 
+import type { UserId } from '#modules/users/schemas/user.schema.js';
+
 import { usersCollectionPath } from '#modules/users/api/users.api.constants.js';
-import { UserId, UserIdSchema } from '#modules/users/schemas/user.schema.js';
+import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
 export const UserByIdInstanceSchema = Schema.TemplateLiteral([
   usersCollectionPath,

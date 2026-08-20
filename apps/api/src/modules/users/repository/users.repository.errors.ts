@@ -1,7 +1,7 @@
 import { Data } from 'effect';
 
-import { UserEmail } from '#modules/users/schemas/user.schema.js';
-import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
+import type { UserEmail } from '#modules/users/schemas/user.schema.js';
+import type { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
 export class InvalidUserRecord extends Data.TaggedError('InvalidUserRecord')<{
   cause: unknown;

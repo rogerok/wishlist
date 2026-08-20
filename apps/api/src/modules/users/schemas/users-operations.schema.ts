@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import type { Schema } from 'effect';
 
 import { makeLiteralUnionSchema } from '#schemas/utils.js';
 

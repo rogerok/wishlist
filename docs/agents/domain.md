@@ -1,0 +1,30 @@
+# Domain Docs
+
+How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+
+## Layout
+
+This repository uses a single-context layout:
+
+- `CONTEXT.md` at the repository root contains the shared domain model and glossary.
+- `docs/adr/` contains architecture decision records for the whole repository.
+- Do not introduce `CONTEXT-MAP.md` or per-package context files unless the repository is deliberately migrated to a multi-context layout.
+
+## Before exploring, read these
+
+- **`CONTEXT.md`**: read the shared domain model and glossary.
+- **`docs/adr/`**: read ADRs that touch the area you're about to work in.
+
+If either location doesn't exist, **proceed silently**. Don't flag its absence or suggest creating it upfront. The `/domain-modeling` skill creates these files lazily when terms or decisions actually get resolved.
+
+## Use the glossary's vocabulary
+
+When your output names a domain concept—in an issue title, refactor proposal, hypothesis, or test name—use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+
+If the concept you need isn't in the glossary yet, either reconsider language the project doesn't use or note a real gap for `/domain-modeling`.
+
+## Flag ADR conflicts
+
+If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
+
+> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
