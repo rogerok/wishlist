@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Урок 1: механика Session Auth</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Урок 1 · 15–20 минут</div>
+    <h1>Сначала состояние, потом Effect</h1>
+    <p class="lede">Цель: без кода предсказать, какие записи и credentials появляются или исчезают при signup, login, me и logout.</p>
+    <div class="toplinks"><a class="button" href="../reference/implementation-roadmap.html">Открыть дорожную карту</a><a class="button" href="../RESOURCES.md">Материалы</a></div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Три разных состояния</h2>
+      <div class="relations">
+        <div class="relation-row"><div class="node"><strong>User</strong><br>публичный профиль</div><div class="arrow">1 → 1</div><div class="node"><strong>Password Credential</strong><br>доказательство личности</div></div>
+        <div class="relation-row"><div class="node"><strong>User</strong><br>публичный профиль</div><div class="arrow">1 → N</div><div class="node"><strong>Session</strong><br>временная аутентификация клиента</div></div>
+      </div>
+      <p><strong>Password Credential и Session напрямую не связаны.</strong> Во время login Credential только доказывает, какому User принадлежит запрос. После успешной проверки создаётся новая Session с <code>userId</code>. В следующих запросах browser предъявляет Session credential, а сервер связывает его digest непосредственно с User.</p>
+      <div class="callout warn"><strong>Ключевое различие:</strong> password hash защищает низкоэнтропийный человеческий секрет медленным scrypt. Session digest индексирует высокоэнтропийный случайный token быстрым SHA-256.</div>
+    </section>
+
+    <section class="card">
+      <h2>Четыре перехода</h2>
+      <table><thead><tr><th>Операция</th><th>Читает</th><th>Записывает</th><th>Клиент получает</th></tr></thead><tbody>
+        <tr><td>Signup</td><td>Проверка email uniqueness</td><td>User + Credential + Session</td><td>Public User + cookie</td></tr>
+        <tr><td>Login</td><td>User + Credential</td><td>Новая Session</td><td>Public User + cookie</td></tr>
+        <tr><td>Me</td><td>Session + User</td><td>Ничего</td><td>Public User</td></tr>
+        <tr><td>Logout</td><td>Cookie/digest</td><td>Удаляет одну Session</td><td>Expired cookie</td></tr>
+      </tbody></table>
+      <p>Effect здесь пока не магия: каждый use case — описание перехода состояния плюс три пути завершения: success, typed failure и interruption/defect. Layers только поставляют зависимости, необходимые переходу.</p>
+    </section>
+
+    <section class="card">
+      <h2>Проверка понимания</h2>
+      <div class="quiz" data-answer="1">
+        <strong>После второго login с другого браузера сколько Sessions должно остаться?</strong>
+        <div class="answers"><button>Одна активная Session</button><button>Две активные Sessions</button><button>Ни одной Session</button></div><div class="feedback" aria-live="polite"></div>
+      </div>
+      <div class="quiz" data-answer="2">
+        <strong>Что должно остаться после ошибки между User insert и Credential insert?</strong>
+        <div class="answers"><button>Только созданный User</button><button>User и пустая Session</button><button>Ни одной новой строки</button></div><div class="feedback" aria-live="polite"></div>
+      </div>
+      <div class="quiz" data-answer="0">
+        <strong>Что делает `/me`, если Session существует, но `expiresAt == now`?</strong>
+        <div class="answers"><button>Возвращает публичный 401</button><button>Продлевает Session на неделю</button><button>Возвращает публичный User</button></div><div class="feedback" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Практика перед Phase 1</h2>
+      <ol class="checklist"><li>Нарисуй на бумаге таблицы User, Password Credential, Session как три коробки.</li><li>Для каждого endpoint нарисуй стрелки read/write и подпиши rollback boundary.</li><li>Объясни вслух: почему logout удаляет Session, но не User и не Password Credential.</li><li>Открой Phase 1 дорожной карты и реализуй только Schema-контракты.</li></ol>
+      <p><strong>Основной manual:</strong> <a href="https://auth.pilcrowonpaper.com/sessions">Pilcrow Auth Book: Sessions</a>, затем <a href="https://auth.pilcrowonpaper.com/auth-sessions">Auth sessions</a>. Читай переходы состояния и security-инварианты, не копируй rolling expiration или <code>id.secret</code>. <strong>Справочник:</strong> <a href="https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html">OWASP Session Management</a>, разделы Session ID Properties и Session Expiration.</p>
+      <p class="stop"><strong>Урок завершён, если:</strong> ты можешь без подсказки предсказать строки БД и HTTP-ответ для success/failure каждого endpoint. Если любое место неясно — спроси агента именно про этот переход состояния.</p>
+    </section>
+  </main></div>
+  <footer class="shell">Не переходи к hashing, пока HTTP contract не заморожен: иначе несколько неизвестных смешаются в одной ошибке.</footer>
+  <script>
+    document.querySelectorAll('.quiz').forEach((quiz) => {
+      const expected = Number(quiz.dataset.answer);
+      const feedback = quiz.querySelector('.feedback');
+      quiz.querySelectorAll('button').forEach((button, index) => {
+        button.addEventListener('click', () => {
+          const correct = index === expected;
+          feedback.textContent = correct ? 'Верно. Объясни причину своими словами.' : 'Не совпало. Вернись к таблице переходов и проверь, какое состояние меняется.';
+          feedback.style.color = correct ? '#145b5f' : '#8f2f37';
+        });
+      });
+    });
+  </script>
+</body>
+</html>

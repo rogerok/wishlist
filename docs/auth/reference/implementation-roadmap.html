@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Дорожная карта: Session Auth с Effect</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Учебная дорожная карта</div>
+    <h1>PostgreSQL Session Auth с Effect: от контракта до реального cookie</h1>
+    <p class="lede">Не список задач, а последовательность наблюдаемых состояний. На каждом этапе ты читаешь маленький фрагмент, предсказываешь поведение, реализуешь один срез и доказываешь результат.</p>
+    <div class="toplinks">
+      <a class="button primary" href="../lessons/0001-session-auth-mental-model.html">Начать с урока 1</a>
+      <a class="button" href="../RESOURCES.md">Каталог материалов</a>
+      <a class="button" href="../implementation-plan.md">Полная спецификация</a>
+    </div>
+  </header>
+  <div class="layout shell">
+    <nav aria-label="Этапы">
+      <strong>Маршрут</strong>
+      <a href="#method">Как работать</a>
+      <a href="#phase-1">1. HTTP-контракты</a>
+      <a href="#phase-2">2. PostgreSQL schema</a>
+      <a href="#phase-3">3. Security primitives</a>
+      <a href="#phase-4">4. Репозитории</a>
+      <a href="#phase-5">5. Signup</a>
+      <a href="#phase-6">6. Login</a>
+      <a href="#phase-7">7. Middleware и /me</a>
+      <a href="#phase-8">8. Logout</a>
+      <a href="#phase-9">9. Composition и smoke</a>
+    </nav>
+    <main>
+      <section class="card" id="method">
+        <h2>Один цикл на каждый этап</h2>
+        <div class="three-col">
+          <div class="meta"><small>Перед кодом</small>Нарисовать состояние и предсказать один success и один failure.</div>
+          <div class="meta"><small>Во время</small>Довести один вертикальный путь до PostgreSQL или HTTP, не строить пустой scaffold.</div>
+          <div class="meta"><small>После</small>Запустить наблюдаемую проверку и объяснить, почему она защищает инвариант.</div>
+        </div>
+        <p class="callout warn"><strong>Правило остановки:</strong> не переходить дальше, пока текущий этап нельзя доказать отдельной командой или сценарием. TypeScript compilation подтверждает типы, но не транзакцию, cookie jar или SQL constraint.</p>
+      </section>
+
+      <section class="phase" id="phase-1">
+        <h2><span class="phase-number">1</span>Заморозить HTTP-контракты</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Согласованные endpoint и ошибки</div><div class="meta"><small>Выход</small>Компилируемый HttpApi group</div><div class="meta"><small>Не делать</small>SQL, hashing, cookie handlers</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://effect.plants.sh/introduction/quickstart/">Effect v4 Quickstart</a>, затем <a href="https://effect.plants.sh/http-api/handlers/">HttpApi Handlers</a>. <strong>Смотреть в коде:</strong> <a href="https://github.com/Effect-TS/effect/tree/v4.0.0-rc.108">Effect rc.108 HttpApi source</a> и локальный <code>modules/users</code>. <a href="../RESOURCES.md">Все ограничения и файлы</a>.</div>
+        <h3>Файлы</h3>
+        <p class="file-list"><code>modules/auth/api/auth.api.ts</code> <code>modules/auth/api/auth.api.constants.ts</code> <code>modules/auth/schemas/*</code> <code>modules/auth/api/auth.api.errors.ts</code></p>
+        <h3>Порядок реализации</h3>
+        <ol class="checklist">
+          <li>Выписать таблицу endpoint: method, path, request, success status/body, error status/body.</li>
+          <li>Создать password input Schema отдельно от Password Credential. Она проверяет 8–128 символов и не делает <code>trim</code>.</li>
+          <li>Собрать signup body из email, password и опциональных имён. Переиспользовать локальный <code>EmailSchema</code>, а не дублировать нормализацию.</li>
+          <li>Описать login body, public User response и четыре группы Problem Details ошибок.</li>
+          <li>Собрать auth HttpApi group без handler implementation. Убедиться, что API сам кодирует 201/200/204.</li>
+          <li>Добавить boundary tests: 7/8/128/129 символов, пробелы, excess property, malformed email.</li>
+        </ol>
+        <table><thead><tr><th>Проверка</th><th>Какой баг ловит</th></tr></thead><tbody><tr><td>Пароль <code>" 123456 "</code> сохраняет пробелы</td><td>Случайное изменение секрета через trim</td></tr><tr><td>Logout success — NoContent</td><td>Случайное JSON-тело при 204</td></tr><tr><td>Excess field → текущий Problem Details</td><td>Второй validation convention</td></tr></tbody></table>
+        <p class="stop"><strong>Готово, когда:</strong> контракт компилируется, boundary tests проходят, а ты можешь назвать публичный ответ каждого endpoint без чтения handler.</p>
+      </section>
+
+      <section class="phase" id="phase-2">
+        <h2><span class="phase-number">2</span>Добавить модель PostgreSQL</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>User + Credential + Session invariants</div><div class="meta"><small>Выход</small>Migration и generated types</div><div class="meta"><small>Не делать</small>Repository interfaces</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://www.kysely.dev/docs/migrations">Kysely Migrations</a> и <a href="https://www.postgresql.org/docs/16/ddl-constraints.html">PostgreSQL 16 Constraints</a>. <strong>Сравнить:</strong> <a href="https://github.com/kysely-org/kysely/tree/v0.29.5">pinned Kysely migration tests</a> и <a href="https://github.com/voxpelli/node-connect-pg-simple/blob/c46daef6d06d257a0fb946ad90b9fb9a652bbe90/table.sql"><code>connect-pg-simple/table.sql</code></a>, не копируя generic JSON session.</div>
+        <h3>Порядок реализации</h3>
+        <ol class="checklist">
+          <li>На бумаге определить cardinality: User имеет ровно один Password Credential и много Sessions.</li>
+          <li>Создать <code>password_credentials</code>: <code>user_id</code> PK/FK, versioned hash, timestamps, cascade.</li>
+          <li>Создать <code>sessions</code>: независимый UUID, <code>user_id</code>, unique digest, creation и absolute expiration.</li>
+          <li>Добавить только доказанные query indexes: unique digest, user id, expiration cleanup.</li>
+          <li>Написать симметричный down migration в обратном dependency order.</li>
+          <li>Применить migration к реальному PostgreSQL, сгенерировать Kysely types, проверить rollback.</li>
+        </ol>
+        <table><thead><tr><th>Эксперимент</th><th>Ожидаемое состояние</th></tr></thead><tbody><tr><td>Повторный digest</td><td>Unique violation, одна строка</td></tr><tr><td>Удаление User</td><td>Credentials и Sessions удалены cascade</td></tr><tr><td>Rollback после User insert</td><td>Ни одной auth-строки</td></tr></tbody></table>
+        <p class="callout danger"><strong>Типичная ошибка:</strong> вручную править generated database type или добавлять <code>last_seen_at</code>/<code>revoked_at</code> до появления use case.</p>
+        <p class="stop"><strong>Готово, когда:</strong> чистая БД проходит up/down, constraints наблюдаются в PostgreSQL, generated file получен командой проекта.</p>
+      </section>
+
+      <section class="phase" id="phase-3">
+        <h2><span class="phase-number">3</span>Построить security primitives</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Password и random bytes</div><div class="meta"><small>Выход</small>PasswordHasher и SessionTokenGenerator</div><div class="meta"><small>Не делать</small>DB lookup и HTTP</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://auth.pilcrowonpaper.com/sessions">Auth Book: Sessions</a>, <a href="https://nodejs.org/docs/latest-v25.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback">Node 25 scrypt</a>, <a href="https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt">OWASP scrypt</a>. <strong>Разобрать:</strong> <a href="https://github.com/lucia-auth/lucia/blob/e1ef2bc66a070f61813ed03d25c1ba8061c4d9f0/code/auth_session.ts">pinned Lucia single-file example</a> только как набор инвариантов.</div>
+        <div class="callout warn"><strong>Обязательный урок перед реализацией:</strong> <a href="../lessons/0002-bounded-password-hashing.html">bounded password hashing</a>. Async <code>scrypt</code> использует libuv worker pool, но не ограничивает память и конкурентность автоматически. Определи memory budget, process-local Semaphore, bounded wait и overload behavior.</div>
+        <h3>Порядок реализации</h3>
+        <ol class="checklist">
+          <li>Спроектировать versioned password-hash format: algorithm, version, N/r/p, salt, key.</li>
+          <li>Обернуть callback-based async <code>crypto.scrypt</code> в отменяемый Effect; не использовать sync API.</li>
+          <li>Задать <code>N=2^17,r=8,p=1</code>, достаточный <code>maxmem</code> и измерить latency/RAM на текущей машине.</li>
+          <li>Измерить один hash/verify и выбранную конкурентность; оценить суммарную память как <code>concurrency × memory per hash</code>.</li>
+          <li>Ограничить активные hash/verify через Effect Semaphore; отдельно ограничить очередь/время ожидания, потому что Semaphore сам не ограничивает число ожидающих fibers.</li>
+          <li>Разделить malformed stored format и password mismatch: первое — integrity error, второе — нормальный false.</li>
+          <li>Генерировать 32 random bytes, отдавать base64url token и отдельно SHA-256 digest исходных bytes.</li>
+          <li>Скрывать секреты через <code>Redacted</code>, но раскрывать только внутри минимальной crypto/cookie границы.</li>
+        </ol>
+        <table><thead><tr><th>Тест</th><th>Инвариант</th></tr></thead><tbody><tr><td>Один password дважды</td><td>Разные salt/hash, оба verify=true</td></tr><tr><td>Wrong password</td><td>verify=false, не defect</td></tr><tr><td>Malformed hash</td><td>Typed integrity failure</td></tr><tr><td>Token sample</td><td>32 bytes, stable digest, no raw logging</td></tr></tbody></table>
+        <p class="stop"><strong>Готово, когда:</strong> primitives тестируются без PostgreSQL и HTTP; production generator не детерминирован; test Layer детерминирован; benchmark обосновывает concurrency; тест доказывает освобождение permit при success, failure и interruption.</p>
+      </section>
+
+      <section class="phase" id="phase-4">
+        <h2><span class="phase-number">4</span>Добавить узкие репозитории</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Generated DB types</div><div class="meta"><small>Выход</small>Credential/Session persistence ports</div><div class="meta"><small>Не делать</small>Signup orchestration</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://www.kysely.dev/docs/examples/transactions/simple-transaction">Kysely transaction example</a> и <a href="https://www.postgresql.org/docs/16/errcodes-appendix.html">PostgreSQL error codes</a>. <strong>Смотреть в коде:</strong> <a href="https://github.com/kysely-org/kysely/tree/v0.29.5">pinned Kysely builders</a>, Effect <code>SqlClient</code> и локальный <code>UsersRepository</code>; именно локальный seam определяет архитектуру.</div>
+        <h3>Операции, которых достаточно</h3>
+        <ul><li>Password Credentials: insert; find by normalized email с минимальным User projection.</li><li>Sessions: insert; find valid candidate by digest; delete by digest.</li><li>Users: переиспользовать существующий repository для public profile, не расширять его password hash.</li></ul>
+        <ol class="checklist">
+          <li>Для каждой операции записать success type и полный tagged-error union до написания query.</li>
+          <li>Выбирать только нужные columns и декодировать каждую DB row через Schema.</li>
+          <li>Классифицировать constraint error по SQLSTATE и имени конкретного constraint.</li>
+          <li>Не использовать broad <code>onConflict().doNothing()</code>, если возможны разные конфликты.</li>
+          <li>Проверить, что Effect transaction context доходит до каждого Kysely query.</li>
+        </ol>
+        <p class="stop"><strong>Готово, когда:</strong> repository integration tests работают с реальным PostgreSQL и ни один repository не знает cookie, HTTP status или полный signup flow.</p>
+      </section>
+
+      <section class="phase" id="phase-5">
+        <h2><span class="phase-number">5</span>Собрать первый вертикальный срез: signup</h2>
+        <div class="meta-grid"><div class="meta"><small>Состояние до</small>Email свободен, строк нет</div><div class="meta"><small>Состояние после</small>User + Credential + Session</div><div class="meta"><small>Failure</small>Полный rollback</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://www.postgresql.org/docs/16/tutorial-transactions.html">PostgreSQL Transactions</a> и <a href="https://effect.plants.sh/http-api/handlers/">Effect Handlers</a>. <strong>Gap:</strong> готового Effect 4/PostgreSQL atomic-signup walkthrough нет; transaction owner выводится из локального use case.</div>
+        <h3>Use case по шагам</h3>
+        <ol class="checklist">
+          <li>Handler принимает уже декодированный body и вызывает один <code>AuthService.signup</code>.</li>
+          <li>Service хеширует password и генерирует Session credential до либо внутри транзакции; решение должно учитывать удержание DB connection.</li>
+          <li><code>SqlClient.withTransaction</code> оборачивает три inserts на одном transaction context.</li>
+          <li>Duplicate email превращается в typed domain error; неизвестный SQL error остаётся unavailable/integrity.</li>
+          <li>Service возвращает public User и redacted raw token. Он не знает Set-Cookie.</li>
+          <li>Handler регистрирует cookie только после успешного завершения service Effect.</li>
+        </ol>
+        <p class="callout warn"><strong>Эксперимент:</strong> искусственно уронить вставку Credential после вставки User. Проверить БД и отсутствие Set-Cookie. Это главный тест транзакционной границы.</p>
+        <p class="stop"><strong>Готово, когда:</strong> реальный запрос signup создаёт три согласованные строки и cookie; повтор email даёт 409; induced failure не оставляет User.</p>
+      </section>
+
+      <section class="phase" id="phase-6">
+        <h2><span class="phase-number">6</span>Добавить login</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Email + password</div><div class="meta"><small>Success</small>Новая независимая Session</div><div class="meta"><small>Public failure</small>Один generic 401</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://auth.pilcrowonpaper.com/passwords">Auth Book: Passwords</a> и <a href="https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#authentication-responses">OWASP Authentication Responses</a>. <strong>Сравнить:</strong> <a href="https://github.com/better-auth/better-auth/tree/6442317f55b041ca8e1f31ca0ace268cfe87671d">Better Auth sign-in/session tests</a> для test matrix, но не копировать rolling Session и raw-token storage.</div>
+        <div class="callout warn"><strong>До production:</strong> login и остальные hashing endpoints получают account/IP rate limits до scrypt. Учебный старт — token bucket capacity 5, refill 1/minute — является гипотезой для load/security теста, не гарантией стойкости пароля. Подробности и границы — в <a href="../lessons/0002-bounded-password-hashing.html">уроке 2</a>.</div>
+        <ol class="checklist">
+          <li>Нормализовать email тем же Schema, что использует signup.</li>
+          <li>Загрузить минимальный credential record; не возвращать его наружу AuthService.</li>
+          <li>Асинхронно проверить password. Не превращать mismatch в defect.</li>
+          <li>Схлопнуть unknown email и mismatch в один публичный <code>InvalidCredentials</code>.</li>
+          <li>На каждый успех создать новую Session; не переиспользовать cookie из request.</li>
+          <li>Вернуть public User и новый redacted token; handler выставляет тот же cookie contract.</li>
+        </ol>
+        <table><thead><tr><th>Сценарий</th><th>Наблюдение</th></tr></thead><tbody><tr><td>Unknown email</td><td>Тот же status/content-type/body, что wrong password</td></tr><tr><td>Два login</td><td>Два разных digest, обе Sessions валидны</td></tr><tr><td>Broken stored hash</td><td>500 integrity, не 401</td></tr></tbody></table>
+        <p class="stop"><strong>Готово, когда:</strong> контракт не раскрывает существование email, а две сессии одного User живут независимо.</p>
+      </section>
+
+      <section class="phase" id="phase-7">
+        <h2><span class="phase-number">7</span>Security middleware и /me</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Cookie credential</div><div class="meta"><small>Выход</small>AuthenticatedSession Context</div><div class="meta"><small>Consumer</small>/me без parsing cookie</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://effect.plants.sh/http-api/middleware-and-auth/">Effect Middleware and Auth</a> и <a href="https://auth.pilcrowonpaper.com/csrf">Auth Book: CSRF</a>. <strong>Source truth:</strong> <a href="https://github.com/Effect-TS/effect/tree/v4.0.0-rc.108">pinned rc.108</a> <code>HttpApiSecurity</code>, <code>HttpApiMiddleware</code>, <code>HttpApiBuilder</code>.</div>
+        <ol class="checklist">
+          <li>Объявить cookie через <code>HttpApiSecurity.apiKey</code> для <code>wishlist_session</code>.</li>
+          <li>В required middleware явно отвергнуть пустой <code>Redacted</code>: это особенность rc.108.</li>
+          <li>Строго декодировать base64url и проверить длину до PostgreSQL.</li>
+          <li>Вычислить digest, найти Session + public User, затем проверить <code>expiresAt &gt; now</code>.</li>
+          <li>Предоставить <code>AuthenticatedSession</code> через Context; не класть туда raw token/hash.</li>
+          <li><code>/me</code> читает только Context и возвращает UserResponse.</li>
+        </ol>
+        <table><thead><tr><th>Cookie</th><th>DB query?</th><th>Ответ</th></tr></thead><tbody><tr><td>Отсутствует/пустая</td><td>Нет</td><td>401</td></tr><tr><td>Malformed/wrong length</td><td>Нет</td><td>401</td></tr><tr><td>Unknown/expired</td><td>Да</td><td>401</td></tr><tr><td>Valid</td><td>Да</td><td>200 User</td></tr></tbody></table>
+        <p class="stop"><strong>Готово, когда:</strong> truth table закреплена тестами, а protected handler типологически зависит от AuthenticatedSession, а не от request cookie.</p>
+      </section>
+
+      <section class="phase" id="phase-8">
+        <h2><span class="phase-number">8</span>Идемпотентный logout</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Optional cookie</div><div class="meta"><small>Состояние после</small>Current Session отсутствует</div><div class="meta"><small>Ответ</small>204 + expired cookie</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://auth.pilcrowonpaper.com/auth-sessions">Auth Book: Auth sessions</a> и <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie">MDN Set-Cookie</a>. <strong>Сравнить:</strong> <a href="https://github.com/better-auth/better-auth/tree/6442317f55b041ca8e1f31ca0ace268cfe87671d">Better Auth</a> и <a href="https://github.com/expressjs/session/tree/96ebea4b6cd805584fba04523773b1b918a836d7">express-session</a> sign-out/destroy tests как counterexamples к локальной failure policy.</div>
+        <ol class="checklist">
+          <li>Не использовать required middleware: отсутствие cookie у logout является успешным no-op.</li>
+          <li>Для well-formed token вычислить digest и удалить только matching row.</li>
+          <li>Missing, malformed, unknown и уже удалённая Session дают 204.</li>
+          <li>Если DB operation для well-formed credential падает, вернуть 503: отзыв не доказан.</li>
+          <li>В ответе вызвать <code>expireCookie</code> с теми же name/path/domain attributes.</li>
+          <li>Проверить две Sessions: logout первой не меняет вторую.</li>
+        </ol>
+        <p class="callout danger"><strong>Не путать:</strong> <code>removeCookie</code> редактирует создаваемый response, но не удаляет cookie из браузера. Нужен expiry header.</p>
+        <p class="stop"><strong>Готово, когда:</strong> последовательность logout → logout остаётся 204, первая Session даёт 401, вторая — 200, cookie jar удаляет credential.</p>
+      </section>
+
+      <section class="phase" id="phase-9">
+        <h2><span class="phase-number">9</span>Собрать Layers и запустить реальный сервер</h2>
+        <div class="meta-grid"><div class="meta"><small>Вход</small>Проверенные части</div><div class="meta"><small>Выход</small>Рабочий API</div><div class="meta"><small>Proof</small>201 → 200 → 204 → 401</div></div>
+        <div class="callout"><strong>Читать:</strong> <a href="https://effect.plants.sh/http-api/serving-and-clients/">Effect Serving and Clients</a>, <a href="https://effect.plants.sh/testing/integration-testing/">Integration Testing</a> и <a href="https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#including_credentials">MDN Fetch credentials</a>. <strong>Смотреть в коде:</strong> Effect rc.108 и <a href="https://github.com/expressjs/session/tree/96ebea4b6cd805584fba04523773b1b918a836d7">express-session transport tests</a>.</div>
+        <ol class="checklist">
+          <li>Собрать live repositories поверх существующих DB/PgClient Layers.</li>
+          <li>Предоставить PasswordHasher, TokenGenerator, Clock и typed cookie config.</li>
+          <li>Добавить AuthService в <code>AppServicesLive</code>, group handlers — в <code>AppApiLive</code>, contract — в <code>AppApi</code>.</li>
+          <li>Обновить <code>.env.example</code> только фиктивными значениями и комментариями; secret для Sessions не нужен без pepper.</li>
+          <li>Запустить narrow type/test/db checks, затем реальный server.</li>
+          <li>Пройти signup → me → logout → me через cookie jar и проверить точные Set-Cookie attributes.</li>
+          <li>Провести self-review: секреты в логах, пропущенные callers, открытый <code>POST /api/users</code>, CORS credentials.</li>
+        </ol>
+        <pre><code>Expected HTTP sequence
+signup  → 201 + Set-Cookie
+me      → 200 + User
+logout  → 204 + expired cookie
+me      → 401</code></pre>
+        <p class="stop"><strong>Готово, когда:</strong> этот сценарий работает на реальном transport, integration tests проходят, а P0 authorization holes явно остаются следующим обязательным этапом.</p>
+      </section>
+    </main>
+  </div>
+  <footer class="shell">Следующий шаг после чтения: пройти урок 1, затем реализовать только Phase 1 и принести Schema или конкретную ошибку на разбор.</footer>
+</body>
+</html>
