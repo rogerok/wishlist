@@ -3,7 +3,7 @@ import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
 import { AppApi } from '#api/api.js';
 import { RequestValidationMiddlewareLive } from '#errors/request-validation.js';
-import { HealthApiLive } from '#modules/health/health.handlers.js';
+import { HealthApiLive } from '#modules/health/handlers/health.handlers.js';
 import { UsersHandlersLive } from '#modules/users/handlers/users.handlers.js';
 
 const groupsLive = Layer.mergeAll(HealthApiLive, UsersHandlersLive);
