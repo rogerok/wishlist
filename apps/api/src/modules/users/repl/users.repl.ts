@@ -9,7 +9,6 @@ import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 import { UsersService } from '#modules/users/service/users.service.js';
 
 type CreateUserReplInput = Schema.Codec.Encoded<typeof CreateUserBodySchema>;
-
 type UpdateUserReplInput = Schema.Codec.Encoded<typeof UpdateUserBodySchema>;
 
 export interface UsersReplFacade {
@@ -23,7 +22,9 @@ export interface UsersReplFacade {
   ) => Promise<UserResponse>;
 }
 
-export const makeUsersRepl = (runPromise: RunPromise) =>
+export const makeUsersRepl = (
+  runPromise: RunPromise,
+): Effect.Effect<UsersReplFacade, never, UsersService> =>
   Effect.gen(function* () {
     const usersService = yield* UsersService;
 

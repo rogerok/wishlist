@@ -15,38 +15,13 @@ import {
 } from 'effect/unstable/httpapi';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { AppApiLive } from '#api/api-live.js';
 import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#errors/request-validation.js';
-import { UsersService } from '#modules/users/service/users.service.js';
+import { withRequestParseOptions } from '#schemas/utils.js';
 
-let createCalls = 0;
-
-const unexpectedCall = (method: string) =>
-  Effect.die(new Error(`Unexpected UsersService.${method} call`));
-
-const UsersServiceTest = Layer.succeed(UsersService, {
-  create: () =>
-    Effect.gen(function* () {
-      createCalls += 1;
-      return yield* unexpectedCall('create');
-    }),
-  getAll: unexpectedCall('getAll'),
-  getById: () => unexpectedCall('getById'),
-  update: () => unexpectedCall('update'),
-  deleteById: () => unexpectedCall('deleteById'),
-});
-
-const TestAppLive = AppApiLive.pipe(
-  HttpRouter.provideRequest(UsersServiceTest),
-  Layer.provide(NodeHttpServer.layerHttpServices),
-);
-
-const app = HttpRouter.toWebHandler(TestAppLive, {
-  disableLogger: true,
-});
+let handlerCalls = 0;
 
 const commonErrorFields = {
   type: '/errors/request-validation',
@@ -57,12 +32,16 @@ const commonErrorFields = {
 };
 const headers = { 'Content-Type': 'application/json' };
 
-const payloadWithInvalidEmail = {
-  firstName: 'Ivan',
-  middleName: null,
-  lastName: 'Ivanov',
-  email: 'not-an-email',
-} as const;
+const TestPayloadSchema = Schema.Struct({
+  quantity: Schema.Finite,
+}).pipe(withRequestParseOptions);
+const TestIdSchema = Schema.String.pipe(
+  Schema.check(
+    Schema.isPattern(/^item-\d+$/u, {
+      expected: 'an item id',
+    }),
+  ),
+);
 
 const BrokenResponseSchema = Schema.String.pipe(
   Schema.decodeTo(
@@ -80,50 +59,73 @@ const BrokenResponseSchema = Schema.String.pipe(
   ),
 );
 
-const brokenGroup = HttpApiGroup.make('group').add(
-  HttpApiEndpoint.get('get', '/broken-resp', {
+const validationGroup = HttpApiGroup.make('validation').add(
+  HttpApiEndpoint.post('create', '/test/items', {
+    payload: TestPayloadSchema,
+    success: Schema.String,
+  }),
+  HttpApiEndpoint.get('getById', '/test/items/:id', {
+    params: { id: TestIdSchema },
+    success: Schema.String,
+  }),
+  HttpApiEndpoint.get('brokenResponse', '/test/broken-response', {
     success: BrokenResponseSchema,
   }),
 );
-const Api = HttpApi.make('api')
-  .add(brokenGroup)
+const TestApi = HttpApi.make('test')
+  .add(validationGroup)
   .middleware(RequestValidationMiddleware);
-const BrokenHandlers = HttpApiBuilder.group(Api, 'group', (handlers) =>
-  handlers.handle('get', () => Effect.succeed('valid handler result')),
+const TestHandlersLive = HttpApiBuilder.group(
+  TestApi,
+  'validation',
+  (handlers) =>
+    handlers
+      .handle('create', () =>
+        Effect.sync(() => {
+          handlerCalls += 1;
+          return 'created';
+        }),
+      )
+      .handle('getById', () =>
+        Effect.sync(() => {
+          handlerCalls += 1;
+          return 'found';
+        }),
+      )
+      .handle('brokenResponse', () => Effect.succeed('valid handler result')),
 ).pipe(Layer.provide(RequestValidationMiddlewareLive));
 
-const BrokenTestApp = HttpApiBuilder.layer(Api).pipe(
-  Layer.provide(BrokenHandlers),
+const TestAppLive = HttpApiBuilder.layer(TestApi).pipe(
+  Layer.provide(TestHandlersLive),
   Layer.provide(NodeHttpServer.layerHttpServices),
 );
 
-const brokenApp = HttpRouter.toWebHandler(BrokenTestApp, {
+const app = HttpRouter.toWebHandler(TestAppLive, {
   disableLogger: true,
 });
 
 beforeEach(() => {
-  createCalls = 0;
+  handlerCalls = 0;
 });
 afterAll(async () => {
   await app.dispose();
-  await brokenApp.dispose();
 });
 
 describe('request validation', () => {
   it('returns all payload validation issues as Problem Details', async () => {
-    const req = new Request('http://localhost/api/users', {
+    const req = new Request('http://localhost/test/items', {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        ...payloadWithInvalidEmail,
-        emali: 'typo@example.com',
+        quantity: 'many',
+        unexpected: true,
       }),
     });
 
     const response = await app.handler(req);
 
     expect(response.status).toBe(400);
-    expect(createCalls).toBe(0);
+    expect(handlerCalls).toBe(0);
     expect(response.headers.get('content-type')).toBe(
       'application/problem+json',
     );
@@ -133,16 +135,16 @@ describe('request validation', () => {
     expect(body).toEqual(
       expect.objectContaining({
         ...commonErrorFields,
-        instance: '/api/users',
+        instance: '/test/items',
         errors: expect.arrayContaining([
           expect.objectContaining({
             location: 'payload',
-            path: ['email'],
-            message: expect.stringMatching('email address'),
+            path: ['quantity'],
+            message: expect.stringMatching(/\S/u),
           }),
           expect.objectContaining({
             location: 'payload',
-            path: ['emali'],
+            path: ['unexpected'],
             message: expect.stringMatching(/\S/u),
           }),
         ]),
@@ -151,16 +153,16 @@ describe('request validation', () => {
   });
 
   it('returns malformed JSON as a payload validation issue', async () => {
-    const req = new Request('http://localhost/api/users', {
+    const req = new Request('http://localhost/test/items', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: `{"email":"user@example.com"`,
+      headers,
+      body: `{"quantity":1`,
     });
 
     const response = await app.handler(req);
 
     expect(response.status).toBe(400);
-    expect(createCalls).toBe(0);
+    expect(handlerCalls).toBe(0);
     expect(response.headers.get('content-type')).toBe(
       'application/problem+json',
     );
@@ -182,13 +184,14 @@ describe('request validation', () => {
   });
 
   it('returns a params validation issue as Problem Details', async () => {
-    const req = new Request('http://localhost/api/users/not-a-uuid', {
+    const req = new Request('http://localhost/test/items/not-an-item-id', {
       method: 'GET',
     });
 
     const response = await app.handler(req);
 
     expect(response.status).toBe(400);
+    expect(handlerCalls).toBe(0);
     expect(response.headers.get('content-type')).toBe(
       'application/problem+json',
     );
@@ -198,12 +201,12 @@ describe('request validation', () => {
     expect(body).toEqual(
       expect.objectContaining({
         ...commonErrorFields,
-        instance: '/api/users/not-a-uuid',
+        instance: '/test/items/not-an-item-id',
         errors: expect.arrayContaining([
           expect.objectContaining({
             location: 'params',
             path: ['id'],
-            message: expect.stringMatching('UUID v4'),
+            message: expect.stringMatching('item id'),
           }),
         ]),
       }),
@@ -211,11 +214,11 @@ describe('request validation', () => {
   });
 
   it('returns 500 when response encoding fails', async () => {
-    const req = new Request('http://localhost/broken-resp', {
+    const req = new Request('http://localhost/test/broken-response', {
       method: 'GET',
     });
 
-    const resp = await brokenApp.handler(req);
+    const resp = await app.handler(req);
 
     expect(resp.status).toBe(500);
     expect(resp.headers.get('content-type')).not.toBe(

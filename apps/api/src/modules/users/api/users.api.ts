@@ -26,8 +26,7 @@ import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
-// TODO: нужен middleware для ошибок валидации
-// put переписать на патч.
+//TODO: put переписать на патч.
 export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
   HttpApiEndpoint.post(UserOperation.create, usersCollectionPath, {
     payload: CreateUserBodySchema,

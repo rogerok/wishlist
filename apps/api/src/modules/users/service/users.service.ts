@@ -44,7 +44,7 @@ export class UsersService extends Context.Service<
   UsersService,
   UsersServiceShape
 >()('app/UsersService') {}
-// TODO: сделать работу repl вместо апи клиента
+
 export const UsersServiceLive = Layer.effect(
   UsersService,
   Effect.gen(function* () {
