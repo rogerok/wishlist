@@ -161,6 +161,14 @@ Do not run every command mechanically; choose checks that match the change. For 
 then prove the fix with the same scenario. For a new observable contract, add or update a test in the existing style.
 Exercise the real application or endpoint when compilation and unit tests do not prove the behavior.
 
+Use property-based testing with FastCheck when the contract is an invariant over a large input space and generated cases
+can expose behavior that a small explicit table cannot. Use the installed `effect/testing` integration and follow the
+nearest Vitest style. Keep generators simpler than the behavior under test and make every generated value satisfy
+unrelated preconditions, so a failure isolates the intended property; assert the exact invariant or failure cause, not
+only a generic failure. Prefer example-based or table-driven tests for fixed HTTP status/error contracts, finite boundary
+matrices, and other small known case sets. Do not use FastCheck when generator, shrinking, or setup overhead exceeds the
+additional confidence or merely retests library behavior.
+
 The work is complete when:
 
 - the requested behavior is fully implemented;

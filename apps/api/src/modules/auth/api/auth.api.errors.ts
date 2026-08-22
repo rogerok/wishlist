@@ -8,7 +8,7 @@ import {
 } from '#modules/auth/api/auth.api.constants.js';
 import { makeLiteralUnionSchema } from '#schemas/utils.js';
 
-export const AuthInstanceErrors = makeLiteralUnionSchema([
+export const AuthInstanceSchema = makeLiteralUnionSchema([
   authSignupPath,
   authLoginPath,
   authLogoutPath,
@@ -40,7 +40,7 @@ export class AuthUnavailableHttpError extends Schema.Error<AuthUnavailableHttpEr
     status: Schema.tag(503),
     title: Schema.tag('Auth service is unavailable'),
     type: Schema.tag('/errors/auth-unavailable'),
-    instance: AuthInstanceErrors,
+    instance: AuthInstanceSchema,
   },
   {
     httpApiStatus: 503,
@@ -56,7 +56,7 @@ export class AuthInternalHttpError extends Schema.Error<AuthInternalHttpError>(
     status: Schema.tag(500),
     title: Schema.tag('Internal auth service error'),
     type: Schema.tag('/errors/auth-internal-error'),
-    instance: AuthInstanceErrors,
+    instance: AuthInstanceSchema,
   },
   {
     httpApiStatus: 500,
