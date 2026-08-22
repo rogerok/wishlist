@@ -2,19 +2,19 @@
   "$schema": "./node_modules/@effect/tsgo/schema.json",
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
-    "rootDir": "./src",
+    "rootDir": ".",
     "outDir": "./dist",
-    "noEmit": false,
+    "noEmit": true,
     "sourceMap": true,
     "declaration": false,
     "declarationMap": false,
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     "plugins": [
       {
         "name": "@effect/language-service"
       }
     ]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

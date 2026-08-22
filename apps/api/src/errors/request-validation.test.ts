@@ -13,7 +13,6 @@ import {
   HttpApiEndpoint,
   HttpApiGroup,
 } from 'effect/unstable/httpapi';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   RequestValidationMiddleware,
