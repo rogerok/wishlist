@@ -35,9 +35,12 @@ const commonBodyFields = {
   email: '1@gmail.com',
 };
 
+const pass = () => 'Password1!';
+const password = pass();
+
 const passwords = {
-  password: 'Password1!',
-  passwordConfirm: 'Password1!',
+  password,
+  passwordConfirm: password,
 };
 
 const missingNameCases = [
@@ -117,7 +120,7 @@ describe('SignupBodySchema', () => {
     const result = Schema.decodeResult(SignupRequestBodySchema)({
       ...commonBodyFields,
       password: passwords.password,
-      passwordConfirm: 'Password2!',
+      passwordConfirm: password + '1',
     });
 
     if (Result.isSuccess(result)) {
