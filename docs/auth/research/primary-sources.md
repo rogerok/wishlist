@@ -156,7 +156,7 @@
 - **Primary sources:** [NIST SP 800-63B §3.1.1 Passwords](https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#password); [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html); [OWASP Password Storage — upgrading work factor](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#upgrading-the-work-factor); [NIST password blocklist requirements](https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver).
 - **Локальные ориентиры:** planned `password_credentials` lifecycle and AuthService transaction/error boundaries.
 - **Упражнение:** design reset-token state machine `issued → consumed|expired`, prove replay fails, and list which sessions are revoked after change/reset. Parse old parameters and decide whether successful login triggers atomic rehash.
-- **Version note:** current NIST SP 800-63B-4 says 15 minimum for single-factor and at least 64 maximum support; milestone 8–128 is an explicit local first-step contract and should be revisited in this P1 item, not silently changed mid-implementation.
+- **Version note:** current NIST SP 800-63B-4 says 15 minimum for a password used as a single authentication factor, support for at least 64 characters, and no composition rules. The milestone's 8–100 composition-and-whitelist policy is an explicit local learning contract, not current NIST guidance; revisit it in this P1 item rather than silently carrying it into production.
 
 ### P1. Operational security
 

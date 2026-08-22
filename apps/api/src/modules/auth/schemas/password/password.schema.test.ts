@@ -2,6 +2,24 @@ import { Result, Schema } from 'effect';
 
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 
+const invalidPasswordCases = [
+  {
+    field: 'AA1!AAAA',
+  },
+  {
+    field: 'aa1!aaaa',
+  },
+  {
+    field: 'Aa!!aaaa',
+  },
+  {
+    field: 'Aa11aaaa',
+  },
+  {
+    field: 'Aa1!aaaé',
+  },
+] as const;
+
 describe('PasswordSchema Test', () => {
   it('Decode passwords with PasswordSchema', () => {
     const first = Schema.decodeResult(PasswordSchema)('Aa1!aaa');
@@ -16,5 +34,11 @@ describe('PasswordSchema Test', () => {
 
     expect(Result.isSuccess(second)).toBe(true);
     expect(Result.isSuccess(third)).toBe(true);
+  });
+
+  it.each(invalidPasswordCases)('rejects invalid password', ({ field }) => {
+    const result = Schema.decodeResult(PasswordSchema)(field);
+
+    expect(Result.isFailure(result)).toBe(true);
   });
 });

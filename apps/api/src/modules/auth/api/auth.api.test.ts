@@ -1,9 +1,14 @@
 import { NodeHttpServer } from '@effect/platform-node';
-import { describe, it } from '@effect/vitest';
+import { describe, expect, it } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
 
+import {
+  RequestValidationHttpError,
+  RequestValidationMiddleware,
+  RequestValidationMiddlewareLive,
+} from '#errors/request-validation.js';
 import {
   authGroupIdentifier,
   authLogoutPath,
@@ -34,7 +39,9 @@ const headers = { 'content-type': 'application/json' };
 const unexpectedHandler = (operation: AuthOperation) => () =>
   Effect.die(new Error(`Unexpected ${operation} handler call`));
 
-const TestApi = HttpApi.make('auth-contract-test').add(authGroup);
+const TestApi = HttpApi.make('auth-contract-test')
+  .add(authGroup)
+  .middleware(RequestValidationMiddleware);
 const TestPositiveApiAuthHandlersLive = HttpApiBuilder.group(
   TestApi,
   authGroupIdentifier,
@@ -47,6 +54,7 @@ const TestPositiveApiAuthHandlersLive = HttpApiBuilder.group(
 );
 const TestPositiveAppLive = HttpApiBuilder.layer(TestApi).pipe(
   Layer.provide(TestPositiveApiAuthHandlersLive),
+  Layer.provide(RequestValidationMiddlewareLive),
   Layer.provide(NodeHttpServer.layerHttpServices),
 );
 const appPositive = HttpRouter.toWebHandler(TestPositiveAppLive, {
@@ -68,6 +76,7 @@ const TestNegativeApiAuthHandlersLive = HttpApiBuilder.group(
 );
 const TestNegativeAppLive = HttpApiBuilder.layer(TestApi).pipe(
   Layer.provide(TestNegativeApiAuthHandlersLive),
+  Layer.provide(RequestValidationMiddlewareLive),
   Layer.provide(NodeHttpServer.layerHttpServices),
 );
 const appNegative = HttpRouter.toWebHandler(TestNegativeAppLive, {
@@ -89,6 +98,7 @@ const TestInternalApiAuthHandlersLive = HttpApiBuilder.group(
 );
 const TestInternalAppLive = HttpApiBuilder.layer(TestApi).pipe(
   Layer.provide(TestInternalApiAuthHandlersLive),
+  Layer.provide(RequestValidationMiddlewareLive),
   Layer.provide(NodeHttpServer.layerHttpServices),
 );
 const appInternal = HttpRouter.toWebHandler(TestInternalAppLive, {
@@ -126,7 +136,7 @@ describe('/api/auth/signup', () => {
     expect(body).toEqual(publicUser);
   });
 
-  it('fail signup test', async () => {
+  it('fail signup test with email already exists', async () => {
     const request = makeRequest();
     const resp = await appNegative.handler(request);
     const json = await resp.json();
@@ -149,6 +159,40 @@ describe('/api/auth/signup', () => {
     expect(resp.headers.get('content-type')).toBe('application/problem+json');
     expect(body).toBeInstanceOf(AuthInternalHttpError);
     expect(body.instance).toBe(authSignupPath);
+  });
+
+  it('fail signup test with request validation error', async () => {
+    const request = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        password,
+        passwordConfirm: password,
+        firstName: null,
+        middleName: null,
+        lastName: null,
+        role: 'admin',
+      }),
+    });
+    const resp = await appInternal.handler(request);
+    const json = await resp.json();
+    const body = Schema.decodeUnknownSync(RequestValidationHttpError)(json);
+
+    expect(resp.status).toBe(400);
+    expect(resp.headers.get('content-type')).toBe('application/problem+json');
+    expect(body).toBeInstanceOf(RequestValidationHttpError);
+    expect(body).toEqual(
+      expect.objectContaining({
+        instance: authSignupPath,
+        errors: expect.arrayContaining([
+          expect.objectContaining({
+            location: 'payload',
+            path: ['role'],
+          }),
+        ]),
+      }),
+    );
   });
 });
 

@@ -51,13 +51,13 @@
         <h3>Порядок реализации</h3>
         <ol class="checklist">
           <li>Выписать таблицу endpoint: method, path, request, success status/body, error status/body.</li>
-          <li>Создать password input Schema отдельно от Password Credential. Она проверяет 8–128 символов и не делает <code>trim</code>.</li>
-          <li>Собрать signup body из email, password и опциональных имён. Переиспользовать локальный <code>EmailSchema</code>, а не дублировать нормализацию.</li>
+          <li>Создать password input Schema отдельно от Password Credential. Она проверяет длину 8–100, требует lowercase/uppercase ASCII letter, digit и разрешённый special character, не делает <code>trim</code> и отвергает whitespace.</li>
+          <li>Собрать signup body из обязательных ключей email, password, passwordConfirm, firstName, lastName и middleName. Значения имён допускают <code>string | null</code>; отсутствующий ключ не нормализуется в <code>null</code>. Переиспользовать локальный <code>UserEmailSchema</code>.</li>
           <li>Описать login body, public User response и четыре группы Problem Details ошибок.</li>
           <li>Собрать auth HttpApi group без handler implementation. Убедиться, что API сам кодирует 201/200/204.</li>
-          <li>Добавить boundary tests: 7/8/128/129 символов, пробелы, excess property, malformed email.</li>
+          <li>Добавить boundary tests: 7/8/100/101 символов, отсутствие каждой обязательной категории, whitespace, password confirmation, обязательные name keys, excess property и malformed email.</li>
         </ol>
-        <table><thead><tr><th>Проверка</th><th>Какой баг ловит</th></tr></thead><tbody><tr><td>Пароль <code>" 123456 "</code> сохраняет пробелы</td><td>Случайное изменение секрета через trim</td></tr><tr><td>Logout success — NoContent</td><td>Случайное JSON-тело при 204</td></tr><tr><td>Excess field → текущий Problem Details</td><td>Второй validation convention</td></tr></tbody></table>
+        <table><thead><tr><th>Проверка</th><th>Какой баг ловит</th></tr></thead><tbody><tr><td>Пароль <code>"Password1! "</code> отклоняется без <code>trim</code></td><td>Скрытая мутация пароля или случайное разрешение whitespace</td></tr><tr><td>Logout success — NoContent</td><td>Случайное JSON-тело при 204</td></tr><tr><td>Excess field → текущий Problem Details</td><td>Второй validation convention</td></tr></tbody></table>
         <p class="stop"><strong>Готово, когда:</strong> контракт компилируется, boundary tests проходят, а ты можешь назвать публичный ответ каждого endpoint без чтения handler.</p>
       </section>
 

@@ -125,6 +125,12 @@ export const config = [
     },
   },
   {
+    files: ['**/*.test.{ts,tsx,cts,mts,js,jsx,cjs,mjs}'],
+    rules: {
+      'sonarjs/no-hardcoded-passwords': 'off',
+    },
+  },
+  {
     files: ['**/*.service.ts', '**/*.repository.ts'],
     rules: {
       'perfectionist/sort-interfaces': [

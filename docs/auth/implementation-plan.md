@@ -42,13 +42,15 @@ Content-Type: application/json
 
 {
   "email": "user@example.test",
-  "password": "correct horse battery staple",
+  "password": "Password1!",
+  "passwordConfirm": "Password1!",
   "firstName": "Ada",
-  "lastName": "Lovelace"
+  "lastName": "Lovelace",
+  "middleName": null
 }
 ```
 
-`firstName` and `lastName` are optional at this boundary and normalize to `null` when absent.
+All seven JSON keys are required. `firstName`, `lastName`, and `middleName` accept `string | null`; a missing key is invalid rather than normalized to `null`. `passwordConfirm` must equal `password`, exists only at the HTTP boundary, and is never persisted or logged. Excess properties are rejected. `UserEmailSchema` preserves the existing email normalization behavior.
 
 Success:
 
@@ -66,7 +68,7 @@ Content-Type: application/json
 
 {
   "email": "user@example.test",
-  "password": "correct horse battery staple"
+  "password": "Password1!"
 }
 ```
 
@@ -163,13 +165,17 @@ Do not add `last_seen_at`, `revoked_at`, user-agent metadata, IP addresses, or a
 
 Use asynchronous `node:crypto.scrypt`, never `scryptSync` on the request path.
 
-- input length: 8–128 characters;
+- input length: 8–100 characters;
+- require at least one lowercase ASCII letter, one uppercase ASCII letter, one digit, and one permitted special character;
+- accept only ASCII letters, digits, and the punctuation whitelist encoded by `PasswordSchema`; reject whitespace and other characters;
 - do not trim or silently truncate the password;
 - generate a fresh random salt of at least 16 bytes for every Password Credential;
 - store a versioned, self-describing format containing scrypt parameters, salt, and derived key;
 - parse the stored format defensively;
 - compare equal-length derived keys with `timingSafeEqual`;
 - malformed stored hashes are internal data-integrity failures, not invalid credentials.
+
+This milestone policy is an explicit local learning contract, not a claim of alignment with current NIST password guidance. NIST SP 800-63B-4 recommends a 15-character minimum for passwords used as a single authentication factor, support for at least 64 characters, and no composition rules. Revisit the local 8–100 composition policy in the P1 password-lifecycle work before production use.
 
 OWASP's current minimum for scrypt is `N = 2^17`, `r = 8`, `p = 1`. Treat this as a starting security floor, explicitly configure sufficient `maxmem`, and benchmark the asynchronous operation on the deployment hardware before freezing parameters. The stored format must permit later rehashing with stronger parameters.
 
@@ -296,11 +302,11 @@ Study companion: [Phase 1 sources and exercise](./research/primary-sources.md#1-
 
 - add auth path constants and an HttpApi group;
 - add signup/login request schemas and public response/error schemas;
-- reuse `EmailSchema` and `UserResponseSchema`;
-- add password boundary validation without trimming;
+- reuse `UserEmailSchema` and `UserResponseSchema`;
+- add the explicit 8–100 password boundary and composition validation without trimming;
 - encode the four status/body contracts listed above.
 
-Check: type-check the API contract and write focused encoding/decoding examples for boundary values, including 7- and 8-character passwords and excess fields.
+Check: type-check the API contract and write focused encoding/decoding examples for 7/8/100/101-character passwords, missing character categories, whitespace, malformed email, required signup keys, password confirmation, and excess fields.
 
 ### 2. Add persistence schema
 
@@ -425,9 +431,10 @@ Expected sequence: `201 → 200 → 204 → 401`. Use the actual configured port
 
 ### Contract and validation
 
-- signup accepts exactly 8 password characters and rejects 7;
-- password is not trimmed;
-- malformed email and excess JSON fields produce existing validation Problem Details;
+- signup accepts exactly 8 and 100 password characters and rejects 7 and 101;
+- passwords missing lowercase, uppercase, digit, or special-character categories are rejected;
+- whitespace is rejected without trimming or otherwise mutating the password;
+- missing signup name keys, mismatched password confirmation, malformed email, and excess JSON fields produce existing validation Problem Details;
 - no success response contains credential or Session fields.
 
 ### Persistence and transactions
