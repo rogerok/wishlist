@@ -134,20 +134,22 @@ Add a new migration after `apps/api/src/db/migrations/0001_initial.ts`, then reg
 | --------------- | ------------------------------------------------------------------------------------------ |
 | `user_id`       | UUID primary key; FK → `users.id`; `ON DELETE CASCADE`                                     |
 | `password_hash` | text, not null; contains algorithm, format version, cost parameters, salt, and derived key |
-| `created_at`    | timestamptz, not null                                                                      |
-| `updated_at`    | timestamptz, not null                                                                      |
+| `created_at`    | timestamp(3) with time zone, not null; `DEFAULT now()`                                     |
+| `updated_at`    | timestamp(3) with time zone, not null; `DEFAULT now()`                                     |
 
 There is exactly one Password Credential per User in the first version. Keeping it outside `users` prevents profile queries from accidentally selecting sensitive authentication material and gives password changes their own lifecycle.
 
 ### `sessions`
 
-| Column         | Constraint                                           |
-| -------------- | ---------------------------------------------------- |
-| `id`           | UUID primary key                                     |
-| `user_id`      | UUID, not null; FK → `users.id`; `ON DELETE CASCADE` |
-| `token_digest` | bytea, not null, unique                              |
-| `created_at`   | timestamptz, not null                                |
-| `expires_at`   | timestamptz, not null                                |
+| Column         | Constraint                                                               |
+| -------------- | ------------------------------------------------------------------------ |
+| `id`           | UUID primary key; `DEFAULT gen_random_uuid()`                            |
+| `user_id`      | UUID, not null; FK → `users.id`; `ON DELETE CASCADE`                     |
+| `token_digest` | bytea, not null, unique; `CHECK (octet_length(token_digest) = 32)`       |
+| `created_at`   | timestamp(3) with time zone, not null; `DEFAULT now()`                   |
+| `expires_at`   | timestamp(3) with time zone, not null; `CHECK (expires_at > created_at)` |
+
+PostgreSQL supplies the initial `created_at` and `updated_at` values. The application must provide `expires_at` and must update `password_credentials.updated_at` explicitly when the stored password hash changes; a default does not run on `UPDATE`. Because Session `created_at` and `expires_at` come from different clocks, clock skew between PostgreSQL and the application is possible. A sufficiently slow application clock can make an otherwise intended Session violate `expires_at > created_at`; deployment therefore assumes synchronized clocks and a Session lifetime much larger than plausible skew.
 
 Indexes:
 
@@ -312,12 +314,16 @@ Check: type-check the API contract and write focused encoding/decoding examples 
 
 Study companion: [Phase 2 sources and exercise](./research/primary-sources.md#2-add-persistence-schema).
 
+Migration policy for Phase 2: keep the current Effect `PgMigrator` forward-only. Verify the complete migration chain against a fresh disposable PostgreSQL database. `db:down` controls Docker Compose and is not a schema rollback command.
+
+TODO (migration infrastructure, outside Phase 2): evaluate and implement first-class rollback support before any workflow claims to support `down` migrations.
+
 - create the migration for `password_credentials` and `sessions`;
 - add FK actions, uniqueness, and indexes;
 - regenerate Kysely database types;
-- verify migration apply/rollback using the existing database workflow.
+- verify the complete migration chain from zero using the existing forward-only database workflow.
 
-Check: `pnpm --filter @wishlist/api db:check` and a migration-backed PostgreSQL test proving cascade and uniqueness behavior.
+Check against a fresh disposable PostgreSQL database: apply the complete migration chain, run `pnpm --filter @wishlist/api db:check`, and run a migration-backed test proving cascade and uniqueness behavior.
 
 ### 3. Implement security primitives
 

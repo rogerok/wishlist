@@ -14,6 +14,21 @@ export type Roles = 'admin' | 'user';
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface PasswordCredentials {
+  createdAt: Generated<Timestamp>;
+  passwordHash: string;
+  updatedAt: Generated<Timestamp>;
+  userId: string;
+}
+
+export interface Sessions {
+  createdAt: Generated<Timestamp>;
+  expiresAt: Timestamp;
+  id: Generated<string>;
+  tokenDigest: Buffer;
+  userId: string;
+}
+
 export interface Users {
   createdAt: Generated<Timestamp>;
   email: string;
@@ -26,5 +41,7 @@ export interface Users {
 }
 
 export interface DB {
+  passwordCredentials: PasswordCredentials;
+  sessions: Sessions;
   users: Users;
 }

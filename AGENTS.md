@@ -82,6 +82,14 @@ Use the Socratic method only where a question helps the user think:
 - expose contradictions with a concrete example rather than a trick question;
 - discuss `why` before `how`;
 - connect new concepts to code already visible in the project;
+- infer the user's current level from demonstrated behavior, not from the task phase: treat concepts the user has already
+  applied correctly without help as known; treat previously unseen syntax/APIs and questions or corrections that expose
+  a missing mental model as unfamiliar;
+- on the first use of non-obvious SQL syntax or an Effect/runtime construct, explain the literal mechanics before giving
+  the finished code: what evaluates it, when it runs, what value it observes, what failure it produces, and one small
+  passing/failing example;
+- introduce a necessary term in Russian first and give the standard English term in parentheses once. Avoid clusters of
+  untranslated jargon. When familiarity is uncertain, give a one-sentence definition instead of testing the user first;
 - when explaining an unfamiliar runtime or control-flow API, start with literal mechanics: what state is stored, which
   event changes it, and the separate normal, error, and cancellation paths; introduce abstractions and terminology only
   after that concrete model;

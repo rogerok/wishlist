@@ -65,18 +65,19 @@
         <h2><span class="phase-number">2</span>Добавить модель PostgreSQL</h2>
         <div class="meta-grid"><div class="meta"><small>Вход</small>User + Credential + Session invariants</div><div class="meta"><small>Выход</small>Migration и generated types</div><div class="meta"><small>Не делать</small>Repository interfaces</div></div>
         <div class="callout"><strong>Читать:</strong> <a href="https://www.kysely.dev/docs/migrations">Kysely Migrations</a> и <a href="https://www.postgresql.org/docs/16/ddl-constraints.html">PostgreSQL 16 Constraints</a>. <strong>Сравнить:</strong> <a href="https://github.com/kysely-org/kysely/tree/v0.29.5">pinned Kysely migration tests</a> и <a href="https://github.com/voxpelli/node-connect-pg-simple/blob/c46daef6d06d257a0fb946ad90b9fb9a652bbe90/table.sql"><code>connect-pg-simple/table.sql</code></a>, не копируя generic JSON session.</div>
+        <div class="callout"><strong>Migration policy Phase 2:</strong> сохранить текущий Effect <code>PgMigrator</code> в режиме forward-only (только вперёд) и проверять полную цепочку на чистой временной PostgreSQL. <code>db:down</code> управляет Docker Compose и не является rollback схемы. <strong>TODO вне Phase 2:</strong> отдельно спроектировать и реализовать first-class rollback support.</div>
         <h3>Порядок реализации</h3>
         <ol class="checklist">
           <li>На бумаге определить cardinality: User имеет ровно один Password Credential и много Sessions.</li>
-          <li>Создать <code>password_credentials</code>: <code>user_id</code> PK/FK, versioned hash, timestamps, cascade.</li>
-          <li>Создать <code>sessions</code>: независимый UUID, <code>user_id</code>, unique digest, creation и absolute expiration.</li>
+          <li>Создать <code>password_credentials</code>: <code>user_id</code> PK/FK, versioned hash, timestamps с PostgreSQL default <code>now()</code>, cascade.</li>
+          <li>Создать <code>sessions</code>: независимый UUID с PostgreSQL default <code>gen_random_uuid()</code>, <code>user_id</code>, unique 32-byte digest с <code>octet_length</code> CHECK, creation с default <code>now()</code>, передаваемую приложением absolute expiration и CHECK <code>expires_at &gt; created_at</code>. Учесть возможное расхождение часов приложения и PostgreSQL: Session lifetime должна быть значительно больше ожидаемого clock skew.</li>
           <li>Добавить только доказанные query indexes: unique digest, user id, expiration cleanup.</li>
-          <li>Написать симметричный down migration в обратном dependency order.</li>
-          <li>Применить migration к реальному PostgreSQL, сгенерировать Kysely types, проверить rollback.</li>
+          <li>Считать применённые migration files неизменяемыми: текущий Effect <code>PgMigrator</code> работает только вперёд.</li>
+          <li>Применить полную migration chain к чистой временной PostgreSQL, сгенерировать Kysely types и повторить проверку с нуля.</li>
         </ol>
-        <table><thead><tr><th>Эксперимент</th><th>Ожидаемое состояние</th></tr></thead><tbody><tr><td>Повторный digest</td><td>Unique violation, одна строка</td></tr><tr><td>Удаление User</td><td>Credentials и Sessions удалены cascade</td></tr><tr><td>Rollback после User insert</td><td>Ни одной auth-строки</td></tr></tbody></table>
+        <table><thead><tr><th>Эксперимент</th><th>Ожидаемое состояние</th></tr></thead><tbody><tr><td>Повторный digest</td><td>Unique violation, одна строка</td></tr><tr><td>Удаление User</td><td>Credentials и Sessions удалены cascade</td></tr><tr><td>Чистая временная PostgreSQL</td><td>Полная migration chain применяется с нуля, auth-таблицы и constraints присутствуют</td></tr></tbody></table>
         <p class="callout danger"><strong>Типичная ошибка:</strong> вручную править generated database type или добавлять <code>last_seen_at</code>/<code>revoked_at</code> до появления use case.</p>
-        <p class="stop"><strong>Готово, когда:</strong> чистая БД проходит up/down, constraints наблюдаются в PostgreSQL, generated file получен командой проекта.</p>
+        <p class="stop"><strong>Готово, когда:</strong> чистая временная БД проходит полную migration chain с нуля, constraints наблюдаются в PostgreSQL, generated file получен командой проекта.</p>
       </section>
 
       <section class="phase" id="phase-3">

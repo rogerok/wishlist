@@ -42,6 +42,7 @@
     "@effect/vitest": "4.0.0-rc.108",
     "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.15.3",
     "@types/pg": "^8.21.0",
     "eslint": "^9.39.1",
