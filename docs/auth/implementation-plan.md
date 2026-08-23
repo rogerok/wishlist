@@ -171,15 +171,20 @@ Use asynchronous `node:crypto.scrypt`, never `scryptSync` on the request path.
 - require at least one lowercase ASCII letter, one uppercase ASCII letter, one digit, and one permitted special character;
 - accept only ASCII letters, digits, and the punctuation whitelist encoded by `PasswordSchema`; reject whitespace and other characters;
 - do not trim or silently truncate the password;
-- generate a fresh random salt of at least 16 bytes for every Password Credential;
-- store a versioned, self-describing format containing scrypt parameters, salt, and derived key;
-- parse the stored format defensively;
+- generate a fresh 16-byte random salt for every Password Credential;
+- derive a 32-byte key;
+- store the exact canonical format `$scrypt$v=1$N=131072,r=8,p=1$<salt-base64url>$<derived-key-base64url>`;
+- encode salt and derived key as unpadded canonical base64url; the encoded lengths are 22 and 43 characters respectively;
+- accept only the exact algorithm, version, field order, `N/r/p`, encoding, and decoded byte lengths defined for `v=1`;
+- reject missing or extra segments, unsupported versions or parameters, non-canonical encoding, and incorrect byte lengths before invoking scrypt;
 - compare equal-length derived keys with `timingSafeEqual`;
-- malformed stored hashes are internal data-integrity failures, not invalid credentials.
+- map every malformed or unsupported stored hash to a typed internal data-integrity failure; a well-formed hash with a password mismatch returns `false`.
 
 This milestone policy is an explicit local learning contract, not a claim of alignment with current NIST password guidance. NIST SP 800-63B-4 recommends a 15-character minimum for passwords used as a single authentication factor, support for at least 64 characters, and no composition rules. Revisit the local 8–100 composition policy in the P1 password-lifecycle work before production use.
 
 OWASP's current minimum for scrypt is `N = 2^17`, `r = 8`, `p = 1`. Treat this as a starting security floor, explicitly configure sufficient `maxmem`, and benchmark the asynchronous operation on the deployment hardware before freezing parameters. The stored format must permit later rehashing with stronger parameters.
+
+`maxmem` is an execution guard rather than a KDF output parameter and is not stored in the password-hash string. Future parameter upgrades add another explicitly supported format/version or parameter allow-list entry; verification must never pass arbitrary database-controlled `N/r/p` values to scrypt.
 
 ### Hashing admission and concurrency
 
@@ -188,9 +193,11 @@ Asynchronous `crypto.scrypt` runs in Node's fixed libuv worker pool. This avoids
 - estimate one scrypt workspace as approximately `128 * N * r` bytes before runtime overhead; with `N = 2^17` and `r = 8`, this is about 128 MiB per active operation;
 - treat `maxmem` as a per-operation check, not a process-wide memory limit;
 - choose `maxConcurrentHashes` from an explicit process memory budget and measured latency/RSS;
-- guard every hash and verify Effect with a process-local Effect `Semaphore`;
-- bound queue length or waiting time separately: a Semaphore limits active work but can still accumulate waiting fibers;
-- release permits on success, typed failure, defect, and interruption by using the scoped Effect wrapper rather than manual acquire/release;
+- construct the hashing Semaphore once in the live Layer and guard every hash and verify operation with that process-local instance;
+- bound admitted work separately: a Semaphore limits active Effect work but can still accumulate waiting fibers, and a timeout alone does not cap their number;
+- prefer an explicit total admission capacity with immediate typed overload when full; if a waiting queue is retained, its capacity must be `maxWaitingHashes`;
+- keep capacity ownership aligned with the native scrypt lifetime. Public Node `crypto.scrypt` has no cancellation handle: interrupting `Effect.callback` does not stop the already submitted libuv job, so a naive interruptible wrapper can release a permit while native work still consumes memory;
+- release permits automatically on success, typed failure, defect, interruption before native start, and only after the native callback for work that has already started;
 - treat a dedicated worker process as optional isolation, not as a replacement for concurrency limits; never place plaintext passwords in a durable external queue;
 - remember that horizontal replicas multiply the total active hashing limit.
 
@@ -200,12 +207,13 @@ SHA-256 is suitable for random Session tokens but not for human-chosen passwords
 
 ### Session credential
 
-- generate 32 random bytes with a cryptographically secure generator;
-- encode the client value as base64url;
-- compute SHA-256 over the decoded token bytes;
-- store only the digest in PostgreSQL;
+- generate 32 random bytes with Node's cryptographically secure generator; Effect `Random` is based on `Math.random` and is not suitable;
+- encode the client value as unpadded base64url, producing 43 characters for 32 bytes;
+- compute SHA-256 over the original raw bytes, not over the base64url text;
+- keep the digest as exactly 32 binary bytes for PostgreSQL;
 - return the raw token only through `Set-Cookie`;
-- wrap boundary values in `Redacted`, understanding that `Redacted` prevents accidental display but is neither encryption nor hashing.
+- wrap password and raw-token service boundaries in `Redacted`, understanding that `Redacted` prevents accidental display but is neither encryption nor hashing;
+- reveal a redacted value only inside the smallest crypto or cookie boundary and never include secrets, stored hashes, salt, or derived keys in logs, error fields, tracing attributes, or snapshots.
 
 Keep an internal Session `id` separate from the credential digest. The id supports future Session management without exposing the credential.
 
@@ -327,15 +335,149 @@ Check against a fresh disposable PostgreSQL database: apply the complete migrati
 
 ### 3. Implement security primitives
 
-Study companion: [Phase 3 sources and exercise](./research/primary-sources.md#3-implement-security-primitives).
+Study companion: [Phase 3 sources and exercise](./research/primary-sources.md#3-implement-security-primitives). Complete [bounded password hashing](./lessons/0002-bounded-password-hashing.html) before implementing the live hashing Layer.
 
-- implement versioned asynchronous scrypt hash/verify behavior;
-- implement a benchmarked, process-local hashing Semaphore and bounded wait/admission behavior;
-- implement 32-byte token generation, base64url encoding, and SHA-256 digest;
-- use `Redacted` at secret-bearing service boundaries;
-- map malformed stored formats to a typed integrity error.
+#### Scope and stop boundary
 
-Check: behavior tests for successful/failed verification, different salts for the same password, malformed format, token round trip, and deterministic clock/token test Layers. Add concurrency tests proving the active count never exceeds the configured permits and permits return after success, failure, and interruption; add an overload test proving waiting work cannot grow without bound. Do not assert a hard-coded random value in production-Layer tests.
+Phase 3 owns only:
+
+- canonical password-hash formatting and defensive parsing;
+- asynchronous scrypt derivation and verification;
+- process-local hashing admission and concurrency;
+- secure Session-token generation and digesting;
+- typed primitive-level failures;
+- live and deterministic test Layers required by those primitives.
+
+Do not add repositories, database access, HTTP handlers, signup/login behavior, cookies, middleware, schema migrations, rate limiting, dummy login hashing, or clock/expiration logic. `Clock` first becomes relevant when Session lifetime behavior is implemented.
+
+#### Fixed contracts
+
+Password hashing uses:
+
+```text
+algorithm:   scrypt
+format:      v1
+N:           131072 (2^17)
+r:           8
+p:           1
+salt:        16 random bytes
+derived key: 32 bytes
+storage:     $scrypt$v=1$N=131072,r=8,p=1$<salt-base64url>$<derived-key-base64url>
+```
+
+Both binary fields use unpadded canonical base64url. The `v1` parser accepts only the fixed values above. A future upgrade must add an explicit supported case; it must not broaden parsing to arbitrary database-controlled resource parameters.
+
+`PasswordHasher` receives the password through `Redacted`. Hash creation returns the canonical stored value. Verification returns `true` for a match and `false` for a well-formed hash with a mismatch. A malformed or unsupported stored value is a typed integrity failure, not `false` and not a defect.
+
+`SessionTokenGenerator` returns one value containing:
+
+- a raw credential represented at the service boundary as `Redacted<string>`;
+- the SHA-256 digest of the original 32 random bytes as a 32-byte binary value.
+
+The base64url representation is for the client; PostgreSQL receives only the binary digest. Decoding is strict and canonical where a public token is later accepted: Node's base64url decoder is intentionally permissive and cannot be the only validator.
+
+#### Dependency and Layer shape
+
+Follow the existing `Context.Service` plus `Layer.effect` convention:
+
+- construct process-local state once while building the live Layer;
+- do not create a Semaphore inside each `hash` or `verify` call;
+- do not read `process.env` inside security services;
+- validate configured capacities as positive integers before passing them to the rc.108 Semaphore, which does not enforce that invariant itself;
+- use Node crypto for production random bytes; never use the default Effect `Random` for secrets;
+- provide deterministic random bytes in tests through one minimal dependency used by salt and Session-token generation;
+- keep the low-level native derivation seam small enough to test failure, interruption, and active-operation counts without replacing the public service behavior with mocks.
+
+The entry point will compose the completed live Layers in a later integration step. Phase 3 tests provide the primitive Layers directly and do not require PostgreSQL or HTTP.
+
+#### Typed failure boundaries
+
+Keep these observable cases distinct:
+
+1. malformed or unsupported stored hash — internal integrity failure;
+2. well-formed hash and wrong password — successful `false`;
+3. native scrypt or secure-random operational failure — typed primitive-unavailable failure;
+4. full admission capacity — typed hashing-overload failure;
+5. interruption before admission or before native start — interruption, with no leaked capacity;
+6. interruption after native start — capacity remains owned until the native callback because public Node scrypt cannot be cancelled.
+
+Error values may carry an opaque `cause: unknown`, but must never contain password, stored hash, raw Session token, salt, or derived key.
+
+#### Interruption invariant
+
+`Effect.callback` can stop waiting and ignore a late callback, but it cannot cancel `crypto.scrypt`. Therefore the implementation must not equate requester-fiber lifetime with native-job lifetime.
+
+Before the concurrency implementation, resolve the exact ownership strategy recorded in `NOTES.md`. The recommended first implementation keeps the admitted native region uninterruptible until its callback completes: admission waiting remains interruptible, interruption after native start is deferred, and permits are released only after memory-intensive work has actually ended. A supervised detached native-job lifetime is an alternative only if prompt requester interruption is required and its extra ownership complexity is justified.
+
+#### Bounded admission invariant
+
+A single execution Semaphore is insufficient because its waiter set is unbounded. The recommended design uses:
+
+1. an admission Semaphore with `maxConcurrentHashes + maxWaitingHashes` permits, acquired through `withPermitsIfAvailable`;
+2. an execution Semaphore with `maxConcurrentHashes` permits around native scrypt;
+3. immediate typed overload when the admission Semaphore returns `Option.none`.
+
+The admission permit covers both waiting and execution. A waiting-time timeout may be added for latency policy, but it is not a substitute for the capacity bound. Final capacity values remain unset until benchmark evidence is recorded.
+
+#### Small implementation iterations
+
+Implement and review one observable invariant at a time:
+
+1. **Stored format.** Add the canonical serializer/parser and typed integrity error. Test round trip, missing/extra segments, algorithm/version/parameter rejection, canonical base64url, and exact decoded lengths. Do not invoke crypto on malformed input.
+2. **Secure bytes and Session token.** Add the minimal secure-random dependency, live Node implementation, deterministic test Layer, 32-byte token generation, base64url encoding, and SHA-256 of raw bytes. Test byte/string/digest lengths, deterministic digest, and production non-determinism without asserting a fixed production value.
+3. **Async scrypt adapter.** Wrap callback-based `crypto.scrypt` with `Effect.callback`; capture both synchronous argument throws and callback errors in the typed channel. Do not use `scryptSync` or a Promise wrapper that hides cancellation semantics.
+4. **PasswordHasher behavior.** Compose fresh salt, fixed production parameters, serializer/parser, derivation, and `timingSafeEqual`. Test success, mismatch, same-password/different-salt behavior, and malformed format.
+5. **Benchmark decision gate.** Measure latency and RSS for one hash and verify, then concurrency 2 and any candidate limit. Record the process memory budget, chosen `maxmem`, `maxConcurrentHashes`, and `maxWaitingHashes` before freezing live configuration.
+6. **Admission and interruption.** Add shared admission/execution Semaphores and typed overload. Prove active native operations never exceed permits; admitted work never exceeds total capacity; permits return after success/failure; waiting interruption removes the waiter; interruption after native start cannot allow replacement work before the native callback.
+7. **Layer and regression check.** Assemble live/test Layers, run narrow behavior tests, then API type-check, relevant lint, and the complete API test suite.
+
+Do not combine two iterations merely because their files are adjacent. After every iteration, inspect semantic errors before formatting concerns and run only the narrow check that proves its invariant.
+
+#### Required behavior tests
+
+- one password hashed twice produces different stored values; both verify;
+- wrong password returns `false`;
+- malformed/unsupported stored values fail with the exact integrity tag;
+- equal-length comparison is enforced before `timingSafeEqual`;
+- production salts and Session tokens are not deterministic;
+- deterministic random test Layer produces stable token digest without logging the raw token;
+- Session token decodes to 32 bytes, its text is canonical 43-character base64url without padding, and its digest is 32 bytes;
+- active native scrypt operations never exceed `maxConcurrentHashes`;
+- total admitted operations never exceed `maxConcurrentHashes + maxWaitingHashes`;
+- overload is a typed failure and rejected work never starts;
+- permits return after success and typed/native failure;
+- interrupted waiters do not leak admission capacity;
+- interruption after native start does not release execution capacity before callback completion.
+
+Tests must not log or snapshot password, stored hash, raw Session token, cookie value, salt, or derived key. Synthetic byte fixtures may be asserted only where the value itself is necessary to prove encoding or digest behavior.
+
+#### Benchmark record
+
+The benchmark must record:
+
+- Node version and relevant libuv pool configuration;
+- `N/r/p`, candidate `maxmem`, salt/key lengths;
+- baseline RSS;
+- latency and peak/observed RSS for hash and verify at concurrency 1;
+- the same observations at concurrency 2 and the selected limit;
+- the explicit memory budget available to hashing;
+- the resulting live `maxConcurrentHashes` and `maxWaitingHashes`.
+
+Do not infer safe concurrency from `UV_THREADPOOL_SIZE`: increasing the worker pool is not a process memory limit.
+
+#### Phase 3 definition of done
+
+Phase 3 is complete only when:
+
+- every fixed contract and behavior test above is implemented;
+- benchmark evidence justifies `maxmem` and both admission capacities;
+- native scrypt lifetime, Effect interruption, and permit lifetime agree;
+- all secret-bearing boundaries use `Redacted` as specified;
+- primitives run without PostgreSQL and HTTP;
+- `pnpm --filter @wishlist/api check-types` passes;
+- relevant API lint passes;
+- narrow security tests and the complete API test suite pass;
+- no unresolved Phase 3 decision remains in `NOTES.md`.
 
 ### 4. Implement repositories
 
