@@ -1,8 +1,10 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
+  DerivedKeyFromBase64Schema,
   parsePasswordHashStructure,
+  SaltFromBase64Schema,
   serializePasswordHash,
 } from '#modules/auth/service/password-hash-format.js';
 import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
@@ -11,6 +13,11 @@ const invalidByteLengthTable = [
   { saltBytesLength: 15, keyBytesLength: 32, component: 'salt' },
   { saltBytesLength: 16, keyBytesLength: 31, component: 'derived key' },
 ] as const;
+const saltBuffer = Buffer.alloc(16, 0x11);
+const derivedKeyBuffer = Buffer.alloc(32, 0x22);
+
+const validSalt = saltBuffer.toString('base64url');
+const validDerivedKey = derivedKeyBuffer.toString('base64url');
 
 describe('serializePasswordHash', () => {
   it.effect('successful serializing', () =>
@@ -52,45 +59,64 @@ describe('serializePasswordHash', () => {
 
 const invalidPasswordHashInputTable = [
   {
-    input: 'scrypt$v=1$N=131072,r=8,p=1$salt-text$key-text',
+    input: `scrypt$v=1$N=131072,r=8,p=1$${validSalt}$${validDerivedKey}`,
     component: 'without $',
   },
   {
-    input: '$scrypt$v=1$N=131072,r=8,p=1$salt-text$key-text$extra-key',
+    input: `$scrypt$v=1$N=131072,r=8,p=1$${validSalt}$${validDerivedKey}$extra-key`,
     component: 'extra segment',
   },
   {
-    input: '$argon2$v=1$N=131072,r=8,p=1$salt-text$key-text',
+    input: `$argon2$v=1$N=131072,r=8,p=1$${validSalt}$${validDerivedKey}`,
     component: 'not scrypt algorithm',
   },
   {
-    input: '$scrypt$v=2$N=131072,r=8,p=1$salt-text$key-text',
+    input: `$scrypt$v=2$N=131072,r=8,p=1$${validSalt}$${validDerivedKey}`,
     component: 'version is not 1',
   },
   {
-    input: '$scrypt$v=1$N=131072,r=7,p=1$salt-text$key-text',
+    input: `$scrypt$v=1$N=131072,r=7,p=1$${validSalt}$${validDerivedKey}`,
     component: 'wrong r param',
   },
   {
-    input: '$scrypt$v=1$N=131072,r=8,p=2$salt-text$key-text',
+    input: `$scrypt$v=1$N=131072,r=8,p=2$${validSalt}$${validDerivedKey}`,
     component: 'wrong p param',
   },
   {
-    input: '$scrypt$v=1$N=131071,r=8,p=1$salt-text$key-text',
+    input: `$scrypt$v=1$N=131071,r=8,p=1$${validSalt}$${validDerivedKey}`,
     component: 'wrong N param',
+  },
+] as const;
+
+const invalidPasswordHashEncodingTable = [
+  {
+    input: `$scrypt$v=1$N=131072,r=8,p=1$${
+      validSalt.slice(0, -1) + '+'
+    }$${validDerivedKey}`,
+    component: 'salt',
+  },
+  {
+    input: `$scrypt$v=1$N=131072,r=8,p=1$${validSalt}$${
+      validDerivedKey.slice(0, -1) + '/'
+    }`,
+    component: 'derived key',
   },
 ] as const;
 
 describe('parsePasswordHashStructure', () => {
   it.effect('successful parsing hash', () =>
     Effect.gen(function* () {
-      const { derivedKeyBase64Url, saltBase64Url } =
-        yield* parsePasswordHashStructure(
-          '$scrypt$v=1$N=131072,r=8,p=1$salt-text$key-text',
-        );
+      const { salt, derivedKey } = yield* parsePasswordHashStructure(
+        `$scrypt$v=1$N=131072,r=8,p=1$${validSalt}$${validDerivedKey}`,
+      );
 
-      expect(derivedKeyBase64Url).toBe('key-text');
-      expect(saltBase64Url).toBe('salt-text');
+      expect(salt.length).toBe(16);
+      expect(salt).toBeInstanceOf(Uint8Array);
+      expect(Buffer.from(salt).equals(saltBuffer)).toBe(true);
+
+      expect(derivedKey.length).toEqual(32);
+      expect(derivedKey).toBeInstanceOf(Uint8Array);
+      expect(Buffer.from(derivedKey).equals(derivedKeyBuffer)).toBe(true);
     }),
   );
 
@@ -104,5 +130,100 @@ describe('parsePasswordHashStructure', () => {
         expect(error).toBeInstanceOf(PasswordHashIntegrityError);
         expect(error.cause).toBe('Invalid stored password hash structure');
       }),
+  );
+
+  it.effect.each(invalidPasswordHashEncodingTable)(
+    'fails when $component encoding is malformed',
+    ({ input }) =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(parsePasswordHashStructure(input));
+
+        expect(error._tag).toBe('PasswordHashIntegrityError');
+
+        expect(error).toBeInstanceOf(PasswordHashIntegrityError);
+        expect(error.cause).toBe('Invalid stored password hash encoding');
+      }),
+  );
+});
+
+const saltFromBase64SchemaTestCases = [
+  {
+    salt: Buffer.alloc(15, 0x00).toString('base64url'),
+    component: 'short salt',
+  },
+  {
+    salt: validSalt.slice(0, -1) + '=',
+    component: 'invalid padding',
+  },
+  {
+    salt: validSalt.slice(0, -1) + '+',
+    component: 'forbidden symbol',
+  },
+  {
+    salt: validSalt.slice(0, -1) + 'R',
+    component: 'non-canonical unused bits',
+  },
+];
+
+describe('SaltFromBase64Schema', () => {
+  it('Successful parsing', () => {
+    const result = Schema.decodeResult(SaltFromBase64Schema)(validSalt);
+
+    expect(Result.isSuccess(result)).toBe(true);
+
+    if (Result.isFailure(result)) {
+      throw new Error('SaltFromBase64Schema expect success.');
+    }
+    expect(result.success.length).toBe(16);
+    expect(result.success).toBeInstanceOf(Uint8Array);
+  });
+
+  it.each(saltFromBase64SchemaTestCases)(
+    'rejects when $component',
+    ({ salt }) => {
+      const result = Schema.decodeResult(SaltFromBase64Schema)(salt);
+
+      expect(Result.isFailure(result)).toBe(true);
+    },
+  );
+});
+
+const derivedKeysFromBase64SchemaTestCases = [
+  {
+    key: Buffer.alloc(31, 0x00).toString('base64url'),
+    component: 'short key',
+  },
+  {
+    key: validDerivedKey.slice(0, -1) + '/',
+    component: 'invalid symbol',
+  },
+  {
+    key: validDerivedKey.slice(0, -1) + 'J',
+    component: 'non-canonical unused bits',
+  },
+];
+
+describe('DerivedKeyFromBase64Schema', () => {
+  it('Successful parsing', () => {
+    const result = Schema.decodeResult(DerivedKeyFromBase64Schema)(
+      validDerivedKey,
+    );
+
+    expect(Result.isSuccess(result)).toBe(true);
+
+    if (Result.isFailure(result)) {
+      throw new Error('DerivedKeyFromBase64Schema expect success.');
+    }
+    expect(result.success.length).toBe(32);
+    expect(result.success).toBeInstanceOf(Uint8Array);
+  });
+
+  it.each(derivedKeysFromBase64SchemaTestCases)(
+    'rejects when $component',
+    ({ key }) => {
+      const result = Schema.decodeResult(DerivedKeyFromBase64Schema)(key);
+
+      expect(Result.isFailure(result)).toBe(true);
+    },
   );
 });
