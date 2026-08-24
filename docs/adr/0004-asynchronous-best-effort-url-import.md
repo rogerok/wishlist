@@ -1,0 +1,5 @@
+# Import URL metadata through asynchronous best-effort previews
+
+Wishlist treats metadata extraction from a pasted product URL as an asynchronous, short-lived Import Preview rather than part of the Wishlist Item write transaction. Fetches run in a worker against a curated HTTPS domain allowlist with strict SSRF, redirect, timeout, content-type, and byte limits; Open Graph or JSON-LD values are untrusted suggestions, and manual entry is always the terminal fallback. Browser automation, private marketplace endpoints, and a promise to parse every Avito, Ozon, or Wildberries page are excluded because those marketplaces do not document an API for arbitrary public product cards and their HTML is not a stable contract.
+
+The User chooses which preview fields to copy into the user-owned Wishlist Item snapshot. Later refreshes produce a new preview and diff instead of silently overwriting edits; after object storage exists, an accepted remote image is validated and copied into service-owned storage rather than hotlinked. See [Marketplace URL Import Research](../product/research/marketplace-url-import.md) for the provider evidence and security boundary.
