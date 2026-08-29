@@ -1,12 +1,12 @@
 import { Schema } from 'effect';
 
+import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import {
   authLoginPath,
   authLogoutPath,
   authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
-import { makeLiteralUnionSchema } from '#schemas/utils.js';
 
 export const AuthInstanceSchema = makeLiteralUnionSchema([
   authSignupPath,

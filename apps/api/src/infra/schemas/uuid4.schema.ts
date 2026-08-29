@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import { makeBrandedSchema } from '#schemas/utils.js';
+import { makeBrandedSchema } from '#infra/schemas/utils.js';
 
 export const Uuid4Schema = Schema.String.pipe(
   Schema.check(

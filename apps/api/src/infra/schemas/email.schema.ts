@@ -1,6 +1,6 @@
 import { Schema, SchemaTransformation } from 'effect';
 
-import { makeBrandedSchema } from '#schemas/utils.js';
+import { makeBrandedSchema } from '#infra/schemas/utils.js';
 
 const ValidEmailSchema = Schema.String.pipe(
   Schema.check(Schema.isMaxLength(255)),

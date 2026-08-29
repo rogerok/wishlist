@@ -8,7 +8,7 @@ import {
   RequestValidationHttpError,
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
-} from '#errors/request-validation.js';
+} from '#infra/errors/request-validation.js';
 import {
   authGroupIdentifier,
   authLogoutPath,

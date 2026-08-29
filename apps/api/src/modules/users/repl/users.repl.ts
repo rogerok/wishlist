@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 
+import type { RunPromise } from '#infra/repl/repl.types.js';
 import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
-import type { RunPromise } from '#repl/repl.types.js';
 
 import { CreateUserBodySchema } from '#modules/users/schemas/create-user.schema.js';
 import { UpdateUserBodySchema } from '#modules/users/schemas/update-user.schema.js';

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
-import { AppApi } from '#api/api.js';
+import { AppApi } from '#infra/api/api.js';
 import { healthGroupIdentifier } from '#modules/health/api/health.constants.js';
 import { HealthOperation } from '#modules/health/schemas/health-operation.schema.js';
 import { HealthService } from '#modules/health/service/health.service.js';

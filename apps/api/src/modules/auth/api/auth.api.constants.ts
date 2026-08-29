@@ -1,4 +1,4 @@
-import { makePath } from '#lib/utils/formatters.js';
+import { makePath } from '#infra/lib/utils/formatters.js';
 
 export const authGroupIdentifier = 'auth';
 

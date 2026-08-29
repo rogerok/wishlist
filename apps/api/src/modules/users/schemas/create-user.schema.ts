@@ -1,8 +1,8 @@
 import { Schema } from 'effect';
 import { HttpApiSchema } from 'effect/unstable/httpapi';
 
+import { withRequestParseOptions } from '#infra/schemas/utils.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
-import { withRequestParseOptions } from '#schemas/utils.js';
 
 import { UserEmailSchema, UserNameInputSchema } from './user.schema.js';
 

@@ -1,6 +1,6 @@
 import type { Schema } from 'effect';
 
-import { makeLiteralUnionSchema } from '#schemas/utils.js';
+import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 
 export const AuthOperationSchema = makeLiteralUnionSchema([
   'signup',

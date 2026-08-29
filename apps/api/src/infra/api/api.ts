@@ -1,6 +1,6 @@
 import { HttpApi } from 'effect/unstable/httpapi';
 
-import { RequestValidationMiddleware } from '#errors/request-validation.js';
+import { RequestValidationMiddleware } from '#infra/errors/request-validation.js';
 import { healthGroup } from '#modules/health/api/health.api.js';
 import { usersGroup } from '#modules/users/api/users.api.js';
 

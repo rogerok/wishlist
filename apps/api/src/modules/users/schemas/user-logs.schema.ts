@@ -1,8 +1,8 @@
 import { Schema } from 'effect';
 
+import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 import { UserOperationSchema } from '#modules/users/schemas/users-operations.schema.js';
-import { makeLiteralUnionSchema } from '#schemas/utils.js';
 
 export const UserLogEventSchema = makeLiteralUnionSchema([
   'users.operation.failed',

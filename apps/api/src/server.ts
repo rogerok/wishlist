@@ -3,8 +3,8 @@ import { Effect, Layer } from 'effect';
 import { HttpRouter, HttpServer } from 'effect/unstable/http';
 import { createServer } from 'node:http';
 
-import { AppApiLive } from '#api/api-live.js';
-import { AppConfig } from '#config/config.js';
+import { AppApiLive } from '#infra/api/api-live.js';
+import { AppConfig } from '#infra/config/config.js';
 
 export const HttpLive = Layer.unwrap(
   Effect.gen(function* () {

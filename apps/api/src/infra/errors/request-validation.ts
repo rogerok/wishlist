@@ -5,8 +5,8 @@ import { HttpServerRequest } from 'effect/unstable/http';
 import { HttpApiMiddleware } from 'effect/unstable/httpapi';
 import { match } from 'ts-pattern';
 
-import { asProblemJson } from '#errors/http-problem.js';
-import { makeLiteralUnionSchema } from '#schemas/utils.js';
+import { asProblemJson } from '#infra/errors/http-problem.js';
+import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 
 export const ValidationIssueLocationSchema = makeLiteralUnionSchema([
   'payload',

@@ -1,8 +1,8 @@
 import { Schema } from 'effect';
 
-import { makeEmailBrandedSchema } from '#schemas/email.schema.js';
-import { makeNullableStringSchema } from '#schemas/utils.js';
-import { makeIdBrandedSchema } from '#schemas/uuid4.schema.js';
+import { makeEmailBrandedSchema } from '#infra/schemas/email.schema.js';
+import { makeNullableStringSchema } from '#infra/schemas/utils.js';
+import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
 
 export const UserIdSchema = makeIdBrandedSchema('UserId');
 export type UserId = Schema.Schema.Type<typeof UserIdSchema>;

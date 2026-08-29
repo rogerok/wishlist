@@ -4,7 +4,7 @@ import {
   HttpApiSchema,
 } from 'effect/unstable/httpapi';
 
-import { asProblemJson } from '#errors/http-problem.js';
+import { asProblemJson } from '#infra/errors/http-problem.js';
 import {
   authGroupIdentifier,
   authLoginPath,

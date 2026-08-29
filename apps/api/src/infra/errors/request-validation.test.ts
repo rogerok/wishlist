@@ -17,8 +17,8 @@ import {
 import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
-} from '#errors/request-validation.js';
-import { withRequestParseOptions } from '#schemas/utils.js';
+} from '#infra/errors/request-validation.js';
+import { withRequestParseOptions } from '#infra/schemas/utils.js';
 
 let handlerCalls = 0;
 

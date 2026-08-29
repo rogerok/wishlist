@@ -4,7 +4,7 @@ import * as PgKysely from '@repo/sql-kysely/pg';
 import { Context, Layer } from 'effect';
 import { CamelCasePlugin } from 'kysely';
 
-import type { DB as Database } from '#db/generated/database.js';
+import type { DB as Database } from '#/infra/db/generated/database.js';
 
 const dbEffect = PgKysely.make<Database>({
   plugins: [new CamelCasePlugin()],

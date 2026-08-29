@@ -1,7 +1,7 @@
 import { Layer } from 'effect';
 
-import { PgClientLive } from '#db/config.js';
-import { DBLive } from '#db/db.service.js';
+import { PgClientLive } from '#infra/db/config.js';
+import { DBLive } from '#infra/db/db.service.js';
 import { HealthModuleLive } from '#modules/health/health.module.js';
 import { UsersModuleLive } from '#modules/users/users.module.js';
 

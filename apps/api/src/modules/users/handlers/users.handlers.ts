@@ -5,7 +5,7 @@ import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
 import type { UserFailureLogAnnotation } from '#modules/users/schemas/user-logs.schema.js';
 
-import { AppApi } from '#api/api.js';
+import { AppApi } from '#infra/api/api.js';
 import {
   usersCollectionPath,
   usersGroupIdentifier,

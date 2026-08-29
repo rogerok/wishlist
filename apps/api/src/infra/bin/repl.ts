@@ -5,7 +5,7 @@ import { Effect, ManagedRuntime } from 'effect';
 import * as repl from 'node:repl';
 
 import { AppServicesLive } from '#app.js';
-import { makeReplContext } from '#repl/repl-context.js';
+import { makeReplContext } from '#infra/repl/repl-context.js';
 
 const waitForExit = (replServer: repl.REPLServer) =>
   Effect.callback<void>((resume) => {

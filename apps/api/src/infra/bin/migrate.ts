@@ -3,7 +3,7 @@ import { PgMigrator } from '@effect/sql-pg';
 import { Effect } from 'effect';
 import { fileURLToPath } from 'url';
 
-import { PgClientLive } from '#db/config.js';
+import { PgClientLive } from '#infra/db/config.js';
 
 const migrationsDir = fileURLToPath(
   new URL('../db/migrations', import.meta.url),

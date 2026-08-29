@@ -14,7 +14,7 @@ import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.j
 import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
 
-import { DB } from '#db/db.service.js';
+import { DB } from '#infra/db/db.service.js';
 import {
   InvalidUserRecord,
   UserEmailAlreadyExists,

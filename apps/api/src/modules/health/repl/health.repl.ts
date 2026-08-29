@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
+import type { RunPromise } from '#infra/repl/repl.types.js';
 import type { HealthResponseBody } from '#modules/health/schemas/health.schema.js';
-import type { RunPromise } from '#repl/repl.types.js';
 
 import { HealthService } from '#modules/health/service/health.service.js';
 
