@@ -48,6 +48,7 @@ describe('LoginRequestBodySchema', () => {
       email: 'user@example.com',
     });
 
+    // TODO: использовать матчеры
     if (Result.isSuccess(result)) {
       throw new Error('Expected signup validation to fail');
     }

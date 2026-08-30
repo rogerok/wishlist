@@ -7,6 +7,7 @@ import * as repl from 'node:repl';
 import { AppServicesLive } from '#app.js';
 import { makeReplContext } from '#infra/repl/repl-context.js';
 
+// TODO: rewrite
 const waitForExit = (replServer: repl.REPLServer) =>
   Effect.callback<void>((resume) => {
     const onExit = () => resume(Effect.void);

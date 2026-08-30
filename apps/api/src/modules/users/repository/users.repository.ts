@@ -75,6 +75,7 @@ export const UsersRepositoryLive = Layer.effect(
     const db = yield* DB;
 
     // TODO: нужна транзакция?
+    // TODO: попробовать переписать Command
 
     const create: UsersRepositoryShape['create'] = (input) =>
       Effect.gen(function* () {
