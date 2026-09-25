@@ -1,14 +1,8 @@
 import { randomBytes } from 'crypto';
-import { Effect, Layer } from 'effect';
-import { Schema } from 'effect';
-import { Data } from 'effect';
-import { Context } from 'effect';
+import { Context, Effect, Encoding, Layer, Redacted, Schema } from 'effect';
+import { createHash } from 'node:crypto';
 
-export class SecurePrimitiveUnavailableError extends Data.TaggedError(
-  'SecurePrimitiveUnavailableError',
-)<{
-  readonly cause: unknown;
-}> {}
+import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
 
 export interface SecureRandomBytesShape {
   readonly get: (
@@ -21,12 +15,18 @@ export class SecureRandomBytes extends Context.Service<
   SecureRandomBytesShape
 >()('app/SecureRandomBytes') {}
 
-// export const SecureRandomBytesLive: SecureRandomBytesShape = {
-//   get: (total) =>
-//     Effect.gen(function* () {
-//       const bytes = randomBytes(total);
-//     }),
-// };
+export const SecureRandomBytesLive: SecureRandomBytesShape = {
+  get: (total) =>
+    Effect.try({
+      try: () => randomBytes(total),
+      catch: (cause) => new SecurePrimitiveUnavailableError({ cause }),
+    }),
+};
+
+export const SecureRandomBytesLiveLayer = Layer.succeed(
+  SecureRandomBytes,
+  SecureRandomBytesLive,
+);
 
 export const GeneratedSessionTokenSchema = Schema.Struct({
   credential: Schema.Redacted(Schema.String),
@@ -53,13 +53,15 @@ export const SessionTokenGeneratorLive = Layer.effect(
   SessionTokenGenerator,
   Effect.gen(function* () {
     const randomBytes = yield* SecureRandomBytes;
-    const random32 = yield* randomBytes.get(32);
 
     return {
-      generate: null as unknown as Effect.Effect<
-        GeneratedSessionToken,
-        SecurePrimitiveUnavailableError
-      >,
+      generate: Effect.gen(function* () {
+        const random32 = yield* randomBytes.get(32);
+        const credential = Redacted.make(Encoding.encodeBase64Url(random32));
+        const digest = createHash('sha256').update(random32).digest();
+
+        return { credential, digest };
+      }),
     };
   }),
 );
