@@ -169,13 +169,7 @@ describe('SaltFromBase64Schema', () => {
   it('Successful parsing', () => {
     const result = Schema.decodeResult(SaltFromBase64Schema)(validSalt);
 
-    expect(Result.isSuccess(result)).toBe(true);
-
-    if (Result.isFailure(result)) {
-      throw new Error('SaltFromBase64Schema expect success.');
-    }
-    expect(result.success.length).toBe(16);
-    expect(result.success).toBeInstanceOf(Uint8Array);
+    expect(result).toBeResultSuccess(new Uint8Array(saltBuffer));
   });
 
   it.each(saltFromBase64SchemaTestCases)(
@@ -209,13 +203,7 @@ describe('DerivedKeyFromBase64Schema', () => {
       validDerivedKey,
     );
 
-    expect(Result.isSuccess(result)).toBe(true);
-
-    if (Result.isFailure(result)) {
-      throw new Error('DerivedKeyFromBase64Schema expect success.');
-    }
-    expect(result.success.length).toBe(32);
-    expect(result.success).toBeInstanceOf(Uint8Array);
+    expect(result).toBeResultSuccess(new Uint8Array(derivedKeyBuffer));
   });
 
   it.each(derivedKeysFromBase64SchemaTestCases)(

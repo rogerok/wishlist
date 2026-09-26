@@ -1,9 +1,10 @@
-import { Result, Schema, SchemaIssue } from 'effect';
+import { Schema } from 'effect';
 
 import { LoginRequestBodySchema } from '#modules/auth/schemas/login/login.schema.js';
+import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
+import { UserEmailSchema } from '#modules/users/schemas/user.schema.js';
 
 const password = 'Password1!';
-const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();
 
 describe('LoginRequestBodySchema', () => {
   it('Successful decoding', () => {
@@ -12,14 +13,9 @@ describe('LoginRequestBodySchema', () => {
       email: 'User@example.com',
     });
 
-    if (Result.isFailure(result)) {
-      throw new Error('Expect success');
-    }
-
-    expect(Result.isSuccess(result)).toBe(true);
-    expect(result.success).toEqual({
-      password,
-      email: 'user@example.com',
+    expect(result).toBeResultSuccess({
+      password: PasswordSchema.make(password),
+      email: UserEmailSchema.make('user@example.com'),
     });
   });
 
@@ -29,12 +25,7 @@ describe('LoginRequestBodySchema', () => {
       email: 'invalid-email',
     });
 
-    if (Result.isSuccess(result)) {
-      throw new Error('Expected signup validation to fail');
-    }
-
-    expect(Result.isFailure(result)).toBe(true);
-    expect(formatIssues(result.failure.issue).issues).toEqual([
+    expect(result).toBeResultSchemaFailure([
       expect.objectContaining({
         path: ['email'],
       }),
@@ -49,12 +40,7 @@ describe('LoginRequestBodySchema', () => {
     });
 
     // TODO: использовать матчеры
-    if (Result.isSuccess(result)) {
-      throw new Error('Expected signup validation to fail');
-    }
-
-    expect(Result.isFailure(result)).toBe(true);
-    expect(formatIssues(result.failure.issue).issues).toEqual([
+    expect(result).toBeResultSchemaFailure([
       expect.objectContaining({
         path: ['passwordConfirm'],
       }),

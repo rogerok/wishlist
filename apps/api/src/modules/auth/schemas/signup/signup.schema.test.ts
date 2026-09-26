@@ -1,12 +1,12 @@
-import { Result, Schema, SchemaIssue } from 'effect';
+import { Schema } from 'effect';
 import { FastCheck } from 'effect/testing';
 
+import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import {
   passwordConfirmIssue,
   SignupRequestBodySchema,
 } from '#modules/auth/schemas/signup/signup.schema.js';
-
-const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();
+import { UserEmailSchema } from '#modules/users/schemas/user.schema.js';
 
 const passwordCharacters = [
   ...'abcdefghijklmnopqrstuvwxyz',
@@ -57,16 +57,11 @@ describe('SignupBodySchema', () => {
       email: ' USER@EXAMPLE.TEST ',
     });
 
-    expect(Result.isSuccess(result)).toBe(true);
-
-    if (Result.isFailure(result)) {
-      throw new Error('Expected signup validation to be successful');
-    }
-
-    expect(result.success).toEqual({
+    expect(result).toBeResultSuccess({
       ...commonBodyFields,
-      ...passwords,
-      email: 'user@example.test',
+      password: PasswordSchema.make(password),
+      passwordConfirm: PasswordSchema.make(password),
+      email: UserEmailSchema.make('user@example.test'),
     });
   });
 
@@ -77,11 +72,7 @@ describe('SignupBodySchema', () => {
       email: 'invalid-email',
     });
 
-    if (Result.isSuccess(result)) {
-      throw new Error('Expected signup validation to fail');
-    }
-
-    expect(formatIssues(result.failure.issue).issues).toEqual([
+    expect(result).toBeResultSchemaFailure([
       expect.objectContaining({
         path: ['email'],
       }),
@@ -104,11 +95,7 @@ describe('SignupBodySchema', () => {
         payloadWithoutField,
       );
 
-      if (Result.isSuccess(result)) {
-        throw new Error(`Expected missing ${field} to fail validation`);
-      }
-
-      expect(formatIssues(result.failure.issue).issues).toEqual([
+      expect(result).toBeResultSchemaFailure([
         expect.objectContaining({
           path: [field],
         }),
@@ -123,11 +110,7 @@ describe('SignupBodySchema', () => {
       passwordConfirm: password + '1',
     });
 
-    if (Result.isSuccess(result)) {
-      throw new Error('Expected signup validation to fail');
-    }
-
-    expect(formatIssues(result.failure.issue).issues).toEqual([
+    expect(result).toBeResultSchemaFailure([
       {
         message: passwordConfirmIssue.issue,
         path: passwordConfirmIssue.path,
@@ -146,13 +129,7 @@ describe('SignupBodySchema', () => {
             passwordConfirm,
           });
 
-          if (Result.isSuccess(result)) {
-            throw new Error('Expected signup validation to fail');
-          }
-
-          expect(Result.isFailure(result)).toBe(true);
-
-          expect(formatIssues(result.failure.issue).issues).toEqual([
+          expect(result).toBeResultSchemaFailure([
             {
               message: passwordConfirmIssue.issue,
               path: passwordConfirmIssue.path,
@@ -171,13 +148,7 @@ describe('SignupBodySchema', () => {
       role: 'admin',
     });
 
-    expect(Result.isFailure(result)).toBe(true);
-
-    if (Result.isSuccess(result)) {
-      throw new Error('Expected signup validation to fail');
-    }
-
-    expect(formatIssues(result.failure.issue).issues).toEqual([
+    expect(result).toBeResultSchemaFailure([
       expect.objectContaining({
         path: ['role'],
       }),
