@@ -1,6 +1,12 @@
+import type { Redacted } from 'effect';
 import type { Buffer } from 'node:buffer';
 
 import { Effect, Encoding, Result, Schema } from 'effect';
+import { clear } from 'effect/Queue';
+
+import type { AuthCredentialsError } from '#modules/auth/service/auth.service.errors.js';
+import type { PasswordHashOverloadedError } from '#modules/auth/service/password-hasher.service.errors.js';
+import type { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
 
 import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
 
@@ -8,6 +14,7 @@ const saltBytesLength = 16;
 const derivedKeyBytesLength = 32;
 const saltTextLength = 22;
 const derivedKeyTextLength = 43;
+const segmentsLength = 6;
 
 const base64UrlRegex = /^[A-Za-z0-9_-]+$/;
 
@@ -103,7 +110,7 @@ export const parsePasswordHashStructure = (
     const derivedKeyBase64Url = segments[5];
 
     if (
-      segments.length !== 6 ||
+      segments.length !== segmentsLength ||
       !saltBase64Url ||
       !derivedKeyBase64Url ||
       !isValidMetadata

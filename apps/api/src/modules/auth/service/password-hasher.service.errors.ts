@@ -5,3 +5,9 @@ export class PasswordHashIntegrityError extends Data.TaggedError(
 )<{
   readonly cause: unknown;
 }> {}
+
+export class PasswordHashOverloadedError extends Data.TaggedError(
+  'PasswordHashOverloadedError',
+)<{
+  readonly cause: unknown;
+}> {}
