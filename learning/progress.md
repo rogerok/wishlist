@@ -5,24 +5,30 @@
 - **Текущая фаза:** Curriculum Phase 0 — надёжный feedback loop и auth security primitives.
 - **Текущий шаг:** `roadmap.md` → `0.1` — восстановить Vitest collection после перемещения custom matchers.
 - **Следующая backend-цель:** завершить `SessionTokenGenerator`, затем `PasswordHasher` с bounded admission.
-- **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и подключить её к live `AppApi`.
+- **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и
+  подключить её к live `AppApi`.
 
 ## Наблюдаемое состояние проекта
 
 - Modular monolith в pnpm/Turborepo workspace.
 - Live API сейчас подключает Health и публичный Users CRUD.
-- Users уже проходят цепочку HttpApi/Schema → handlers → `UsersService` → `UsersRepository` → Effect-compatible Kysely/PostgreSQL.
-- Auth HttpApi contracts, request schemas, Problem Details errors и isolated contract tests существуют, но auth group/handlers/services не подключены к live application.
+- Users уже проходят цепочку HttpApi/Schema → handlers → `UsersService` → `UsersRepository` → Effect-compatible
+  Kysely/PostgreSQL.
+- Auth HttpApi contracts, request schemas, Problem Details errors и isolated contract tests существуют, но auth
+  group/handlers/services не подключены к live application.
 - Migration `0002_auth.ts` и generated DB types уже содержат `password_credentials` и `sessions`.
 - Canonical password-hash parser/serializer и тесты существуют.
-- `SessionTokenGenerator` — незавершённая работа: `SecureRandomBytes` объявлен, live implementation отсутствует, `generate` содержит unsafe placeholder, random bytes сейчас запрашиваются при построении Layer.
+- `SessionTokenGenerator` — незавершённая работа: `SecureRandomBytes` объявлен, live implementation отсутствует,
+  `generate` содержит unsafe placeholder, random bytes сейчас запрашиваются при построении Layer.
 - Wishlists, Items, Sharing Links, Reservations, Guest Sessions, outbox, images и Import Preview в коде отсутствуют.
-- `docs/auth/implementation-plan.md` частично устарел: его раздел Current state утверждает, что auth tables отсутствуют. Текущий код и `docs/product/implementation-plan.md` подтверждают обратное.
+- `docs/auth/implementation-plan.md` частично устарел: его раздел Current state утверждает, что auth tables отсутствуют.
+  Текущий код и `docs/product/implementation-plan.md` подтверждают обратное.
 
 ## Наблюдаемые проверки на момент инициализации
 
 - `pnpm --filter @wishlist/api check-types` — проходит.
-- `pnpm --filter @wishlist/api test` — не собирает 8 suite: Vitest пытается импортировать `src/infra/lib/matchers.ts`, а фактический новый файл находится в `src/infra/lib/matchers/matchers.ts`.
+- `pnpm --filter @wishlist/api test` — не собирает 8 suite: Vitest пытается импортировать `src/infra/lib/matchers.ts`, а
+  фактический новый файл находится в `src/infra/lib/matchers/matchers.ts`.
 - Это текущий blocker feedback loop, а не доказательство падения behavior tests: тестовые тела не запускались.
 - В worktree уже есть пользовательские незавершённые изменения matcher setup; learning initialization их не меняет.
 
@@ -39,9 +45,11 @@
 
 ## Предварительная mastery map
 
-Шкала: 0 — не встречал; 1 — узнаю; 2 — могу объяснить с помощью; 3 — могу реализовать с помощью; 4 — самостоятельно; 5 — объясняю, реализую, отлаживаю и сравниваю альтернативы.
+Шкала: 0 — не встречал; 1 — узнаю; 2 — могу объяснить с помощью; 3 — могу реализовать с помощью; 4 — самостоятельно; 5 —
+объясняю, реализую, отлаживаю и сравниваю альтернативы.
 
-Наличие кода не доказывает mastery. Оценки `2–3` ниже — рабочие гипотезы по коду и git history; их нужно подтвердить самостоятельным объяснением и новой задачей.
+Наличие кода не доказывает mastery. Оценки `2–3` ниже — рабочие гипотезы по коду и git history; их нужно подтвердить
+самостоятельным объяснением и новой задачей.
 
 | Концепция                                             |  Оценка | Основание                                         | Статус проверки                                            |
 | ----------------------------------------------------- | ------: | ------------------------------------------------- | ---------------------------------------------------------- |
@@ -82,17 +90,27 @@
 
 ## Запланированный архитектурный эксперимент
 
-Пользователь хочет попробовать Command–Decider–Event. Безопасная точка — Reservation lifecycle в Phase 6: там уже появятся реальные commands, terminal/active states, domain errors и события. План не включает переписывание всего проекта и не требует Event Sourcing. Сначала создаётся один чистый `ReservationDecider`, затем он сравнивается с прямыми transitions; PostgreSQL constraint остаётся владельцем конкурентного single-active invariant.
+Пользователь хочет попробовать Command–Decider–Event. Безопасная точка — Reservation lifecycle в Phase 6: там уже
+появятся реальные commands, terminal/active states, domain errors и события. План не включает переписывание всего
+проекта и не требует Event Sourcing. Сначала создаётся один чистый `ReservationDecider`, затем он сравнивается с прямыми
+transitions; PostgreSQL constraint остаётся владельцем конкурентного single-active invariant.
 
 ## Материалы платформы ментора
 
-Авторизованная BatSchool изучена как источник будущих experiments. Релевантные материалы и прямые ссылки сопоставлены с фазами в [`platform-materials.md`](./platform-materials.md). Доступно 26 изученных lesson pages; страница Effect Event Store вернула HTTP 500, поэтому её содержание не считается изученным.
+Авторизованная изучена как источник будущих experiments. Релевантные материалы и прямые ссылки сопоставлены с фазами в [
+`platform-materials.md`](./platform-materials.md). Доступно 26 изученных lesson pages; страница Effect Event Store
+вернула HTTP 500, поэтому её содержание не считается изученным.
 
-В обязательный маршрут добавлен только graceful shutdown будущего worker. Property-based test, mutation testing, Effect Request batching и PostgreSQL Event Store/CQRS оставлены gated laboratories: они открываются после соответствующего observable problem и не повышают mastery только по факту прочтения урока.
+В обязательный маршрут добавлен только graceful shutdown будущего worker. Property-based test, mutation testing, Effect
+Request batching и PostgreSQL Event Store/CQRS оставлены gated laboratories: они открываются после соответствующего
+observable problem и не повышают mastery только по факту прочтения урока.
 
 ## Ближайшая учебная цель
 
-Сначала вернуть красно-зелёный feedback loop: тест должен хотя бы собраться и упасть/пройти по поведению. Затем на `SessionTokenGenerator` проверить фундаментальную Effect-модель: случайное значение должно создаваться при каждом выполнении service effect, а не один раз при сборке Layer. Это маленькая граница, но от неё зависит безопасность всех Sessions.
+Сначала вернуть красно-зелёный feedback loop: тест должен хотя бы собраться и упасть/пройти по поведению. Затем на
+`SessionTokenGenerator` проверить фундаментальную Effect-модель: случайное значение должно создаваться при каждом
+выполнении service effect, а не один раз при сборке Layer. Это маленькая граница, но от неё зависит безопасность всех
+Sessions.
 
 ## Допущения и открытые вопросы
 
@@ -101,7 +119,8 @@
 - Целевой продукт и порядок больших milestones берутся из `docs/product/implementation-plan.md`.
 - Backend остаётся главным учебным контуром; frontend не определяет порядок curriculum.
 - Пользовательские незавершённые изменения matcher setup намеренные и должны быть продолжены, а не перезаписаны агентом.
-- Темп и доступное учебное время неизвестны, поэтому roadmap ограничивает размер технического шага, а не календарную длительность.
+- Темп и доступное учебное время неизвестны, поэтому roadmap ограничивает размер технического шага, а не календарную
+  длительность.
 - Код показывает exposure и guided implementation, но не доказывает самостоятельный уровень 4–5.
 
 ### Вопросы, которые не блокируют старт

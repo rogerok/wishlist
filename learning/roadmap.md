@@ -2,7 +2,9 @@
 
 ## Как проходить шаг
 
-Каждая строка — одна учебная итерация. Агент сначала раскрывает только концепцию текущего шага, затем владелец проекта реализует задачу. Агент проверяет указанное наблюдаемое поведение и задаёт один вопрос из колонки «Проверка понимания». Следующий шаг не выдаётся, пока текущий не объяснён и не проверен.
+Каждая строка — одна учебная итерация. Агент сначала раскрывает только концепцию текущего шага, затем владелец проекта
+реализует задачу. Агент проверяет указанное наблюдаемое поведение и задаёт один вопрос из колонки «Проверка понимания».
+Следующий шаг не выдаётся, пока текущий не объяснён и не проверен.
 
 Текущий шаг отмечен `→`.
 
@@ -22,7 +24,8 @@
 | 0.10  | Semaphore ограничивает active work, но очередь может расти       | Bounded admission и overload                                               | Добавить лимит admitted work и typed immediate overload                                            | Тест capacity: active, waiting, rejected                             | Чем execution capacity отличается от admission capacity?                        |
 | 0.11  | Нужно доказать crypto contract целиком                           | Round-trip, mismatch и canonical parsing                                   | Завершить behavior tests PasswordHasher                                                            | hash→verify true; wrong password false; malformed hash typed failure | Какие inputs допускаются до вызова scrypt?                                      |
 
-**Выход фазы:** `check-types`, crypto tests и узкий interruption/overload experiment проходят; в `docs/auth/NOTES.md` не остаётся нерешённых решений Phase 3.
+**Выход фазы:** `check-types`, crypto tests и узкий interruption/overload experiment проходят; в `docs/auth/NOTES.md` не
+остаётся нерешённых решений Phase 3.
 
 ## 1. PostgreSQL Session authentication
 
@@ -42,63 +45,110 @@
 
 ## 2. Identity и authorization
 
-1. **2.1 — Display Name contract.** Проблема: текущие nullable `firstName/middleName/lastName` расходятся с доменной моделью. Концепция: clean schema cutover. Задача: сначала изменить runtime/HTTP contract и boundary tests. Проверка: old shape rejected, required Display Name accepted. Вопрос: почему два параллельных name-моделя опаснее одной миграции?
-2. **2.2 — Data migration.** Задача: мигрировать PostgreSQL schema/data и regenerated Kysely types. Проверка: migration from existing schema и `db:check`. Вопрос: где находится необратимый риск?
-3. **2.3 — Authenticated private profile.** Задача: заменить arbitrary `:id` на current principal для read/update. Проверка: User A не может выбрать User B. Вопрос: почему проверка только в handler недостаточна?
-4. **2.4 — Public Profile projection.** Задача: создать отдельный response без email. Проверка: schema и HTTP response не содержат private fields. Вопрос: почему `Omit` TypeScript не является runtime boundary?
-5. **2.5 — Remove public CRUD.** Задача: удалить неразрешённые list/get/update/delete routes и callers. Проверка: route inventory и HTTP 404/contract absence. Вопрос: чем clean cutover безопаснее deprecated alias?
-6. **2.6 — Authorization matrix.** Задача: записать и проверить owner/other/anonymous cases. Проверка: конечная table-driven matrix. Вопрос: когда `404` безопаснее `403`?
+1. **2.1 — Display Name contract.** Проблема: текущие nullable `firstName/middleName/lastName` расходятся с доменной
+   моделью. Концепция: clean schema cutover. Задача: сначала изменить runtime/HTTP contract и boundary tests. Проверка:
+   old shape rejected, required Display Name accepted. Вопрос: почему два параллельных name-моделя опаснее одной
+   миграции?
+2. **2.2 — Data migration.** Задача: мигрировать PostgreSQL schema/data и regenerated Kysely types. Проверка: migration
+   from existing schema и `db:check`. Вопрос: где находится необратимый риск?
+3. **2.3 — Authenticated private profile.** Задача: заменить arbitrary `:id` на current principal для read/update.
+   Проверка: User A не может выбрать User B. Вопрос: почему проверка только в handler недостаточна?
+4. **2.4 — Public Profile projection.** Задача: создать отдельный response без email. Проверка: schema и HTTP response
+   не содержат private fields. Вопрос: почему `Omit` TypeScript не является runtime boundary?
+5. **2.5 — Remove public CRUD.** Задача: удалить неразрешённые list/get/update/delete routes и callers. Проверка: route
+   inventory и HTTP 404/contract absence. Вопрос: чем clean cutover безопаснее deprecated alias?
+6. **2.6 — Authorization matrix.** Задача: записать и проверить owner/other/anonymous cases. Проверка: конечная
+   table-driven matrix. Вопрос: когда `404` безопаснее `403`?
 
 ## 3. Owner-only Wishlists
 
-1. **3.1 — Минимальный aggregate contract.** Определить title, description, Occasion Date, visibility, Wishlist Currency. Проверка: boundary matrix Schema. Вопрос: какие поля нужны текущему product path?
-2. **3.2 — Persistence invariant.** Добавить migration/FK/indexes и generated types. Проверка: migration test. Вопрос: что гарантирует FK при удалении owner?
-3. **3.3 — Create/read one.** Реализовать два use case с owner ID. Проверка: integration test owner/other. Вопрос: где должен участвовать owner ID?
-4. **3.4 — List and pagination.** Добавить stable `(createdAt,id)` ordering и ограниченный page size. Проверка: ties и page boundary. Вопрос: почему order только по timestamp нестабилен?
-5. **3.5 — Update.** Scope SQL mutation по `wishlistId + ownerId`. Проверка: affected row semantics. Вопрос: какую утечку создаёт отдельная предварительная ownership query?
-6. **3.6 — Delete semantics.** Явно выбрать idempotent/not-found contract и реализовать его. Проверка: repeated delete. Вопрос: где этот выбор видит HTTP consumer?
-7. **3.7 — Vertical smoke.** Signup→create→list→update→delete. Проверка: real server/PostgreSQL. Вопрос: какие boundary пересёк сценарий?
+1. **3.1 — Минимальный aggregate contract.** Определить title, description, Occasion Date, visibility, Wishlist
+   Currency. Проверка: boundary matrix Schema. Вопрос: какие поля нужны текущему product path?
+2. **3.2 — Persistence invariant.** Добавить migration/FK/indexes и generated types. Проверка: migration test. Вопрос:
+   что гарантирует FK при удалении owner?
+3. **3.3 — Create/read one.** Реализовать два use case с owner ID. Проверка: integration test owner/other. Вопрос: где
+   должен участвовать owner ID?
+4. **3.4 — List and pagination.** Добавить stable `(createdAt,id)` ordering и ограниченный page size. Проверка: ties и
+   page boundary. Вопрос: почему order только по timestamp нестабилен?
+5. **3.5 — Update.** Scope SQL mutation по `wishlistId + ownerId`. Проверка: affected row semantics. Вопрос: какую
+   утечку создаёт отдельная предварительная ownership query?
+6. **3.6 — Delete semantics.** Явно выбрать idempotent/not-found contract и реализовать его. Проверка: repeated delete.
+   Вопрос: где этот выбор видит HTTP consumer?
+7. **3.7 — Vertical smoke.** Signup→create→list→update→delete. Проверка: real server/PostgreSQL. Вопрос: какие boundary
+   пересёк сценарий?
 
 ## 4. Sharing и Public Profiles
 
-1. **4.1 — Visibility state table.** До кода выписать actor × visibility × credential. Проверка: исчерпывающая таблица. Вопрос: где одна policy уменьшает расхождения?
-2. **4.2 — Sharing credential.** Добавить high-entropy URL-safe key/digest отдельно от UUID. Проверка: generation/lookup без логирования raw key. Вопрос: почему UUID не capability secret?
-3. **4.3 — Unlisted read.** Реализовать доступ только по current key. Проверка: wrong/old key denied. Вопрос: кто является principal этого запроса?
-4. **4.4 — Public Profile read.** Выдать Display Name и только Public Wishlists. Проверка: Private/Unlisted absent. Вопрос: чем discoverability отличается от readability?
-5. **4.5 — Visibility transitions.** Атомарно rotate/invalidate при снижении visibility. Проверка: вся transition matrix. Вопрос: почему update и invalidation должны commit вместе?
-6. **4.6 — Leakage audit.** Проверить responses/logs/metrics. Проверка: нет email, holder или key. Вопрос: какие данные являются credentials?
+1. **4.1 — Visibility state table.** До кода выписать actor × visibility × credential. Проверка: исчерпывающая таблица.
+   Вопрос: где одна policy уменьшает расхождения?
+2. **4.2 — Sharing credential.** Добавить high-entropy URL-safe key/digest отдельно от UUID. Проверка: generation/lookup
+   без логирования raw key. Вопрос: почему UUID не capability secret?
+3. **4.3 — Unlisted read.** Реализовать доступ только по current key. Проверка: wrong/old key denied. Вопрос: кто
+   является principal этого запроса?
+4. **4.4 — Public Profile read.** Выдать Display Name и только Public Wishlists. Проверка: Private/Unlisted absent.
+   Вопрос: чем discoverability отличается от readability?
+5. **4.5 — Visibility transitions.** Атомарно rotate/invalidate при снижении visibility. Проверка: вся transition
+   matrix. Вопрос: почему update и invalidation должны commit вместе?
+6. **4.6 — Leakage audit.** Проверить responses/logs/metrics. Проверка: нет email, holder или key. Вопрос: какие данные
+   являются credentials?
 
 ## 5. Wishlist Items
 
-1. **5.1 — Item contract.** Title-only success; optional URL/price/priority/comment. Проверка: Schema boundaries. Вопрос: почему remote metadata не является обязательной частью Item?
-2. **5.2 — Exact money.** Выбрать minor units или exact decimal и написать invariant. Проверка: значения, которые ломают float. Вопрос: какой trade-off у выбранного представления?
-3. **5.3 — Parent-scoped persistence.** Migration и queries через parent Wishlist ownership. Проверка: cross-owner matrix. Вопрос: почему Item authorization начинается с Wishlist?
-4. **5.4 — Owner CRUD.** По одной операции с узкой integration проверкой. Проверка: create/update/delete. Вопрос: какие failures domain, а какие persistence?
-5. **5.5 — Sorting.** Priority-first default и price asc/desc с missing last. Проверка: ties/nulls. Вопрос: какой последний tie-breaker делает порядок стабильным?
-6. **5.6 — Visitor projection.** Public read без outbound fetch. Проверка: controlled network spy и response shape. Вопрос: почему read availability не должна зависеть от marketplace?
+1. **5.1 — Item contract.** Title-only success; optional URL/price/priority/comment. Проверка: Schema boundaries.
+   Вопрос: почему remote metadata не является обязательной частью Item?
+2. **5.2 — Exact money.** Выбрать minor units или exact decimal и написать invariant. Проверка: значения, которые ломают
+   float. Вопрос: какой trade-off у выбранного представления?
+3. **5.3 — Parent-scoped persistence.** Migration и queries через parent Wishlist ownership. Проверка: cross-owner
+   matrix. Вопрос: почему Item authorization начинается с Wishlist?
+4. **5.4 — Owner CRUD.** По одной операции с узкой integration проверкой. Проверка: create/update/delete. Вопрос: какие
+   failures domain, а какие persistence?
+5. **5.5 — Sorting.** Priority-first default и price asc/desc с missing last. Проверка: ties/nulls. Вопрос: какой
+   последний tie-breaker делает порядок стабильным?
+6. **5.6 — Visitor projection.** Public read без outbound fetch. Проверка: controlled network spy и response shape.
+   Вопрос: почему read availability не должна зависеть от marketplace?
 
 ## 6. User Reservations
 
-1. **6.1 — State machine.** Записать active/terminal transitions, commands, events и actors. Проверка: запрещённые переходы видимы до кода. Вопрос: почему terminal history не удаляется?
-2. **6.2 — Pure ReservationDecider.** Реализовать маленький чистый module с `decide(state, command) → events | domain error` и `evolve(state, event) → state`, без Effect, SQL и HTTP. Проверка: table-driven tests всей transition matrix. Вопрос: какую сложность Decider скрывает от caller?
-3. **6.3 — Adoption gate.** Сравнить Decider с прямыми conditional transitions по interface, локальности правил и tests. Оставить Decider только для Reservation lifecycle; current state продолжить хранить в PostgreSQL. Проверка: events воспроизводят новое state, event store отсутствует. Вопрос: почему Command–Decider–Event не требует Event Sourcing?
-4. **6.4 — Database constraint.** Добавить single-active invariant. Проверка: две concurrent transactions. Вопрос: почему чистый Decider и process lock не подходят двум replicas?
-5. **6.5 — Reserve integration.** Загрузить state, вызвать Decider и атомарно сохранить transition с conflict mapping. Проверка: one success/one conflict. Вопрос: где рождается окончательная truth о конкурентном конфликте?
-6. **6.6 — Cancel and owner release.** Провести holder/other/owner commands через тот же Decider без раскрытия identity. Проверка: allowed/forbidden/retry matrix. Вопрос: что делает повтор команды идемпотентным?
-7. **6.7 — Delete lifecycle.** End active Reservations атомарно с Item/Wishlist deletion и сохранить terminal reason. Проверка: delete transition и последующая история. Вопрос: почему cascade delete может быть недостаточен?
-8. **6.8 — Holder-aware projection.** `free/reserved/reservedByMe`. Проверка: owner/holder/other. Вопрос: почему domain event и public projection не должны иметь одну shape?
+1. **6.1 — State machine.** Записать active/terminal transitions, commands, events и actors. Проверка: запрещённые
+   переходы видимы до кода. Вопрос: почему terminal history не удаляется?
+2. **6.2 — Pure ReservationDecider.** Реализовать маленький чистый module с
+   `decide(state, command) → events | domain error` и `evolve(state, event) → state`, без Effect, SQL и HTTP. Проверка:
+   table-driven tests всей transition matrix. Вопрос: какую сложность Decider скрывает от caller?
+3. **6.3 — Adoption gate.** Сравнить Decider с прямыми conditional transitions по interface, локальности правил и tests.
+   Оставить Decider только для Reservation lifecycle; current state продолжить хранить в PostgreSQL. Проверка: events
+   воспроизводят новое state, event store отсутствует. Вопрос: почему Command–Decider–Event не требует Event Sourcing?
+4. **6.4 — Database constraint.** Добавить single-active invariant. Проверка: две concurrent transactions. Вопрос:
+   почему чистый Decider и process lock не подходят двум replicas?
+5. **6.5 — Reserve integration.** Загрузить state, вызвать Decider и атомарно сохранить transition с conflict mapping.
+   Проверка: one success/one conflict. Вопрос: где рождается окончательная truth о конкурентном конфликте?
+6. **6.6 — Cancel and owner release.** Провести holder/other/owner commands через тот же Decider без раскрытия identity.
+   Проверка: allowed/forbidden/retry matrix. Вопрос: что делает повтор команды идемпотентным?
+7. **6.7 — Delete lifecycle.** End active Reservations атомарно с Item/Wishlist deletion и сохранить terminal reason.
+   Проверка: delete transition и последующая история. Вопрос: почему cascade delete может быть недостаточен?
+8. **6.8 — Holder-aware projection.** `free/reserved/reservedByMe`. Проверка: owner/holder/other. Вопрос: почему domain
+   event и public projection не должны иметь одну shape?
 
 ## 7. Guest Sessions и outbox
 
-1. **7.1 — Guest challenge model.** Digest-only, single-use, expiry, Wishlist scope. Проверка: replay/expiry/scope. Вопрос: чем challenge отличается от Session?
-2. **7.2 — Request magic link.** Persist challenge + outbox; Item не блокируется. Проверка: crash-safe commit. Вопрос: где находится crash window без outbox?
-3. **7.3 — Worker claim loop.** `SKIP LOCKED`/lease и bounded batch. Проверка: два workers не обрабатывают одну claim одновременно. Вопрос: почему at-least-once всё равно допускает duplicate delivery attempt?
-4. **7.4 — Email adapter.** Local capture implementation за Effect service. Проверка: observable captured message без real provider. Вопрос: какая часть является domain command, а какая transport?
-5. **7.5 — Consume link.** Атомарно consume challenge, создать Guest Session, попытаться reserve. Проверка: concurrent prior reservation. Вопрос: почему Session можно создать даже при Reservation conflict?
-6. **7.6 — Guest cancel.** Scope по Guest Session + Wishlist. Проверка: cross-Wishlist denied. Вопрос: почему verified email не создаёт global Guest identity?
-7. **7.7 — Retry/idempotency.** Сделать worker handler устойчивым к crash. Проверка: restart between send/ack. Вопрос: какую duplicate границу невозможно убрать без provider idempotency?
-8. **7.8 — Retention.** Purge raw recipient payload/expired credentials. Проверка: cleanup query и audit. Вопрос: какие данные нужно сохранить, а какие удалить?
-9. **7.9 — Graceful worker shutdown.** Остановить новые claims, дать текущей job bounded drain и закрыть resources через Effect Scope. Проверка: `SIGTERM` во время job приводит либо к завершённой обработке, либо к recoverable lease после restart. Вопрос: какое состояние делает незавершённую job безопасной для повторного claim?
+1. **7.1 — Guest challenge model.** Digest-only, single-use, expiry, Wishlist scope. Проверка: replay/expiry/scope.
+   Вопрос: чем challenge отличается от Session?
+2. **7.2 — Request magic link.** Persist challenge + outbox; Item не блокируется. Проверка: crash-safe commit. Вопрос:
+   где находится crash window без outbox?
+3. **7.3 — Worker claim loop.** `SKIP LOCKED`/lease и bounded batch. Проверка: два workers не обрабатывают одну claim
+   одновременно. Вопрос: почему at-least-once всё равно допускает duplicate delivery attempt?
+4. **7.4 — Email adapter.** Local capture implementation за Effect service. Проверка: observable captured message без
+   real provider. Вопрос: какая часть является domain command, а какая transport?
+5. **7.5 — Consume link.** Атомарно consume challenge, создать Guest Session, попытаться reserve. Проверка: concurrent
+   prior reservation. Вопрос: почему Session можно создать даже при Reservation conflict?
+6. **7.6 — Guest cancel.** Scope по Guest Session + Wishlist. Проверка: cross-Wishlist denied. Вопрос: почему verified
+   email не создаёт global Guest identity?
+7. **7.7 — Retry/idempotency.** Сделать worker handler устойчивым к crash. Проверка: restart between send/ack. Вопрос:
+   какую duplicate границу невозможно убрать без provider idempotency?
+8. **7.8 — Retention.** Purge raw recipient payload/expired credentials. Проверка: cleanup query и audit. Вопрос: какие
+   данные нужно сохранить, а какие удалить?
+9. **7.9 — Graceful worker shutdown.** Остановить новые claims, дать текущей job bounded drain и закрыть resources через
+   Effect Scope. Проверка: `SIGTERM` во время job приводит либо к завершённой обработке, либо к recoverable lease после
+   restart. Вопрос: какое состояние делает незавершённую job безопасной для повторного claim?
 
 ## 8. External-user security gate
 
@@ -128,7 +178,8 @@
 5. **10.5:** Apply selected fields с authorization/idempotency/version check.
 6. **10.6:** Refresh как новый preview/diff; accepted image проходит image pipeline.
 
-Проверка фазы — детерминированные controlled fixtures для SSRF, redirect, timeout, oversized, non-HTML, challenge и stale-write cases; live marketplace не используется как test dependency.
+Проверка фазы — детерминированные controlled fixtures для SSRF, redirect, timeout, oversized, non-HTML, challenge и
+stale-write cases; live marketplace не используется как test dependency.
 
 ## 11. Scale lab
 
@@ -140,13 +191,25 @@
 
 ## Необязательные лаборатории после появления gate
 
-Источник, момент применения и ограничения каждой лаборатории зафиксированы в [`platform-materials.md`](./platform-materials.md). Эти шаги не блокируют продуктовый roadmap.
+Источник, момент применения и ограничения каждой лаборатории зафиксированы в [
+`platform-materials.md`](./platform-materials.md). Эти шаги не блокируют продуктовый roadmap.
 
-1. **L1 — Property-based invariant.** После стабильного money contract или Reservation transition matrix выбрать одно свойство и проверить generated cases с воспроизводимым seed и shrinking. Не заменять конечную boundary matrix генератором.
-2. **L2 — Mutation probe.** После стабилизации чистого `ReservationDecider` запустить mutation testing только для этого module и разобрать meaningful surviving mutants. Не вводить project-wide threshold.
-3. **L3 — Effect Request batching.** Только если trace/query counter показывает `1 + N`, сначала сравнить обычный SQL `JOIN/IN`, затем локальный `RequestResolver` prototype. Cache и batching оценивать отдельно.
-4. **L4 — PostgreSQL Event Store + CQRS projection.** После завершённого product path в throwaway module проверить append/version conflict, replay и rebuild одной idempotent projection. Production schema не менять; adoption допустим только при реальной потребности в time-travel, audit или нескольких rebuildable read models. Страница BatSchool про Event Store при исследовании возвращала HTTP 500, поэтому детали API перед экспериментом нужно проверить повторно и по установленным типам.
+1. **L1 — Property-based invariant.** После стабильного money contract или Reservation transition matrix выбрать одно
+   свойство и проверить generated cases с воспроизводимым seed и shrinking. Не заменять конечную boundary matrix
+   генератором.
+2. **L2 — Mutation probe.** После стабилизации чистого `ReservationDecider` запустить mutation testing только для этого
+   module и разобрать meaningful surviving mutants. Не вводить project-wide threshold.
+3. **L3 — Effect Request batching.** Только если trace/query counter показывает `1 + N`, сначала сравнить обычный SQL
+   `JOIN/IN`, затем локальный `RequestResolver` prototype. Cache и batching оценивать отдельно.
+4. **L4 — PostgreSQL Event Store + CQRS projection.** После завершённого product path в throwaway module проверить
+   append/version conflict, replay и rebuild одной idempotent projection. Production schema не менять; adoption допустим
+   только при реальной потребности в time-travel, audit или нескольких rebuildable read models. Страница про Event Store
+   при исследовании возвращала HTTP 500, поэтому детали API перед экспериментом нужно проверить повторно и по
+   установленным типам.
 
 ## Конечный критерий проекта
 
-Закончен первый продуктовый путь из `docs/product/implementation-plan.md`: signup → Wishlist → Items → share → User/Guest Reservation → cancel, включая concurrent correctness и durable required email. Владелец может самостоятельно спроектировать изменение, назвать trade-offs, реализовать, протестировать, отладить и объяснить, почему проверка защищает наблюдаемый инвариант.
+Закончен первый продуктовый путь из `docs/product/implementation-plan.md`: signup → Wishlist → Items → share →
+User/Guest Reservation → cancel, включая concurrent correctness и durable required email. Владелец может самостоятельно
+спроектировать изменение, назвать trade-offs, реализовать, протестировать, отладить и объяснить, почему проверка
+защищает наблюдаемый инвариант.
