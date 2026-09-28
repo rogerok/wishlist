@@ -3,8 +3,17 @@
 ## Текущий checkpoint
 
 - **Текущая фаза:** Curriculum Phase 0 — надёжный feedback loop и auth security primitives.
-- **Текущий шаг:** `roadmap.md` → `0.1` — восстановить Vitest collection после перемещения custom matchers.
-- **Следующая backend-цель:** завершить `SessionTokenGenerator`, затем `PasswordHasher` с bounded admission.
+- **Текущий шаг:** `roadmap.md` → `0.9` (после `0.8`) — benchmark scrypt (latency и peak RSS при 1/2/… concurrent calls). Шаг `0.9`
+  начат заранее: `deriveKey` через `Effect.callback` + `Effect.uninterruptible` существует, permit и `hash`/`verify` нет.
+- **Статус шагов 0.1–0.7 (сверка кода 2026-09-26):** реализация есть; вопросы «Проверка понимания» из roadmap устно не
+  пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Пробел: `0.3` — нет детерминированного
+  теста на два обращения по 32 bytes.
+- **`0.4` закрыт с отклонением от roadmap (решение владельца, 2026-09-26):** предусловие `total` (safe integer в
+  `[min, max]`) → `Effect.die`, отказ `randomBytes` после предусловия → `SecurePrimitiveUnavailableError`; тест на 6
+  неверных длин проверяет `Die`. Проверку длины результата не делаем: Node гарантирует длину, единственный случай
+  усечения (дробный `total`) закрыт предусловием. Injected failure test адаптера не делаем (потребовал бы фабрику-шов
+  ради одной ветки); проброс typed failure проверить test layer'ом на уровне потребителя при HTTP mapping 503.
+- **Следующая backend-цель:** `PasswordHasher` с bounded admission.
 - **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и
   подключить её к live `AppApi`.
 
@@ -18,19 +27,39 @@
   group/handlers/services не подключены к live application.
 - Migration `0002_auth.ts` и generated DB types уже содержат `password_credentials` и `sessions`.
 - Canonical password-hash parser/serializer и тесты существуют.
-- `SessionTokenGenerator` — незавершённая работа: `SecureRandomBytes` объявлен, live implementation отсутствует,
-  `generate` содержит unsafe placeholder, random bytes сейчас запрашиваются при построении Layer.
+- `SessionTokenGenerator` реализован: `SecureRandomBytesLive`, lazy `generate` (bytes на каждый вызов), SHA-256 digest
+  от raw bytes, `Redacted` credential; тесты known-vector и freshness.
+- `PasswordHasher`: service shape и ошибки есть; `deriveKey` (scrypt в `Effect.callback`, uninterruptible) есть, но не
+  используется; Layer, `hash`/`verify`, permit и admission отсутствуют. Scrypt/format constants вынесены в
+  `service/constants.ts` (serializer ещё содержит литерал `$scrypt$v=1$N=131072,r=8,p=1$`).
 - Wishlists, Items, Sharing Links, Reservations, Guest Sessions, outbox, images и Import Preview в коде отсутствуют.
 - `docs/auth/implementation-plan.md` частично устарел: его раздел Current state утверждает, что auth tables отсутствуют.
   Текущий код и `docs/product/implementation-plan.md` подтверждают обратное.
 
-## Наблюдаемые проверки на момент инициализации
+## Наблюдаемые проверки (2026-09-26)
 
-- `pnpm --filter @wishlist/api check-types` — проходит.
-- `pnpm --filter @wishlist/api test` — не собирает 8 suite: Vitest пытается импортировать `src/infra/lib/matchers.ts`, а
-  фактический новый файл находится в `src/infra/lib/matchers/matchers.ts`.
-- Это текущий blocker feedback loop, а не доказательство падения behavior tests: тестовые тела не запускались.
+- `pnpm --filter @wishlist/api test` — 8 suites, 60 tests passed; `setupFiles` указывает на
+  `src/infra/lib/matchers/matchers.ts`.
+- `pnpm --filter @wishlist/api lint` — 0 errors; warnings: неиспользуемые `Fiber` и `deriveKey` в hasher.
 - В worktree уже есть пользовательские незавершённые изменения matcher setup; learning initialization их не меняет.
+
+## Измерения scrypt (`0.8`, 2026-09-26, dev-машина 12 ядер, Node 25.2.1, N=131072 r=8 p=1)
+
+Одноразовый скрипт вне репозитория; один процесс на уровень K; `maxRSS` из `process.resourceUsage()`.
+
+| K   | UV_THREADPOOL_SIZE | Завершения, мс   | Peak RSS |
+| --- | ------------------ | ---------------- | -------- |
+| 1   | 4                  | 271              | 210 MB   |
+| 4   | 4                  | 296–328          | 581 MB   |
+| 8   | 4                  | 319–339, 654–669 | 581 MB   |
+| 8   | 8                  | 315–481          | 1093 MB  |
+| 12  | 12                 | 405–625          | 1588 MB  |
+
+Выводы: RSS ≈ base (~68 MB) + active × 128 MB; очередь libuv памяти не занимает. Выше 4 параллельных хэшей latency
+растёт из-за memory bandwidth (≈12 → 17 → 19 hash/s при 4/8/12). Предсказание владельца (две волны, ~512 MB) подтвердилось.
+Вопрос понимания `0.8` («почему UV_THREADPOOL_SIZE не лимит») владелец не смог ответить; агент объяснил: unbounded
+очередь libuv без отказа/отмены + общий пул (fs, dns.lookup, zlib, crypto). Самостоятельное объяснение не подтверждено —
+вернуться к вопросу после `0.10`.
 
 ## Стек и обнаруженные версии
 
