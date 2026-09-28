@@ -1,22 +1,19 @@
-import type { Redacted } from 'effect';
 import type { Buffer } from 'node:buffer';
 
 import { Effect, Encoding, Result, Schema } from 'effect';
-import { clear } from 'effect/Queue';
 
-import type { AuthCredentialsError } from '#modules/auth/service/auth.service.errors.js';
-import type { PasswordHashOverloadedError } from '#modules/auth/service/password-hasher.service.errors.js';
-import type { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
-
+import {
+  base64UrlRegex,
+  cryptAlgorithm,
+  cryptOptions,
+  cryptVersion,
+  derivedKeyBytesLength,
+  derivedKeyTextLength,
+  saltBytesLength,
+  saltTextLength,
+  segmentsLength,
+} from '#modules/auth/service/constants.js';
 import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
-
-const saltBytesLength = 16;
-const derivedKeyBytesLength = 32;
-const saltTextLength = 22;
-const derivedKeyTextLength = 43;
-const segmentsLength = 6;
-
-const base64UrlRegex = /^[A-Za-z0-9_-]+$/;
 
 const canonicalBase64UrlFilter = Schema.makeFilter<string>(
   (input) => {
@@ -80,7 +77,7 @@ export const serializePasswordHash = (
 
   return Effect.succeed(
     StoredPasswordHashSchema.make(
-      `$scrypt$v=1$N=131072,r=8,p=1$${saltBase64}$${hashBase64}`,
+      `$${cryptAlgorithm}$v=${cryptVersion}$N=${cryptOptions.N},r=${cryptOptions.r},p=${cryptOptions.p}$${saltBase64}$${hashBase64}`,
     ),
   );
 };
@@ -96,9 +93,11 @@ export const parsePasswordHashStructure = (
   Effect.gen(function* () {
     const segments = input.split('$');
     const isValidFirstSegment = segments[0] === '';
-    const isValidAlgorithmSegment = segments[1] === 'scrypt';
-    const isValidVersion = segments[2] === 'v=1';
-    const isValidParams = segments[3] === 'N=131072,r=8,p=1';
+    const isValidAlgorithmSegment = segments[1] === cryptAlgorithm;
+    const isValidVersion = segments[2] === `v=${cryptVersion}`;
+    const isValidParams =
+      segments[3] ===
+      `N=${cryptOptions.N},r=${cryptOptions.r},p=${cryptOptions.p}`;
 
     const isValidMetadata =
       isValidFirstSegment &&
