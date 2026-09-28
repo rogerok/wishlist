@@ -1,5 +1,3 @@
-import type { Buffer } from 'node:buffer';
-
 import { Effect, Encoding, Result, Schema } from 'effect';
 
 import {
@@ -60,8 +58,8 @@ export type StoredPasswordHash = Schema.Schema.Type<
 >;
 
 export const serializePasswordHash = (
-  salt: Buffer,
-  derivedKey: Buffer,
+  salt: Uint8Array,
+  derivedKey: Uint8Array,
 ): Effect.Effect<StoredPasswordHash, PasswordHashIntegrityError> => {
   if (
     salt.length !== saltBytesLength ||
@@ -72,8 +70,8 @@ export const serializePasswordHash = (
     });
   }
 
-  const saltBase64 = salt.toString('base64url');
-  const hashBase64 = derivedKey.toString('base64url');
+  const saltBase64 = Encoding.encodeBase64Url(salt);
+  const hashBase64 = Encoding.encodeBase64Url(derivedKey);
 
   return Effect.succeed(
     StoredPasswordHashSchema.make(
