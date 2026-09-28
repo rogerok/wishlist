@@ -2,18 +2,20 @@
 
 ## Текущий checkpoint
 
-- **Текущая фаза:** Curriculum Phase 0 — надёжный feedback loop и auth security primitives.
-- **Текущий шаг:** `roadmap.md` → `0.9` (после `0.8`) — benchmark scrypt (latency и peak RSS при 1/2/… concurrent calls). Шаг `0.9`
-  начат заранее: `deriveKey` через `Effect.callback` + `Effect.uninterruptible` существует, permit и `hash`/`verify` нет.
-- **Статус шагов 0.1–0.7 (сверка кода 2026-09-26):** реализация есть; вопросы «Проверка понимания» из roadmap устно не
-  пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Пробел: `0.3` — нет детерминированного
-  теста на два обращения по 32 bytes.
+- **Текущий checkpoint (2026-09-28):** `0.8` локально измерен; `0.9–0.11` реализованы и функционально проверены.
+- **Следующий функциональный шаг:** `roadmap.md` → `1.1` — `PasswordCredentialsRepository`.
+- **Статус шагов 0.1–0.7:** реализация есть, feedback loop работает. Вопросы «Проверка понимания» из roadmap устно не
+  пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Остаток `0.3` — нет детерминированного
+  теста, доказывающего два обращения по 32 bytes; готовность hasher этот пробел не закрывает.
+- **Phase 0 не объявлена полностью закрытой:** остаются этот token test и учебные проверки; production memory budget
+  не определён. Локальные лимиты hasher не являются production approval.
 - **`0.4` закрыт с отклонением от roadmap (решение владельца, 2026-09-26):** предусловие `total` (safe integer в
   `[min, max]`) → `Effect.die`, отказ `randomBytes` после предусловия → `SecurePrimitiveUnavailableError`; тест на 6
-  неверных длин проверяет `Die`. Проверку длины результата не делаем: Node гарантирует длину, единственный случай
-  усечения (дробный `total`) закрыт предусловием. Injected failure test адаптера не делаем (потребовал бы фабрику-шов
-  ради одной ветки); проброс typed failure проверить test layer'ом на уровне потребителя при HTTP mapping 503.
-- **Следующая backend-цель:** `PasswordHasher` с bounded admission.
+  неверных длин проверяет `Die`. Проверку длины результата не делаем: Node гарантирует длину, дробный `total` закрыт
+  предусловием. Первоначально injected failure test был отложен. На 2026-09-28 он добавлен на уровне потребителя
+  `PasswordHasher`: подмена Node `randomBytes` доказывает typed failure, отсутствие вызова scrypt и восстановление
+  после отказа без введения production-фабрики. HTTP mapping 503 ещё не реализован.
+- **Следующая backend-цель:** insert/load Password Credential с точной error mapping и изоляцией от публичного User.
 - **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и
   подключить её к live `AppApi`.
 
@@ -29,23 +31,31 @@
 - Canonical password-hash parser/serializer и тесты существуют.
 - `SessionTokenGenerator` реализован: `SecureRandomBytesLive`, lazy `generate` (bytes на каждый вызов), SHA-256 digest
   от raw bytes, `Redacted` credential; тесты known-vector и freshness.
-- `PasswordHasher`: service shape и ошибки есть; `deriveKey` (scrypt в `Effect.callback`, uninterruptible) есть, но не
-  используется; Layer, `hash`/`verify`, permit и admission отсутствуют. Scrypt/format constants вынесены в
-  `service/constants.ts` (serializer ещё содержит литерал `$scrypt$v=1$N=131072,r=8,p=1$`).
+- `PasswordHasherLive` реализует `hash`/`verify`, захватывает `SecureRandomBytes` при сборке Layer и сам предоставляет
+  `SecureRandomBytesLiveLayer`. Native scrypt обёрнут в `Effect.callback` + `Effect.uninterruptible`; work permit
+  удерживается до callback. Лимиты одного экземпляра: 2 work permits и 4 admission permits (2 active + 2 waiting),
+  сверх capacity — immediate overload. Sync throw scrypt остаётся defect, callback failure —
+  `SecurePrimitiveUnavailableError`.
+- Тесты token generator и hasher находятся в `apps/api/src/modules/auth/service/test/`.
 - Wishlists, Items, Sharing Links, Reservations, Guest Sessions, outbox, images и Import Preview в коде отсутствуют.
-- `docs/auth/implementation-plan.md` частично устарел: его раздел Current state утверждает, что auth tables отсутствуют.
-  Текущий код и `docs/product/implementation-plan.md` подтверждают обратное.
 
-## Наблюдаемые проверки (2026-09-26)
+## Наблюдаемые проверки (2026-09-28)
 
-- `pnpm --filter @wishlist/api test` — 8 suites, 60 tests passed; `setupFiles` указывает на
-  `src/infra/lib/matchers/matchers.ts`.
-- `pnpm --filter @wishlist/api lint` — 0 errors; warnings: неиспользуемые `Fiber` и `deriveKey` в hasher.
-- В worktree уже есть пользовательские незавершённые изменения matcher setup; learning initialization их не меняет.
+- `pnpm --filter @wishlist/api test` — 10 файлов, 74 теста прошли.
+- `pnpm --filter @wishlist/api check-types` — pass.
+- Целевой ESLint для `src/modules/auth/service/test/password-hasher.concurrency.test.ts` — без замечаний.
+- Hasher покрывают 10 concurrency tests и 3 behavior tests с реальным scrypt.
+- Во временных копиях тесты поймали три мутации: execution capacity `2→3`, admission capacity `4→5` и удаление
+  `uninterruptible`. Временные каталоги удалены.
+- Проблема Vitest setup устранена; возвращаться к исправлению пути matcher не требуется.
 
-## Измерения scrypt (`0.8`, 2026-09-26, dev-машина 12 ядер, Node 25.2.1, N=131072 r=8 p=1)
+## Исторические измерения scrypt (`0.8`, 2026-09-26)
 
-Одноразовый скрипт вне репозитория; один процесс на уровень K; `maxRSS` из `process.resourceUsage()`.
+Это сохранённые измерения предыдущей сессии, не результаты 2026-09-28. Единая актуальная таблица и условия измерений:
+[benchmark record](../docs/auth/implementation-plan.md#benchmark-record).
+
+Dev-машина 12 ядер, Node 25.2.1, N=131072 r=8 p=1. Одноразовый скрипт вне репозитория; один процесс на уровень K;
+`maxRSS` из `process.resourceUsage()`.
 
 | K   | UV_THREADPOOL_SIZE | Завершения, мс   | Peak RSS |
 | --- | ------------------ | ---------------- | -------- |
@@ -55,11 +65,14 @@
 | 8   | 8                  | 315–481          | 1093 MB  |
 | 12  | 12                 | 405–625          | 1588 MB  |
 
-Выводы: RSS ≈ base (~68 MB) + active × 128 MB; очередь libuv памяти не занимает. Выше 4 параллельных хэшей latency
-растёт из-за memory bandwidth (≈12 → 17 → 19 hash/s при 4/8/12). Предсказание владельца (две волны, ~512 MB) подтвердилось.
+Выводы той сессии: RSS ≈ base (~68 MB) + active × 128 MB. Ожидание в очереди libuv не аллоцирует рабочие ~128 MiB
+scrypt на каждую ожидающую операцию, но состояние очереди занимает память. Выше 4 параллельных хэшей latency растёт;
+это было интерпретировано как влияние memory bandwidth (≈12 → 17 → 19 hash/s при 4/8/12). Предсказание владельца
+(две волны, ~512 MB) подтвердилось.
+
 Вопрос понимания `0.8` («почему UV_THREADPOOL_SIZE не лимит») владелец не смог ответить; агент объяснил: unbounded
 очередь libuv без отказа/отмены + общий пул (fs, dns.lookup, zlib, crypto). Самостоятельное объяснение не подтверждено —
-вернуться к вопросу после `0.10`.
+вернуться к нему при учебном разборе уже реализованного `0.10`; повторная реализация не требуется.
 
 ## Стек и обнаруженные версии
 
@@ -80,29 +93,29 @@
 Наличие кода не доказывает mastery. Оценки `2–3` ниже — рабочие гипотезы по коду и git history; их нужно подтвердить
 самостоятельным объяснением и новой задачей.
 
-| Концепция                                             |  Оценка | Основание                                         | Статус проверки                                            |
-| ----------------------------------------------------- | ------: | ------------------------------------------------- | ---------------------------------------------------------- |
-| strict TypeScript и ESM imports                       |       3 | строгие config, branded types, NodeNext imports   | Практика видна; самостоятельность не проверена             |
-| pnpm workspace/Turborepo                              |       2 | scripts и внутренние packages используются        | Trade-offs не проверены                                    |
-| Effect `Effect.gen`, combinators, typed error channel |       3 | services/repositories/handlers и tests            | Failure/defect/interruption model не проверен целиком      |
-| `Context.Service` и `Layer` composition               |       2 | Users/Health/DB Layers собраны                    | Lifetime и requirement reasoning требует проверки          |
-| Effect Schema boundary validation                     |       3 | transforms, brands, excess-property policy, tests | Encode/decode boundary требует проверки                    |
-| HttpApi contracts и Problem Details                   |       3 | Users/Auth contracts и middleware                 | Live auth wiring ещё отсутствует                           |
-| PostgreSQL DDL, FK, indexes, constraints              |       3 | две migrations и invariant tests                  | Concurrency design ещё не проверен                         |
-| Kysely queries и repository error mapping             |       3 | полный Users CRUD                                 | Transaction ownership и authorization scoping не проверены |
-| Vitest и example-based tests                          |       2 | несколько suites существуют                       | Текущий setup broken; test design объяснение не проверено  |
-| Property-based testing                                |       2 | один FastCheck invariant для passwordConfirm      | Generator/shrinking trade-offs не проверены                |
-| Session auth domain model                             |       2 | contracts, migration, docs                        | Use cases и live behavior не реализованы                   |
-| Password hash format parsing                          |       3 | substantial parser/serializer + tests             | Full hasher и native boundary отсутствуют                  |
-| Secure randomness и Session token digest              |       1 | начальная shape, implementation placeholder       | Текущая ближайшая практика                                 |
-| Async native callback/interruption semantics          |       1 | проблема описана в docs                           | Реализации/эксперимента нет                                |
-| Bounded concurrency/admission                         |       1 | решение ещё открыто в NOTES                       | Benchmark и код отсутствуют                                |
-| Authentication vs authorization                       |       1 | auth ещё не защищает Users CRUD                   | Нужен вертикальный сценарий                                |
-| Aggregate/ownership modeling                          |       1 | отражено в product docs                           | Wishlist кода нет                                          |
-| Reservation concurrency/idempotency                   |       1 | ADR и plan                                        | Практики нет                                               |
-| Guest Session/transactional outbox                    |       1 | ADR и plan                                        | Практики нет                                               |
-| Object storage/SSRF/async import                      |       0 | только future plans                               | Не изучать до соответствующей проблемы                     |
-| Multi-instance observability/scaling                  | unknown | код не даёт данных                                | Только после законченного product path                     |
+| Концепция                                             |  Оценка | Основание                                          | Статус проверки                                                      |
+| ----------------------------------------------------- | ------: | -------------------------------------------------- | -------------------------------------------------------------------- |
+| strict TypeScript и ESM imports                       |       3 | строгие config, branded types, NodeNext imports    | Практика видна; самостоятельность не проверена                       |
+| pnpm workspace/Turborepo                              |       2 | scripts и внутренние packages используются         | Trade-offs не проверены                                              |
+| Effect `Effect.gen`, combinators, typed error channel |       3 | services/repositories/handlers и tests             | Failure/defect/interruption model не проверен целиком                |
+| `Context.Service` и `Layer` composition               |       2 | Users/Health/DB Layers собраны                     | Lifetime и requirement reasoning требует проверки                    |
+| Effect Schema boundary validation                     |       3 | transforms, brands, excess-property policy, tests  | Encode/decode boundary требует проверки                              |
+| HttpApi contracts и Problem Details                   |       3 | Users/Auth contracts и middleware                  | Live auth wiring ещё отсутствует                                     |
+| PostgreSQL DDL, FK, indexes, constraints              |       3 | две migrations и invariant tests                   | Concurrency design ещё не проверен                                   |
+| Kysely queries и repository error mapping             |       3 | полный Users CRUD                                  | Transaction ownership и authorization scoping не проверены           |
+| Vitest и example-based tests                          |       2 | 10 файлов / 74 теста проходят                      | Setup исправлен; самостоятельное объяснение test design не проверено |
+| Property-based testing                                |       2 | один FastCheck invariant для passwordConfirm       | Generator/shrinking trade-offs не проверены                          |
+| Session auth domain model                             |       2 | contracts, migration, docs                         | Use cases и live behavior не реализованы                             |
+| Password hash format parsing                          |       3 | parser/serializer и полный hasher с tests          | Самостоятельное объяснение native boundary не подтверждено           |
+| Secure randomness и Session token digest              |       1 | generator реализован, known-vector/freshness tests | Остаток `0.3`: deterministic test двух обращений по 32 bytes         |
+| Async native callback/interruption semantics          |       1 | реализация, concurrency tests и mutation probe     | Самостоятельное понимание не проверено                               |
+| Bounded concurrency/admission                         |       1 | локальные измерения, реализация и capacity tests   | Production budget и самостоятельное обоснование открыты              |
+| Authentication vs authorization                       |       1 | auth ещё не защищает Users CRUD                    | Нужен вертикальный сценарий                                          |
+| Aggregate/ownership modeling                          |       1 | отражено в product docs                            | Wishlist кода нет                                                    |
+| Reservation concurrency/idempotency                   |       1 | ADR и plan                                         | Практики нет                                                         |
+| Guest Session/transactional outbox                    |       1 | ADR и plan                                         | Практики нет                                                         |
+| Object storage/SSRF/async import                      |       0 | только future plans                                | Не изучать до соответствующей проблемы                               |
+| Multi-instance observability/scaling                  | unknown | код не даёт данных                                 | Только после законченного product path                               |
 
 ## Концепции, которые ещё нельзя считать проверенными
 
@@ -136,10 +149,10 @@ observable problem и не повышают mastery только по факту
 
 ## Ближайшая учебная цель
 
-Сначала вернуть красно-зелёный feedback loop: тест должен хотя бы собраться и упасть/пройти по поведению. Затем на
-`SessionTokenGenerator` проверить фундаментальную Effect-модель: случайное значение должно создаваться при каждом
-выполнении service effect, а не один раз при сборке Layer. Это маленькая граница, но от неё зависит безопасность всех
-Sessions.
+Отделить функциональную готовность от самостоятельного понимания: объяснить удержание permit до native callback,
+разницу между execution/admission capacity и ограничениями общего пула libuv. Реализация AI и зелёные тесты не повышают
+mastery. Учебный остаток `0.3` — детерминированно доказать два вызова `randomBytes.get(32)` при двух выполнениях
+generator; known-vector и freshness tests уже есть. Следующий функциональный шаг — `1.1`, credential repository.
 
 ## Допущения и открытые вопросы
 
@@ -147,7 +160,7 @@ Sessions.
 
 - Целевой продукт и порядок больших milestones берутся из `docs/product/implementation-plan.md`.
 - Backend остаётся главным учебным контуром; frontend не определяет порядок curriculum.
-- Пользовательские незавершённые изменения matcher setup намеренные и должны быть продолжены, а не перезаписаны агентом.
+- Feedback loop восстановлен; дальнейшие изменения опираются на рабочие API tests, а не повторяют ремонт setup.
 - Темп и доступное учебное время неизвестны, поэтому roadmap ограничивает размер технического шага, а не календарную
   длительность.
 - Код показывает exposure и guided implementation, но не доказывает самостоятельный уровень 4–5.
@@ -158,4 +171,5 @@ Sessions.
 - Какие части существующего Users/Auth кода были реализованы полностью самостоятельно, а где была существенная помощь?
 - Есть ли практический опыт деплоя, production logs и PostgreSQL operations?
 
-Ответы изменят темп и глубину объяснений, но не первый шаг: сначала нужен рабочий test feedback loop.
+Ответы изменят темп и глубину объяснений; следующий функциональный шаг остаётся `1.1`, а открытые учебные проверки
+учитываются отдельно от готового кода.
