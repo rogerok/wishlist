@@ -1,37 +1,47 @@
-import type { Redacted } from 'effect';
-
 import { scrypt } from 'crypto';
-import { Effect } from 'effect';
-import { Context } from 'effect';
+import { Context, Effect, Layer, Option, Redacted, Semaphore } from 'effect';
+import { timingSafeEqual } from 'node:crypto';
 
 import type { StoredPasswordHash } from '#modules/auth/service/password-hash-format.js';
 import type { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
-import type { PasswordHashOverloadedError } from '#modules/auth/service/password-hasher.service.errors.js';
 
 import {
   cryptOptions,
   derivedKeyBytesLength,
+  saltBytesLength,
 } from '#modules/auth/service/constants.js';
+import { parsePasswordHashStructure } from '#modules/auth/service/password-hash-format.js';
+import { serializePasswordHash } from '#modules/auth/service/password-hash-format.js';
+import { PasswordHashOverloadedError } from '#modules/auth/service/password-hasher.service.errors.js';
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
+import {
+  SecureRandomBytes,
+  SecureRandomBytesLiveLayer,
+} from '#modules/auth/service/session-token-generator.js';
+
+const passwordHasherPermits = 2;
+const passwordAdmissionPermits = 4;
+const passwordHashOverloadedErrorCause =
+  'Password hashing capacity exhausted: all execution and waiting slots are occupied';
+
+type PasswordHasherHashErrors =
+  | PasswordHashIntegrityError
+  | PasswordHashOverloadedError
+  | SecurePrimitiveUnavailableError;
+
+type PasswordHasherVerifyErrors =
+  | PasswordHashIntegrityError
+  | PasswordHashOverloadedError
+  | SecurePrimitiveUnavailableError;
 
 interface PasswordHasherShape {
   readonly hash: (
     password: Redacted.Redacted<string>,
-  ) => Effect.Effect<
-    StoredPasswordHash,
-    | PasswordHashIntegrityError
-    | PasswordHashOverloadedError
-    | SecurePrimitiveUnavailableError
-  >;
+  ) => Effect.Effect<StoredPasswordHash, PasswordHasherHashErrors>;
   readonly verify: (
     password: Redacted.Redacted<string>,
     hash: string,
-  ) => Effect.Effect<
-    boolean,
-    | PasswordHashIntegrityError
-    | PasswordHashOverloadedError
-    | SecurePrimitiveUnavailableError
-  >;
+  ) => Effect.Effect<boolean, PasswordHasherVerifyErrors>;
 }
 
 export class PasswordHasher extends Context.Service<
@@ -39,7 +49,7 @@ export class PasswordHasher extends Context.Service<
   PasswordHasherShape
 >()('app/PasswordHasher') {}
 
-const deriveKey = (password: string, salt: Uint8Array<ArrayBufferLike>) =>
+const makeDeriveKey = (password: string, salt: Uint8Array<ArrayBufferLike>) =>
   Effect.callback<Uint8Array, SecurePrimitiveUnavailableError>((resume) => {
     scrypt(
       password,
@@ -58,4 +68,49 @@ const deriveKey = (password: string, salt: Uint8Array<ArrayBufferLike>) =>
     );
   }).pipe(Effect.uninterruptible);
 
-const hash = Effect.gen(function* () {});
+export const PasswordHasherLive = Layer.effect(
+  PasswordHasher,
+  Effect.gen(function* () {
+    const secureRandomBytes = yield* SecureRandomBytes;
+    const workSem = yield* Semaphore.make(passwordHasherPermits);
+    const admissionSem = yield* Semaphore.make(passwordAdmissionPermits);
+
+    const hash: PasswordHasherShape['hash'] = (
+      password: Redacted.Redacted<string>,
+    ) =>
+      Effect.gen(function* () {
+        const salt = yield* secureRandomBytes.get(saltBytesLength);
+        const derivedKey = yield* admissionSem.withPermitsIfAvailable(1)(
+          workSem.withPermits(1)(makeDeriveKey(Redacted.value(password), salt)),
+        );
+
+        if (Option.isNone(derivedKey)) {
+          return yield* new PasswordHashOverloadedError({
+            cause: passwordHashOverloadedErrorCause,
+          });
+        }
+        return yield* serializePasswordHash(salt, derivedKey.value);
+      });
+
+    const verify: PasswordHasherShape['verify'] = (
+      password: Redacted.Redacted<string>,
+      hash: string,
+    ) =>
+      Effect.gen(function* () {
+        const { salt, derivedKey } = yield* parsePasswordHashStructure(hash);
+        const createdDerivedKey = yield* admissionSem.withPermitsIfAvailable(1)(
+          workSem.withPermits(1)(makeDeriveKey(Redacted.value(password), salt)),
+        );
+
+        if (Option.isNone(createdDerivedKey)) {
+          return yield* new PasswordHashOverloadedError({
+            cause: passwordHashOverloadedErrorCause,
+          });
+        }
+
+        return timingSafeEqual(derivedKey, createdDerivedKey.value);
+      });
+
+    return { hash, verify };
+  }),
+).pipe(Layer.provide(SecureRandomBytesLiveLayer));
