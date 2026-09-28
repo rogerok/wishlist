@@ -1,6 +1,6 @@
 # Teaching Notes
 
-- Пользователь — начинающий backend-разработчик и будет писать auth-код самостоятельно.
+- Пользователь — начинающий backend-разработчик. Режим работы определяется `backend-mentoring`: по умолчанию код пишет пользователь; явное отключение наставничества действует только в текущей сессии.
 - Нужен не каталог API reference, а маршрут обучения: качественный manual → конкретный чужой пример → локальное упражнение → наблюдаемая проверка.
 - Для нового механизма сначала объяснять буквальную механику состояния, затем Effect-абстракцию.
 - Каждый этап дробить до конкретных файлов, контрактов, ошибок, тестов и критерия остановки.
@@ -23,13 +23,16 @@
 - Malformed/unsupported stored format становится typed integrity error до запуска crypto; well-formed mismatch возвращает `false`.
 - Effect `Random` не используется для salt или Session token. Production randomness приходит из Node crypto.
 - `Clock` не входит в Phase 3: в security primitives этой фазы нет времени или expiration.
+- Native scrypt: выбран `Effect.callback` с `Effect.uninterruptible` только вокруг вычисления; ожидание разрешения можно отменить. Оба разрешения удерживаются до callback.
+- Общий допуск для `hash` и `verify`: 2 вычисления + 2 ожидающих; внешний Semaphore имеет 4 разрешения и использует `withPermitsIfAvailable`, внутренний — 2 и `withPermits`. При заполнении — немедленный отказ без запуска scrypt.
+- Ошибки: `PasswordHashIntegrityError` для повреждённого stored hash; `SecurePrimitiveUnavailableError` для callback failure и отказа `randomBytes` при допустимом размере; `PasswordHashOverloadedError` для полного допуска. Синхронный throw scrypt остаётся дефектом. Дефект сам по себе не завершает процесс.
+- `SecureRandomBytes` остаётся внутренней зависимостью безопасности. `PasswordHasherLive` захватывает её при сборке и предоставляет Node Layer внутри себя; `SessionTokenGeneratorLive` принимает зависимость извне. Тесты hasher управляют Node callback через Vitest, сохраняя настоящий сервис и Semaphores.
+- `maxmem=256 MiB`, локальные лимиты 2/2. Размер ожидающей очереди выбран как политика, не выведен из замеров. Методика, результаты и точные команды проверок — в [implementation-plan.md](./implementation-plan.md#benchmark-record).
+- На 2026-09-28 реализация PasswordHasher проверена: полный API suite — 74 теста; ошибки, перегрузка и оба вида отмены покрыты постоянными тестами. Это не означает готовности всей авторизации или production-конфигурации.
 
 ### Открыто
 
-1. **Native scrypt и interruption.** Public Node `crypto.scrypt` нельзя отменить после отправки в libuv. Рекомендованный первый вариант — interruptible admission wait и uninterruptible native region до callback; альтернатива — отдельный supervised lifetime, удерживающий capacity после немедленного interruption requester fiber. До concurrency-кода нужно выбрать один вариант.
-2. **Memory и concurrency budget.** После benchmark зафиксировать `maxmem`, `maxConcurrentHashes` и `maxWaitingHashes`. Значения нельзя выбирать только из `UV_THREADPOOL_SIZE` или количества CPU cores.
-3. **Bounded admission policy.** Рекомендованный вариант — admission Semaphore с capacity `maxConcurrentHashes + maxWaitingHashes`, `withPermitsIfAvailable` и немедленный typed overload при заполнении; execution Semaphore отдельно ограничивает active native work. Нужно принять capacity и ожидание/отказ после измерений.
-4. **Typed error taxonomy.** Нужно зафиксировать точные tags и service signatures для integrity failure, native crypto/random failure и hashing overload. Error payload не содержит password, stored hash, raw Session token, salt или derived key.
-5. **Randomness test seam.** Рекомендован один минимальный secure-random-bytes service для PasswordHasher salt и SessionTokenGenerator с live Node Layer и deterministic test Layer. Перед второй итерацией нужно подтвердить, что seam остаётся внутренней security dependency, а не отдельной абстракцией общего назначения.
+1. **Production memory budget.** Не определены память deployment/container, резерв полного приложения и допустимая задержка очереди. Локальные 2 активных + 2 ожидающих не являются production approval; нужны повторные измерения под HTTP/DB-нагрузкой на целевой машине.
+2. **Детерминированная свежесть Session token.** Есть known-vector и live-freshness tests, но ещё нет отдельного теста, доказывающего два запроса по 32 bytes и разные результаты при двух заданных наборах bytes (учебный шаг `0.3`).
 
-После решения каждого пункта перенести его в `implementation-plan.md` и Phase 3 roadmap, затем удалить пункт из списка открытых. Phase 3 нельзя считать завершённой, пока раздел «Открыто» не пуст.
+Следующий функциональный шаг — `PasswordCredentialsRepository` (Phase 4 плана, шаг `1.1` учебного маршрута). Открытые пункты остаются видимыми: переход к репозиторию не означает формального завершения всех критериев Phase 3 или разрешения на production.

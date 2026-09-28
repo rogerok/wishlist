@@ -13,11 +13,13 @@ The first milestone is intentionally smaller than a production authentication sy
 
 ## Current state
 
-Observed in the working code:
+Observed in the working code on 2026-09-28:
 
 - `apps/api` uses `effect`, `@effect/platform-node`, and `@effect/sql-pg` `4.0.0-rc.108`;
 - HttpApi, HTTP, and SQL APIs are imported from unstable Effect 4 entry points;
-- only the `users` table exists; no password credential, Session, cookie, or hashing implementation exists;
+- migration `0002_auth.ts` and generated database types include `users`, `password_credentials`, and `sessions`;
+- auth HTTP contracts, schemas, and migration tests exist, but auth repositories, `AuthService`, handlers, cookies, and live auth wiring are not implemented;
+- `PasswordHasherLive` implements hash/verify with shared bounded admission; `SessionTokenGeneratorLive` implements secure token generation and digesting;
 - `POST /api/users` currently creates a User without a Password Credential;
 - all existing users CRUD endpoints are public;
 - `users.role` exists in PostgreSQL but is not selected or used for authorization;
@@ -126,7 +128,7 @@ Never place passwords, raw Session tokens, Password Credential hashes, or cookie
 
 ## Persistence model
 
-Add a new migration after `apps/api/src/db/migrations/0001_initial.ts`, then regenerate `apps/api/src/db/generated/database.ts` using the project's generator. Do not edit the generated file by hand.
+Migration `apps/api/src/infra/db/migrations/0002_auth.ts` already adds the auth tables after `0001_initial.ts`; generated types are in `apps/api/src/infra/db/generated/database.ts`. Reuse this schema for repositories rather than recreating it. Generate future type changes with the project command; do not edit the generated file by hand.
 
 ### `password_credentials`
 
@@ -337,6 +339,8 @@ Check against a fresh disposable PostgreSQL database: apply the complete migrati
 
 Study companion: [Phase 3 sources and exercise](./research/primary-sources.md#3-implement-security-primitives). Complete [bounded password hashing](./lessons/0002-bounded-password-hashing.html) before implementing the live hashing Layer.
 
+Status on 2026-09-28: PasswordHasher behavior, admission, native failure, and interruption scenarios are implemented and tested. The next functional slice is Phase 4, starting with `PasswordCredentialsRepository`. This is not a claim that all Phase 3 completion criteria or production readiness are met: see the remaining items in [NOTES.md](./NOTES.md#открыто).
+
 #### Scope and stop boundary
 
 Phase 3 owns only:
@@ -390,34 +394,39 @@ Follow the existing `Context.Service` plus `Layer.effect` convention:
 
 The entry point will compose the completed live Layers in a later integration step. Phase 3 tests provide the primitive Layers directly and do not require PostgreSQL or HTTP.
 
+Current composition: `PasswordHasherLive` obtains `SecureRandomBytes` once while building the Layer and provides `SecureRandomBytesLiveLayer` internally. Its `hash` and `verify` methods have no remaining service requirements. `SessionTokenGeneratorLive` keeps `SecureRandomBytes` as an external Layer dependency, allowing a deterministic test Layer. Controlled hasher tests substitute only the Node crypto boundary, not the public service or its Semaphores. Both Semaphores are shared by hash/verify within one built PasswordHasher instance; the application must share that instance rather than rebuild the Layer per request.
+
 #### Typed failure boundaries
 
 Keep these observable cases distinct:
 
-1. malformed or unsupported stored hash — internal integrity failure;
+1. malformed or unsupported stored hash — `PasswordHashIntegrityError`, before admission and native crypto;
 2. well-formed hash and wrong password — successful `false`;
-3. native scrypt or secure-random operational failure — typed primitive-unavailable failure;
-4. full admission capacity — typed hashing-overload failure;
-5. interruption before admission or before native start — interruption, with no leaked capacity;
-6. interruption after native start — capacity remains owned until the native callback because public Node scrypt cannot be cancelled.
+3. scrypt callback failure or secure-random failure after valid size preconditions — `SecurePrimitiveUnavailableError`;
+4. full admission capacity — immediate `PasswordHashOverloadedError`;
+5. synchronous scrypt throws with internally supplied parameters, or invalid secure-random size — defects, not automatically retryable typed failures;
+6. interruption while waiting for execution — interruption, with admission capacity returned;
+7. interruption after native start — both permits remain owned until the native callback because public Node scrypt cannot be cancelled.
 
 Error values may carry an opaque `cause: unknown`, but must never contain password, stored hash, raw Session token, salt, or derived key.
+
+A defect does not automatically terminate the Node process, and a typed primitive failure does not itself select HTTP 503 or retry. HTTP mapping and startup readiness checks are separate responsibilities. `SecureRandomBytesLive` requires a safe integer size from 1 to 128; it relies on Node's output-length guarantee rather than rechecking the result. Synchronous `randomBytes` can fail operationally, so its valid-size invocation still uses the typed error channel.
 
 #### Interruption invariant
 
 `Effect.callback` can stop waiting and ignore a late callback, but it cannot cancel `crypto.scrypt`. Therefore the implementation must not equate requester-fiber lifetime with native-job lifetime.
 
-Before the concurrency implementation, resolve the exact ownership strategy recorded in `NOTES.md`. The recommended first implementation keeps the admitted native region uninterruptible until its callback completes: admission waiting remains interruptible, interruption after native start is deferred, and permits are released only after memory-intensive work has actually ended. A supervised detached native-job lifetime is an alternative only if prompt requester interruption is required and its extra ownership complexity is justified.
+The implemented strategy keeps only the native derivation region uninterruptible until its callback completes. Waiting on the execution Semaphore remains interruptible; interruption after native start is deferred; both execution and admission permits are released after the native operation ends. Controlled callback tests cover both waiting and active cancellation. No detached native-job supervisor is introduced.
 
 #### Bounded admission invariant
 
-A single execution Semaphore is insufficient because its waiter set is unbounded. The recommended design uses:
+A single execution Semaphore is insufficient because its waiter set is unbounded. The implemented design uses:
 
 1. an admission Semaphore with `maxConcurrentHashes + maxWaitingHashes` permits, acquired through `withPermitsIfAvailable`;
 2. an execution Semaphore with `maxConcurrentHashes` permits around native scrypt;
 3. immediate typed overload when the admission Semaphore returns `Option.none`.
 
-The admission permit covers both waiting and execution. A waiting-time timeout may be added for latency policy, but it is not a substitute for the capacity bound. Final capacity values remain unset until benchmark evidence is recorded.
+The admission permit covers both waiting and execution. Current local constants are `passwordHasherPermits = 2` and `passwordAdmissionPermits = 4`: at saturation two operations run and two wait, shared across hash/verify. These are positive integer constants, not runtime configuration. Malformed hash parsing precedes both Semaphores; `hash` currently generates its salt before admission, but rejected work never starts scrypt. A waiting-time timeout is not implemented and would not replace the capacity bound. The two waiting slots are a chosen latency/backlog policy, not a value derived from the benchmark; production approval remains open.
 
 #### Small implementation iterations
 
@@ -425,9 +434,9 @@ Implement and review one observable invariant at a time:
 
 1. **Stored format.** Add the canonical serializer/parser and typed integrity error. Test round trip, missing/extra segments, algorithm/version/parameter rejection, canonical base64url, and exact decoded lengths. Do not invoke crypto on malformed input.
 2. **Secure bytes and Session token.** Add the minimal secure-random dependency, live Node implementation, deterministic test Layer, 32-byte token generation, base64url encoding, and SHA-256 of raw bytes. Test byte/string/digest lengths, deterministic digest, and production non-determinism without asserting a fixed production value.
-3. **Async scrypt adapter.** Wrap callback-based `crypto.scrypt` with `Effect.callback`; capture both synchronous argument throws and callback errors in the typed channel. Do not use `scryptSync` or a Promise wrapper that hides cancellation semantics.
+3. **Async scrypt adapter.** Wrap callback-based `crypto.scrypt` with `Effect.callback`. Preserve synchronous throws as defects; map callback errors to `SecurePrimitiveUnavailableError`. A blanket try/catch would incorrectly classify invalid internal parameters as an operational outage. Do not use `scryptSync` or a Promise wrapper that hides cancellation semantics.
 4. **PasswordHasher behavior.** Compose fresh salt, fixed production parameters, serializer/parser, derivation, and `timingSafeEqual`. Test success, mismatch, same-password/different-salt behavior, and malformed format.
-5. **Benchmark decision gate.** Measure latency and RSS for one hash and verify, then concurrency 2 and any candidate limit. Record the process memory budget, chosen `maxmem`, `maxConcurrentHashes`, and `maxWaitingHashes` before freezing live configuration.
+5. **Benchmark decision gate.** Measure latency and RSS for hash/verify at concurrency 1 and 2. Record measured values separately from policy decisions. Local limits may support repository development; before production, establish the deployment memory budget, validate `maxmem` and active concurrency there, and evaluate the chosen waiting capacity under load.
 6. **Admission and interruption.** Add shared admission/execution Semaphores and typed overload. Prove active native operations never exceed permits; admitted work never exceeds total capacity; permits return after success/failure; waiting interruption removes the waiter; interruption after native start cannot allow replacement work before the native callback.
 7. **Layer and regression check.** Assemble live/test Layers, run narrow behavior tests, then API type-check, relevant lint, and the complete API test suite.
 
@@ -453,24 +462,43 @@ Tests must not log or snapshot password, stored hash, raw Session token, cookie 
 
 #### Benchmark record
 
-The benchmark must record:
+Measured on 2026-09-28 using the current hash/verify implementation:
 
-- Node version and relevant libuv pool configuration;
-- `N/r/p`, candidate `maxmem`, salt/key lengths;
-- baseline RSS;
-- latency and peak/observed RSS for hash and verify at concurrency 1;
-- the same observations at concurrency 2 and the selected limit;
-- the explicit memory budget available to hashing;
-- the resulting live `maxConcurrentHashes` and `maxWaitingHashes`.
+- CPU: Intel Core i5-11400H; Node.js 25.2.1; libuv thread pool default of 4;
+- `N=131072`, `r=8`, `p=1`, `maxmem=256 MiB`, salt 16 bytes, derived key 32 bytes;
+- three trials for each concurrency level, each in a fresh process, run sequentially between trials;
+- execution via `tsx`; each trial hashes a fictitious password, then verifies the resulting hash(es); both phases use the same concurrency;
+- operation latency measured around effect execution with `performance.now()`; baseline RSS from `process.memoryUsage().rss`, peak RSS from `process.resourceUsage().maxRSS`;
+- each verification returned `true`; no password, salt, key, or stored hash was printed.
 
-Do not infer safe concurrency from `UV_THREADPOOL_SIZE`: increasing the worker pool is not a process memory limit.
+| Concurrent operations | Hash median (range), ms | Verify median (range), ms | Process peak RSS, MiB | Peak minus baseline, MiB |
+| --------------------- | ----------------------- | ------------------------- | --------------------- | ------------------------ |
+| 1                     | 365.2 (360.5–367.4)     | 359.7 (356.4–361.2)       | 231.8–239.0           | 128.2–129.8              |
+| 2                     | 387.5 (362.8–395.0)     | 388.4 (365.3–400.0)       | 364.0–367.1           | 256.6–257.5              |
+
+Latency columns describe individual operations, not whole batches. With concurrency 2, median batch duration was 390.8 ms for hashing and 398.7 ms for verification. Baseline RSS across all trials was 103.2–110.8 MiB. Peak RSS covers the full hash-then-verify process lifetime, not an isolated allocation sample for each phase.
+
+The observed increment is consistent with approximately 128 MiB of workspace per active scrypt. `maxmem` is a per-operation guard, not a process memory budget or guaranteed allocation. Waiting operations retain request/queue state but do not yet allocate the active scrypt workspace. Do not infer safe concurrency from `UV_THREADPOOL_SIZE`.
+
+Local decision: retain `maxmem=256 MiB`, allow 2 active operations and 2 waiting operations (4 total admissions). These are per built service instance, not a distributed limit. The deployment/container memory budget is **not yet defined**; tests do not include HTTP/DB load, sustained saturation, or production hardware. Before deployment, rerun the measurements with the complete application and choose an explicit memory reserve and queue latency policy. The temporary benchmark script was not retained; the methodology and observations are recorded here, not a committed benchmark command.
+
+#### Verified checkpoint (2026-09-28)
+
+- `pnpm --filter @wishlist/api test`: 10 files, 74 tests passed, including PostgreSQL migration tests;
+- `pnpm --filter @wishlist/api check-types`: passed;
+- `pnpm --filter @wishlist/api exec eslint src/modules/auth/service/test/password-hasher.concurrency.test.ts`: passed without warnings; this is not a claim of a clean project-wide lint run;
+- `service/test/password-hasher.service.test.ts`: 3 real-crypto tests for matching/mismatching passwords, malformed stored hashes, and fresh salt when executing the same hash effect twice;
+- `service/test/password-hasher.concurrency.test.ts`: 10 controlled-boundary scenarios for shared capacity, typed overload, callback failures in both methods, synchronous defects, permit reuse, waiting/active cancellation, malformed-input precedence, and random-source failure/recovery;
+- in temporary copies, tests detected all three deliberate mutations: execution capacity 2→3, admission capacity 4→5, and removal of native-region `uninterruptible`; temporary copies were removed.
+
+All test paths above are under `apps/api/src/modules/auth/`. Token known-vector and live-freshness tests exist, but the explicit deterministic two-call/32-byte-request test remains an open coverage item. Passing hasher tests must not be used to mark it complete.
 
 #### Phase 3 definition of done
 
 Phase 3 is complete only when:
 
 - every fixed contract and behavior test above is implemented;
-- benchmark evidence justifies `maxmem` and both admission capacities;
+- benchmark evidence validates active concurrency and `maxmem` against the deployment memory budget, while waiting capacity is justified by a stated latency/backlog policy;
 - native scrypt lifetime, Effect interruption, and permit lifetime agree;
 - all secret-bearing boundaries use `Redacted` as specified;
 - primitives run without PostgreSQL and HTTP;

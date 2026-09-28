@@ -19,11 +19,12 @@ Observed in the working code:
 - `apps/api` uses Effect Platform, Effect Schema, PostgreSQL, Kysely, and Effect SQL;
 - the running `AppApi` and live Layers expose only health and unauthenticated Users CRUD;
 - auth request/response contracts, auth tables, validation tests, migration tests, and password-hash format parsing exist;
-- production auth handlers, `AuthService`, repositories, hashing, cookie issuance, and Layer composition are not implemented or wired into `AppApi`;
+- `PasswordHasherLive` and `SessionTokenGeneratorLive` are implemented and tested; hashing has a shared local limit of 2 active operations and 2 waiting operations;
+- auth handlers, `AuthService`, auth repositories, cookie issuance, and auth wiring into `AppApi` remain unimplemented;
 - the generated database model contains only Users, Password Credentials, and Sessions;
 - Wishlists, Wishlist Items, Sharing Links, Reservations, Guest Sessions, outbox jobs, images, notifications, and URL import are absent.
 
-The `docs/auth/implementation-plan.md` “Current state” section predates migration `0002_auth.ts`; code is authoritative. Its Session contracts and hardening backlog remain useful, but every phase must re-check the installed Effect 4 RC APIs and current code before editing.
+The auth plan's [current state and security-primitives checkpoint](../auth/implementation-plan.md#current-state) were synchronized on 2026-09-28. The next functional slice is `PasswordCredentialsRepository`; production memory-budget approval and the explicit deterministic two-call Session-token test remain open in [auth notes](../auth/NOTES.md#открыто). Code remains authoritative; check the installed Effect 4 RC APIs and current implementation before editing.
 
 The old product sketch is not the technical plan. Fastify, Zod, JWT/refresh tokens, and nanoid are removed from the roadmap: the repository already chose Effect Platform/Schema, PostgreSQL-backed opaque Sessions in [ADR-0001](../adr/0001-postgresql-backed-sessions.md), and UUID internal IDs. Sharing Links receive their own cryptographically random public keys because they have a different lifecycle from internal entity IDs.
 
