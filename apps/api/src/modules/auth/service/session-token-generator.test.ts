@@ -1,7 +1,8 @@
-import { describe, it } from '@effect/vitest';
+import { describe, expect, it } from '@effect/vitest';
 import { Effect, Encoding, Layer, Redacted } from 'effect';
 import { createHash } from 'node:crypto';
 
+import { secureRandomBytesMaxLength } from '#modules/auth/service/constants.js';
 import {
   SecureRandomBytes,
   SecureRandomBytesLiveLayer,
@@ -21,6 +22,28 @@ describe('SecureRandomBytes', () => {
       expect(first).not.toEqual(second);
       expect(first.length).toBe(bytes);
       expect(second.length).toBe(bytes);
+    }).pipe(Effect.provide(SecureRandomBytesLiveLayer)),
+  );
+
+  it.effect('rejects invalid lengths as defects', () =>
+    Effect.gen(function* () {
+      const service = yield* SecureRandomBytes;
+
+      const tooLarge = yield* Effect.exit(
+        service.get(secureRandomBytesMaxLength + 1),
+      );
+      const withNegative = yield* Effect.exit(service.get(-1));
+      const withNaN = yield* Effect.exit(service.get(Number.NaN));
+      const withNegativeFloat = yield* Effect.exit(service.get(-0.5));
+      const withPositiveFloat = yield* Effect.exit(service.get(1.5));
+      const withZero = yield* Effect.exit(service.get(0));
+
+      expect(tooLarge).toFailWithDie();
+      expect(withNaN).toFailWithDie();
+      expect(withNegative).toFailWithDie();
+      expect(withNegativeFloat).toFailWithDie();
+      expect(withPositiveFloat).toFailWithDie();
+      expect(withZero).toFailWithDie();
     }).pipe(Effect.provide(SecureRandomBytesLiveLayer)),
   );
 });

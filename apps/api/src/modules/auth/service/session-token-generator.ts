@@ -2,6 +2,11 @@ import { randomBytes } from 'crypto';
 import { Context, Effect, Encoding, Layer, Redacted, Schema } from 'effect';
 import { createHash } from 'node:crypto';
 
+import { isSafeIntegerInRange } from '#infra/lib/utils/checkers.js';
+import {
+  secureRandomBytesMaxLength,
+  secureRandomBytesMinLength,
+} from '#modules/auth/service/constants.js';
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
 
 export interface SecureRandomBytesShape {
@@ -17,9 +22,23 @@ export class SecureRandomBytes extends Context.Service<
 
 export const SecureRandomBytesLive: SecureRandomBytesShape = {
   get: (total) =>
-    Effect.try({
-      try: () => randomBytes(total),
-      catch: (cause) => new SecurePrimitiveUnavailableError({ cause }),
+    Effect.gen(function* () {
+      if (
+        isSafeIntegerInRange(
+          total,
+          secureRandomBytesMinLength,
+          secureRandomBytesMaxLength,
+        )
+      ) {
+        return yield* Effect.try({
+          try: () => randomBytes(total),
+          catch: (cause) => new SecurePrimitiveUnavailableError({ cause }),
+        });
+      }
+
+      return yield* Effect.die(
+        `Can not to get ${total} bytes.Check bytes length.`,
+      );
     }),
 };
 
