@@ -14,6 +14,7 @@ type SchemaIssues = ReturnType<
 
 declare module 'vitest' {
   interface Matchers<T> {
+    toBeExitFailure(): void;
     toBeResultFailure<
       ErrorType extends Cause.YieldableError & FailureOf<T>,
       Args extends Array<unknown>,
@@ -29,5 +30,7 @@ declare module 'vitest' {
     ): void;
 
     toBeResultSuccess(expected: SuccessOf<T>): void;
+    toFailWithDie(): void;
+    toHaveDies(): void;
   }
 }

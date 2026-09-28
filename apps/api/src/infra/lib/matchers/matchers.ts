@@ -1,5 +1,5 @@
 import { expect } from '@effect/vitest';
-import { type Cause, Result, Schema, SchemaIssue } from 'effect';
+import { Cause, Exit, Result, Schema, SchemaIssue } from 'effect';
 
 const formatSchemaIssues = SchemaIssue.makeFormatterStandardSchemaV1();
 
@@ -200,6 +200,124 @@ expect.extend({
               this.utils.printExpected(expectedIssues),
               'Received:',
               this.utils.printReceived(actualIssues),
+            ].join('\n'),
+    };
+  },
+});
+
+expect.extend({
+  toBeExitFailure(received: unknown) {
+    if (!Exit.isExit(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Exit.Failure',
+        message: () =>
+          [
+            'Expected received value to be an Exit',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    const pass = Exit.isFailure(received);
+
+    return {
+      pass,
+      actual: received,
+      expected: 'Exit.Failure',
+      message: () =>
+        pass
+          ? [
+              'Expected Exit not to be a Failure',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n')
+          : [
+              'Expected Exit.Failure, but received Exit.Success',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n'),
+    };
+  },
+});
+
+expect.extend({
+  toHaveDies(received: unknown) {
+    if (!Cause.isCause(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Cause with a Die reason',
+        message: () =>
+          [
+            'Expected received value to be a Cause',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    const pass = Cause.hasDies(received);
+
+    return {
+      pass,
+      actual: received,
+      expected: 'Cause with a Die reason',
+      message: () =>
+        pass
+          ? [
+              'Expected Cause not to contain a Die reason',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n')
+          : [
+              'Expected Cause to contain a Die reason',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n'),
+    };
+  },
+});
+
+expect.extend({
+  toFailWithDie(received: unknown) {
+    if (!Exit.isExit(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Exit.Failure with a Die reason',
+        message: () =>
+          [
+            'Expected received value to be an Exit',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    if (!Exit.isFailure(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Exit.Failure with a Die reason',
+        message: () =>
+          [
+            'Expected Exit.Failure with a Die reason, but received Exit.Success',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    const pass = Cause.hasDies(received.cause);
+
+    return {
+      pass,
+      actual: received.cause,
+      expected: 'Cause with a Die reason',
+      message: () =>
+        pass
+          ? [
+              'Expected Exit failure not to contain a Die reason',
+              `Received: ${this.utils.printReceived(received.cause)}`,
+            ].join('\n')
+          : [
+              'Expected Exit failure to contain a Die reason',
+              `Received: ${this.utils.printReceived(received.cause)}`,
             ].join('\n'),
     };
   },
