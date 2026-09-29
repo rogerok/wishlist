@@ -1,9 +1,103 @@
 import { expect } from '@effect/vitest';
-import { Cause, Exit, Result, Schema, SchemaIssue } from 'effect';
+import { Cause, Exit, Option, Result, Schema, SchemaIssue } from 'effect';
 
 const formatSchemaIssues = SchemaIssue.makeFormatterStandardSchemaV1();
 
 expect.extend({
+  /** Checks that an Option is Some and its value matches the specified fields. */
+  toBeOptionSome(received: unknown, expectedFields: unknown) {
+    if (!Option.isOption(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Option.Some',
+        message: () =>
+          [
+            'Expected received value to be an Option',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    if (!Option.isSome(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Option.Some',
+        message: () =>
+          [
+            'Expected Option.Some, but received Option.None',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    const pass = this.equals(received.value, expectedFields, [
+      ...this.customTesters,
+      this.utils.iterableEquality,
+      this.utils.subsetEquality,
+    ]);
+
+    return {
+      pass,
+      actual: received.value,
+      expected: expectedFields,
+      message: () =>
+        pass
+          ? [
+              'Expected Option value not to match:',
+              this.utils.printExpected(expectedFields),
+              'Received:',
+              this.utils.printReceived(received.value),
+            ].join('\n')
+          : [
+              'Expected Option value to match:',
+              this.utils.printExpected(expectedFields),
+              'Received:',
+              this.utils.printReceived(received.value),
+            ].join('\n'),
+    };
+  },
+});
+
+expect.extend({
+  /** Checks that an Option is None. */
+  toBeOptionNone(received: unknown) {
+    if (!Option.isOption(received)) {
+      return {
+        pass: false,
+        actual: received,
+        expected: 'Option.None',
+        message: () =>
+          [
+            'Expected received value to be an Option',
+            `Received: ${this.utils.printReceived(received)}`,
+          ].join('\n'),
+      };
+    }
+
+    const pass = Option.isNone(received);
+
+    return {
+      pass,
+      actual: received,
+      expected: 'Option.None',
+      message: () =>
+        pass
+          ? [
+              'Expected Option not to be None',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n')
+          : [
+              'Expected Option.None, but received Option.Some',
+              `Received: ${this.utils.printReceived(received)}`,
+            ].join('\n'),
+    };
+  },
+});
+
+expect.extend({
+  /** Checks a Result failure's error class and selected fields. */
   toBeResultFailure<
     ErrorType extends Cause.YieldableError,
     Args extends Array<unknown>,
@@ -82,6 +176,7 @@ expect.extend({
 });
 
 expect.extend({
+  /** Checks that a Result success value equals the expected value. */
   toBeResultSuccess(received: unknown, expected: unknown) {
     if (!Result.isResult(received)) {
       return {
@@ -137,6 +232,7 @@ expect.extend({
 });
 
 expect.extend({
+  /** Checks a Result's SchemaError against formatted schema issues. */
   toBeResultSchemaFailure(received: unknown, expectedIssues: unknown) {
     if (!Result.isResult(received)) {
       return {
@@ -206,6 +302,7 @@ expect.extend({
 });
 
 expect.extend({
+  /** Checks that an Exit is a Failure. */
   toBeExitFailure(received: unknown) {
     if (!Exit.isExit(received)) {
       return {
@@ -241,6 +338,7 @@ expect.extend({
 });
 
 expect.extend({
+  /** Checks that a Cause contains a Die reason. */
   toHaveDies(received: unknown) {
     if (!Cause.isCause(received)) {
       return {
@@ -276,6 +374,7 @@ expect.extend({
 });
 
 expect.extend({
+  /** Checks that an Exit failure's cause contains a Die reason. */
   toFailWithDie(received: unknown) {
     if (!Exit.isExit(received)) {
       return {
