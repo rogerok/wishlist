@@ -1,49 +1,8 @@
-import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-
-import { NodeServices } from '@effect/platform-node';
-import { PgClient, PgMigrator } from '@effect/sql-pg';
 import { layer } from '@effect/vitest';
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
-import { Context, Effect, Layer, Redacted } from 'effect';
+import { Effect } from 'effect';
 import { SqlClient } from 'effect/unstable/sql/SqlClient';
-import { fileURLToPath } from 'url';
 
-class PostgresContainer extends Context.Service<
-  PostgresContainer,
-  StartedPostgreSqlContainer
->()('test/PostgresContainer') {}
-
-const PostgresContainerLive = Layer.effect(
-  PostgresContainer,
-  Effect.acquireRelease(
-    Effect.promise(() =>
-      new PostgreSqlContainer('postgres:16.3-alpine3.19').start(),
-    ),
-    (container) => Effect.promise(() => container.stop()),
-  ),
-);
-
-const PgClientLive = Layer.unwrap(
-  Effect.gen(function* () {
-    const container = yield* PostgresContainer;
-
-    return PgClient.layer({
-      url: Redacted.make(container.getConnectionUri()),
-    });
-  }),
-).pipe(Layer.provide(PostgresContainerLive));
-
-const migrationsDir = fileURLToPath(new URL('.', import.meta.url));
-
-const MigrationDepsLive = Layer.mergeAll(PgClientLive, NodeServices.layer);
-const MigrationsLive = Layer.effectDiscard(
-  PgMigrator.run({
-    loader: PgMigrator.fromFileSystem(migrationsDir),
-  }),
-);
-const TestDatabaseLive = MigrationsLive.pipe(
-  Layer.provideMerge(MigrationDepsLive),
-);
+import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 
 layer(TestDatabaseLive, { timeout: '60 seconds' })('Auth migrations', (it) => {
   it.effect('cascades auth rows when the user is deleted', () =>
