@@ -42,10 +42,14 @@ Production memory budget не определён; локальные лимит�
 
 ## 1. PostgreSQL Session authentication
 
+**Checkpoint 2026-09-29:** `1.1` реализован; пять интеграционных тестов credentials repository на PostgreSQL проходят.
+Совместно с миграциями — 9 passed; детали проверок и учебный статус в [progress](./progress.md).
+Далее `1.2`; Phase 0 и самостоятельное понимание учитываются отдельно.
+
 | Шаг   | Практическая проблема                                | Концепция                                     | Маленькая задача владельца                                           | Проверка агента                                                             | Проверка понимания                                         |
 | ----- | ---------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| → 1.1 | Auth use cases не могут сохранять credentials        | Repository boundary для чувствительных данных | Реализовать insert/load Password Credential с точной error mapping   | Testcontainers: insert, duplicate, invalid record                           | Почему обычный User query не выбирает password hash?       |
-| 1.2   | Sessions ещё нельзя создать/разрешить/удалить        | Digest lookup и expiration predicate          | Реализовать минимальный SessionsRepository                           | create, valid lookup, expired miss, delete current                          | Где авторитетно решается валидность Session?               |
+| 1.1   | Credentials repository реализован                    | Repository boundary для чувствительных данных | Выполнено: insert/load Password Credential с точной error mapping    | 5 Testcontainers tests: round-trip, missing, duplicate, invalid record, FK  | Почему обычный User query не выбирает password hash?       |
+| → 1.2 | Sessions ещё нельзя создать/разрешить/удалить        | Digest lookup и expiration predicate          | Реализовать минимальный SessionsRepository                           | create, valid lookup, expired miss, delete current                          | Где авторитетно решается валидность Session?               |
 | 1.3   | Signup состоит из трёх зависимых writes              | Transaction boundary                          | Реализовать signup transaction в `AuthService`                       | Fault после каждого insert оставляет 0 частичных строк                      | Почему transaction принадлежит use case?                   |
 | 1.4   | Signup должен вернуть cookie и public User           | HTTP adapter responsibility                   | Подключить signup handler и cookie issuance                          | HTTP integration: 201, body, cookie attributes                              | Какие данные не должны перейти из service в response/logs? |
 | 1.5   | Login не должен раскрывать, что именно неверно       | Enumeration-resistant error contract          | Реализовать password lookup/verify и fresh Session                   | Unknown email и wrong password дают один 401; success создаёт новую Session | Почему нельзя вернуть разные ошибки для email и password?  |

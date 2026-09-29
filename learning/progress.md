@@ -2,8 +2,8 @@
 
 ## Текущий checkpoint
 
-- **Текущий checkpoint (2026-09-28):** `0.8` локально измерен; `0.9–0.11` реализованы и функционально проверены.
-- **Следующий функциональный шаг:** `roadmap.md` → `1.1` — `PasswordCredentialsRepository`.
+- **Текущий checkpoint (2026-09-29):** `1.1` реализован; пять интеграционных сценариев `PasswordCredentialsRepository` проходят.
+- **Следующий функциональный шаг:** `roadmap.md` → `1.2` — `SessionsRepository`.
 - **Статус шагов 0.1–0.7:** реализация есть, feedback loop работает. Вопросы «Проверка понимания» из roadmap устно не
   пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Остаток `0.3` — нет детерминированного
   теста, доказывающего два обращения по 32 bytes; готовность hasher этот пробел не закрывает.
@@ -15,7 +15,7 @@
   предусловием. Первоначально injected failure test был отложен. На 2026-09-28 он добавлен на уровне потребителя
   `PasswordHasher`: подмена Node `randomBytes` доказывает typed failure, отсутствие вызова scrypt и восстановление
   после отказа без введения production-фабрики. HTTP mapping 503 ещё не реализован.
-- **Следующая backend-цель:** insert/load Password Credential с точной error mapping и изоляцией от публичного User.
+- **Следующая backend-цель:** создание Session, поиск действующей Session по дайджесту и удаление текущей Session.
 - **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и
   подключить её к live `AppApi`.
 
@@ -37,7 +37,55 @@
   сверх capacity — immediate overload. Sync throw scrypt остаётся defect, callback failure —
   `SecurePrimitiveUnavailableError`.
 - Тесты token generator и hasher находятся в `apps/api/src/modules/auth/service/test/`.
+- `PasswordCredentialsRepository` реализован; `PasswordCredentialsSchema` проверяет даты и формат хеша через
+  существующий парсер. Общая подготовка PostgreSQL и миграций вынесена в `infra/db/test-database.layer.ts`.
 - Wishlists, Items, Sharing Links, Reservations, Guest Sessions, outbox, images и Import Preview в коде отсутствуют.
+
+## Итоги сессии 2026-09-29
+
+Владелец самостоятельно вносил правки при пошаговом сопровождении: credentials repository, схема записи,
+общий слой Testcontainers и пять интеграционных тестов. До сессии сообщил, что не писал тесты с Testcontainers.
+Практика с подсказками наблюдалась; самостоятельное объяснение и перенос на новую задачу ещё не проверялись,
+поэтому оценки mastery не повышены.
+
+Проверенные сценарии `PasswordCredentialsRepository`:
+
+1. Сохранение и чтение возвращают исходные `userId` и хеш.
+2. Пользователь без credentials даёт `Option.none`.
+3. Повторное создание даёт `PasswordCredentialsAlreadyExists` и сохраняет первый хеш.
+4. Прямая SQL-вставка повреждённого хеша приводит при чтении к `PasswordCredentialsInvalidRecord`.
+5. Вставка для несуществующего пользователя даёт `PasswordCredentialsRepositoryError`.
+
+Обычные `UsersRepository.getAll/getById` по коду выбирают только публичные поля `users`, без хеша.
+Отдельный новый интеграционный тест публичного профиля в этой сессии не запускался.
+
+Наблюдаемые проверки:
+
+- `pnpm --filter @wishlist/api test src/modules/auth/repository/password-credentials.repository.test.ts` —
+  последний запуск после всех правок: 5 passed.
+- `pnpm --filter @wishlist/api test src/modules/auth/repository/password-credentials.repository.test.ts src/infra/db/migrations/migrations.test.ts` —
+  2 файла / 9 passed; после него менялись только имя теста, импорт и UUID отсутствующего пользователя.
+- `pnpm --filter @wishlist/api check-types` — pass до последних правок имени теста, импорта и UUID.
+- `pnpm --filter @wishlist/api exec eslint src/modules/auth/repository/password-credentials.repository.test.ts` —
+  без замечаний после удаления `Result`; после этого изменился только UUID последнего теста.
+- Одноразовый запуск Schema на искусственных данных: корректный хеш сохраняется при decode/encode,
+  повреждённый отвергается в обоих направлениях, `Invalid Date` отвергается.
+- Полный API suite, build и db:check в этой сессии не запускались; результаты 2026-09-28 ниже исторические.
+
+Разобранные границы:
+
+- Прямой SQL подготавливает пользователя или повреждённую запись; проверяемое действие идёт через repository.
+  Для корректного хеша достаточно сериализатора: криптографическое вычисление не является предметом этих тестов.
+- `acquireRelease` регистрирует удаление пользователя в scope теста; credentials удаляются каскадно.
+  `Effect.orDie` оставляет сбой очистки видимым. Установленный `it.effect` сам предоставляет scope.
+- Причина `Missing key ["userId"]`: тестовый PgClient возвращал snake_case, в отличие от рабочего клиента.
+  Исправлено добавлением одинаковых преобразований имён; Kysely-адаптер обходит обработку результата плагином.
+- Проверяющая схема сохраняет строку `StoredPasswordHash`; `Effect.match` адаптирует результат существующего
+  парсера к `SchemaGetter.checkEffect`. Исходная branded schema для сериализатора оставлена без преобразования.
+- На Effect `4.0.0-rc.108` SchemaError не сохраняет вход по умолчанию; при `reportInput: true` сохраняет.
+  Обе ветви проверены на искусственных данных. Предыдущее предупреждение агента о текущей утечке исправлено.
+- FastCheck обсуждался, но для конечного набора исходов не добавлен. Генеративный тест оправдан полезным
+  инвариантом и требует изоляции каждого примера, включая shrinking.
 
 ## Наблюдаемые проверки (2026-09-28)
 
@@ -152,7 +200,7 @@ observable problem и не повышают mastery только по факту
 Отделить функциональную готовность от самостоятельного понимания: объяснить удержание permit до native callback,
 разницу между execution/admission capacity и ограничениями общего пула libuv. Реализация AI и зелёные тесты не повышают
 mastery. Учебный остаток `0.3` — детерминированно доказать два вызова `randomBytes.get(32)` при двух выполнениях
-generator; known-vector и freshness tests уже есть. Следующий функциональный шаг — `1.1`, credential repository.
+generator; known-vector и freshness tests уже есть. Следующий функциональный шаг — `1.2`, SessionsRepository.
 
 ## Допущения и открытые вопросы
 
@@ -171,5 +219,5 @@ generator; known-vector и freshness tests уже есть. Следующий �
 - Какие части существующего Users/Auth кода были реализованы полностью самостоятельно, а где была существенная помощь?
 - Есть ли практический опыт деплоя, production logs и PostgreSQL operations?
 
-Ответы изменят темп и глубину объяснений; следующий функциональный шаг остаётся `1.1`, а открытые учебные проверки
+Ответы изменят темп и глубину объяснений; следующий функциональный шаг остаётся `1.2`, а открытые учебные проверки
 учитываются отдельно от готового кода.
