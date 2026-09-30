@@ -1,7 +1,11 @@
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 import { HttpApiSchema } from 'effect/unstable/httpapi';
 
 import { withRequestParseOptions } from '#infra/schemas/utils.js';
+import {
+  CredentialsSchema,
+  ExpiresAtSchema,
+} from '#modules/auth/schemas/auth.schema.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import {
@@ -32,3 +36,15 @@ export const SignupRequestBodySchema = Schema.Struct({
 export const SignupResponseSuccessSchema = UserResponseSchema.pipe(
   HttpApiSchema.status(201),
 );
+
+export const SignupInputSchema = SignupRequestBodySchema.mapFields(
+  Struct.omit(['passwordConfirm']),
+);
+export type SignupInput = Schema.Schema.Type<typeof SignupInputSchema>;
+
+export const SignupResultSchema = Schema.Struct({
+  user: UserResponseSchema,
+  credential: CredentialsSchema,
+  expiresAt: ExpiresAtSchema,
+});
+export type SignupResult = Schema.Schema.Type<typeof SignupResultSchema>;

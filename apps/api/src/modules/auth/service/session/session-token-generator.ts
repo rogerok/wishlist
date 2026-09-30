@@ -3,13 +3,14 @@ import { Context, Effect, Encoding, Layer, Redacted, Schema } from 'effect';
 import { createHash } from 'node:crypto';
 
 import { isSafeIntegerInRange } from '#infra/lib/utils/checkers.js';
+import { CredentialsSchema } from '#modules/auth/schemas/auth.schema.js';
 import {
   secureRandomBytesMaxLength,
   secureRandomBytesMinLength,
 } from '#modules/auth/service/constants.js';
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
-export interface SecureRandomBytesShape {
+interface SecureRandomBytesShape {
   readonly get: (
     total: number,
   ) => Effect.Effect<Uint8Array, SecurePrimitiveUnavailableError>;
@@ -47,12 +48,12 @@ export const SecureRandomBytesLiveLayer = Layer.succeed(
   SecureRandomBytesLive,
 );
 
-export const GeneratedSessionTokenSchema = Schema.Struct({
-  credential: Schema.Redacted(Schema.String),
+const GeneratedSessionTokenSchema = Schema.Struct({
+  credential: CredentialsSchema,
   digest: Schema.Uint8Array,
 });
 
-export type GeneratedSessionToken = Schema.Schema.Type<
+type GeneratedSessionToken = Schema.Schema.Type<
   typeof GeneratedSessionTokenSchema
 >;
 
