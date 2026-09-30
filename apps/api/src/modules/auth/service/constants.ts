@@ -17,3 +17,5 @@ export const base64UrlRegex = /^[A-Za-z0-9_-]+$/;
 
 export const secureRandomBytesMaxLength = 128;
 export const secureRandomBytesMinLength = 1;
+
+export const sessionLifetimeMs = 7 * 24 * 60 * 60 * 1000;
