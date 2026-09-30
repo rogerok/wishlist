@@ -177,3 +177,44 @@ users.update)`), TypeScript выдаст ошибку — `Type` схем не �
    ```
 
 3. Убедись, что слой сервиса входит в `AppServicesLive` (`src/app.ts`).
+
+## Фейковые данные: `fake`
+
+В режиме `MODE=development` в консоли есть объект `fake`, который создаёт записи со случайными данными:
+
+```text
+@wishlist/api> await fake.users.create()
+{ id: '7cf3…', firstName: 'Matilde', middleName: 'Willow', lastName: 'Halvorson', email: 'matilde_halvorson.xu0cv1k0@example.test' }
+@wishlist/api> await fake.users.create({ email: 'me@example.test' })   // остальные поля случайные
+@wishlist/api> await fake.users.createMany(20)                         // от 1 до 100
+```
+
+В других режимах `fake` не добавляется, а в лог пишется предупреждение — чтобы случайно не наполнить мусором
+не ту базу.
+
+### Как устроено
+
+Пример — `modules/users/repl/users.fake.ts`:
+
+1. **Генератор входа.** Обычная функция на [Faker](https://fakerjs.dev/api/) (`@faker-js/faker`, dev-зависимость)
+   возвращает данные в формате `Encoded` — ровно то, что пришло бы по HTTP. К email добавляется случайный суффикс,
+   чтобы не упираться в уникальность между сессиями.
+
+   Почему не `Schema.toArbitrary(CreateUserBodySchema)` из fast-check: он генерирует валидные, но нечитаемые данные
+   (`firstName: 'bind'`, `email: 'j@\\Nz).['`). Для property-based тестов это плюс, для наполнения базы — минус.
+
+2. **Вызов через обычный фасад.** Сгенерированное значение (с наложенными `overrides`) передаётся в
+   `users.create` из `UsersRepl`, то есть проходит через тот же `decodeArgs`. Фейковые данные проверяются той же
+   схемой, что и настоящие, поэтому генератор не может создать то, что не создал бы HTTP-запрос.
+
+Faker — dev-зависимость: REPL-файлы попадают в `dist`, но сервер их не импортирует, поэтому в продакшене Faker
+не загружается. Не импортируй `*.fake.ts` из кода сервера.
+
+### Как добавить фейки для модуля
+
+1. Создай `modules/<name>/repl/<name>.fake.ts` с генератором и объектом методов (как в `users.fake.ts`).
+2. Добавь его в `makeFakeContext` в `repl-context.ts`:
+
+   ```ts
+   wishlists: yield* makeReplFacade(yield* WishlistsFake),
+   ```

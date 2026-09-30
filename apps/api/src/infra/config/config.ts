@@ -1,9 +1,14 @@
 import { Config, Schema } from 'effect';
 
+export const ModeConfig = Config.literals(
+  ['development', 'test', 'production'],
+  'MODE',
+);
+
 export const AppConfig = Config.all({
   appName: Config.string('APP_NAME'),
   appPort: Config.port('APP_PORT'),
-  mode: Config.literals(['development', 'test', 'production'], 'MODE'),
+  mode: ModeConfig,
   corsAllowedOrigins: Config.schema(
     Config.Array(Schema.URL),
     'CORS_ALLOWED_ORIGINS',
