@@ -7,7 +7,7 @@ import {
   secureRandomBytesMaxLength,
   secureRandomBytesMinLength,
 } from '#modules/auth/service/constants.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
+import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
 export interface SecureRandomBytesShape {
   readonly get: (

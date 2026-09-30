@@ -8,7 +8,7 @@ import {
   SecureRandomBytesLiveLayer,
   SessionTokenGenerator,
   SessionTokenGeneratorLive,
-} from '#modules/auth/service/session-token-generator.js';
+} from '#modules/auth/service/session/session-token-generator.js';
 
 describe('SecureRandomBytes', () => {
   it.effect('expect one effect return same bytes length', () =>
