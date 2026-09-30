@@ -15,7 +15,7 @@ import {
   PasswordCredentialsRepository,
   PasswordCredentialsRepositoryLive,
 } from '#modules/auth/repository/password/password-credentials.repository.js';
-import { serializePasswordHash } from '#modules/auth/service/password-hash-format.js';
+import { serializePasswordHash } from '#modules/auth/service/password/password-hash-format.js';
 import {
   UserEmailSchema,
   UserIdSchema,

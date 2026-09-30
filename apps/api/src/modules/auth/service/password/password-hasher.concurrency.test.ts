@@ -5,16 +5,16 @@ import { randomBytes } from 'crypto';
 import { Deferred, Effect, Exit, Fiber, Redacted, Result } from 'effect';
 import { beforeEach, vi } from 'vitest';
 
-import { serializePasswordHash } from '#modules/auth/service/password-hash-format.js';
+import { serializePasswordHash } from '#modules/auth/service/password/password-hash-format.js';
 import {
   PasswordHashIntegrityError,
   PasswordHashOverloadedError,
-} from '#modules/auth/service/password-hasher.service.errors.js';
+} from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
-} from '#modules/auth/service/password-hasher.service.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
+} from '#modules/auth/service/password/password-hasher.service.js';
+import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
 type Scrypt = typeof Crypto.scrypt;
 const scryptMock = vi.hoisted(() => vi.fn<Scrypt>());

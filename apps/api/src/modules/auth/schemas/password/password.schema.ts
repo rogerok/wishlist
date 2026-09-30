@@ -1,10 +1,12 @@
 import { Effect, Schema, SchemaGetter } from 'effect';
 
-import type { StoredPasswordHash } from '#modules/auth/service/password-hash-format.js';
+import type { StoredPasswordHash } from '#modules/auth/service/password/password-hash-format.js';
 
 import { makeBrandedSchema } from '#infra/schemas/utils.js';
-import { StoredPasswordHashSchema } from '#modules/auth/service/password-hash-format.js';
-import { parsePasswordHashStructure } from '#modules/auth/service/password-hash-format.js';
+import {
+  parsePasswordHashStructure,
+  StoredPasswordHashSchema,
+} from '#modules/auth/service/password/password-hash-format.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
 const passwordRegex =

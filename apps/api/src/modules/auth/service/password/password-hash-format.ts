@@ -11,7 +11,7 @@ import {
   saltTextLength,
   segmentsLength,
 } from '#modules/auth/service/constants.js';
-import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
+import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 
 const canonicalBase64UrlFilter = Schema.makeFilter<string>(
   (input) => {

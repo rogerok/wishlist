@@ -2,22 +2,24 @@ import { scrypt } from 'crypto';
 import { Context, Effect, Layer, Option, Redacted, Semaphore } from 'effect';
 import { timingSafeEqual } from 'node:crypto';
 
-import type { StoredPasswordHash } from '#modules/auth/service/password-hash-format.js';
-import type { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
+import type { StoredPasswordHash } from '#modules/auth/service/password/password-hash-format.js';
+import type { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 
 import {
   cryptOptions,
   derivedKeyBytesLength,
   saltBytesLength,
 } from '#modules/auth/service/constants.js';
-import { parsePasswordHashStructure } from '#modules/auth/service/password-hash-format.js';
-import { serializePasswordHash } from '#modules/auth/service/password-hash-format.js';
-import { PasswordHashOverloadedError } from '#modules/auth/service/password-hasher.service.errors.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session-token-generator.errors.js';
+import {
+  parsePasswordHashStructure,
+  serializePasswordHash,
+} from '#modules/auth/service/password/password-hash-format.js';
+import { PasswordHashOverloadedError } from '#modules/auth/service/password/password-hasher.service.errors.js';
+import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 import {
   SecureRandomBytes,
   SecureRandomBytesLiveLayer,
-} from '#modules/auth/service/session-token-generator.js';
+} from '#modules/auth/service/session/session-token-generator.js';
 
 const passwordHasherPermits = 2;
 const passwordAdmissionPermits = 4;

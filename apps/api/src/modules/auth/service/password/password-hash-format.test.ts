@@ -6,8 +6,8 @@ import {
   parsePasswordHashStructure,
   SaltFromBase64Schema,
   serializePasswordHash,
-} from '#modules/auth/service/password-hash-format.js';
-import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
+} from '#modules/auth/service/password/password-hash-format.js';
+import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 
 const invalidByteLengthTable = [
   { saltBytesLength: 15, keyBytesLength: 32, component: 'salt' },

@@ -1,12 +1,12 @@
 import { describe, expect, it } from '@effect/vitest';
 import { Effect, Redacted } from 'effect';
 
-import { parsePasswordHashStructure } from '#modules/auth/service/password-hash-format.js';
-import { PasswordHashIntegrityError } from '#modules/auth/service/password-hasher.service.errors.js';
+import { parsePasswordHashStructure } from '#modules/auth/service/password/password-hash-format.js';
+import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
-} from '#modules/auth/service/password-hasher.service.js';
+} from '#modules/auth/service/password/password-hasher.service.js';
 
 const firstPass = Redacted.make('First');
 const secondPass = Redacted.make('Second');
