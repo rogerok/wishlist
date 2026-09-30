@@ -2,8 +2,6 @@ import { describe, expect, layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/unstable/sql/SqlClient';
 
-import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
-
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
@@ -20,6 +18,7 @@ import {
   UserEmailSchema,
   UserIdSchema,
 } from '#modules/users/schemas/user.schema.js';
+import { insertTestUser } from '#modules/users/testing/test-user.js';
 
 const uuid = 'f26699b7-6a55-4971-aecc-aac8d2474e35';
 const email = 'test@example.test';
@@ -31,20 +30,6 @@ const repoLayer = PasswordCredentialsRepositoryLive.pipe(
   Layer.provideMerge(DbLayer),
 );
 
-const createDeleteUser = (id: UserId, email: UserEmail) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient;
-
-    yield* Effect.acquireRelease(
-      sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${id}, ${email})
-      `,
-      () =>
-        sql`DELETE FROM "public"."users" WHERE "id" = ${id}`.pipe(Effect.orDie),
-    );
-  });
-
 describe('PasswordCredentialsRepository', () => {
   layer(repoLayer, { timeout: '60 seconds' })(
     'PasswordCredentialsRepository',
@@ -55,7 +40,7 @@ describe('PasswordCredentialsRepository', () => {
           const userId = UserIdSchema.make(uuid);
           const userEmail = UserEmailSchema.make(email);
 
-          yield* createDeleteUser(userId, userEmail);
+          yield* insertTestUser(userId, userEmail);
 
           const repo = yield* PasswordCredentialsRepository;
           yield* repo.create(userId, hash);
@@ -72,7 +57,7 @@ describe('PasswordCredentialsRepository', () => {
           );
           const userEmail = UserEmailSchema.make('test2@example.com');
 
-          yield* createDeleteUser(userId, userEmail);
+          yield* insertTestUser(userId, userEmail);
 
           const repo = yield* PasswordCredentialsRepository;
           const loaded = yield* repo.getByUserId(userId);
@@ -92,7 +77,7 @@ describe('PasswordCredentialsRepository', () => {
             const hash = yield* serializePasswordHash(salt, derivedKey);
             const hash2 = yield* serializePasswordHash(salt2, derivedKey2);
 
-            yield* createDeleteUser(userId, userEmail);
+            yield* insertTestUser(userId, userEmail);
 
             const repo = yield* PasswordCredentialsRepository;
             yield* repo.create(userId, hash);
@@ -117,7 +102,7 @@ describe('PasswordCredentialsRepository', () => {
           const userId = UserIdSchema.make(uuid);
           const userEmail = UserEmailSchema.make(email);
 
-          yield* createDeleteUser(userId, userEmail);
+          yield* insertTestUser(userId, userEmail);
 
           yield* sql`INSERT INTO "public"."password_credentials" ("user_id", "password_hash") VALUES (${userId}, 'broken')`;
 

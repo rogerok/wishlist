@@ -1,6 +1,5 @@
 import { describe, layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { SqlClient } from 'effect/unstable/sql/SqlClient';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
@@ -10,27 +9,10 @@ import {
 } from '#modules/auth/repository/session/sesion.repository.js';
 import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/session/session.repository.errors.js';
 import {
-  type UserEmail,
   UserEmailSchema,
-  type UserId,
   UserIdSchema,
 } from '#modules/users/schemas/user.schema.js';
-
-const createDeleteUser = (id: UserId, email: UserEmail) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient;
-
-    yield* Effect.acquireRelease(
-      sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${id}, ${email})
-      `,
-      () =>
-        sql`DELETE
-            FROM "public"."users"
-            WHERE "id" = ${id}`.pipe(Effect.orDie),
-    );
-  });
+import { insertTestUser } from '#modules/users/testing/test-user.js';
 
 const DbLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 const repoLayer = SessionRepositoryLive.pipe(Layer.provideMerge(DbLayer));
@@ -50,7 +32,7 @@ describe('SessionRepository', () => {
         Effect.gen(function* () {
           const repo = yield* SessionRepository;
 
-          yield* createDeleteUser(userId, userEmail);
+          yield* insertTestUser(userId, userEmail);
 
           yield* repo.create(userId, digest, expiresAt);
           const createdSession2 = yield* repo.create(
@@ -87,7 +69,7 @@ describe('SessionRepository', () => {
       () =>
         Effect.gen(function* () {
           const repo = yield* SessionRepository;
-          yield* createDeleteUser(userId, userEmail);
+          yield* insertTestUser(userId, userEmail);
 
           const session = yield* repo.create(userId, digest, expiresAt);
 
