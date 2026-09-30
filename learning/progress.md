@@ -2,7 +2,8 @@
 
 ## Текущий checkpoint
 
-- **Текущий checkpoint (2026-09-29):** `1.1` реализован; пять интеграционных сценариев `PasswordCredentialsRepository` проходят.
+- **Текущий checkpoint (2026-09-29):** `1.1` реализован; пять интеграционных сценариев `PasswordCredentialsRepository`
+  проходят.
 - **Следующий функциональный шаг:** `roadmap.md` → `1.2` — `SessionsRepository`.
 - **Статус шагов 0.1–0.7:** реализация есть, feedback loop работает. Вопросы «Проверка понимания» из roadmap устно не
   пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Остаток `0.3` — нет детерминированного
@@ -32,7 +33,7 @@
 - `SessionTokenGenerator` реализован: `SecureRandomBytesLive`, lazy `generate` (bytes на каждый вызов), SHA-256 digest
   от raw bytes, `Redacted` credential; тесты known-vector и freshness.
 - `PasswordHasherLive` реализует `hash`/`verify`, захватывает `SecureRandomBytes` при сборке Layer и сам предоставляет
-  `SecureRandomBytesLiveLayer`. Native scrypt обёрнут в `Effect.callback` + `Effect.uninterruptible`; work permit
+  `SecureRandomBytesLive`. Native scrypt обёрнут в `Effect.callback` + `Effect.uninterruptible`; work permit
   удерживается до callback. Лимиты одного экземпляра: 2 work permits и 4 admission permits (2 active + 2 waiting),
   сверх capacity — immediate overload. Sync throw scrypt остаётся defect, callback failure —
   `SecurePrimitiveUnavailableError`.
@@ -115,8 +116,8 @@ Dev-машина 12 ядер, Node 25.2.1, N=131072 r=8 p=1. Одноразов�
 
 Выводы той сессии: RSS ≈ base (~68 MB) + active × 128 MB. Ожидание в очереди libuv не аллоцирует рабочие ~128 MiB
 scrypt на каждую ожидающую операцию, но состояние очереди занимает память. Выше 4 параллельных хэшей latency растёт;
-это было интерпретировано как влияние memory bandwidth (≈12 → 17 → 19 hash/s при 4/8/12). Предсказание владельца
-(две волны, ~512 MB) подтвердилось.
+это было интерпретировано как влияние memory bandwidth (≈12 → 17 → 19 hash/s при 4/8/12). Предсказание владельца (две
+волны, ~512 MB) подтвердилось.
 
 Вопрос понимания `0.8` («почему UV_THREADPOOL_SIZE не лимит») владелец не смог ответить; агент объяснил: unbounded
 очередь libuv без отказа/отмены + общий пул (fs, dns.lookup, zlib, crypto). Самостоятельное объяснение не подтверждено —

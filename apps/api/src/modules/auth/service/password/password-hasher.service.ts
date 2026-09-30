@@ -18,7 +18,7 @@ import { PasswordHashOverloadedError } from '#modules/auth/service/password/pass
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 import {
   SecureRandomBytes,
-  SecureRandomBytesLiveLayer,
+  SecureRandomBytesLive,
 } from '#modules/auth/service/session/session-token-generator.js';
 
 const passwordHasherPermits = 2;
@@ -115,4 +115,4 @@ export const PasswordHasherLive = Layer.effect(
 
     return { hash, verify };
   }),
-).pipe(Layer.provide(SecureRandomBytesLiveLayer));
+).pipe(Layer.provide(SecureRandomBytesLive));

@@ -21,7 +21,7 @@ export class SecureRandomBytes extends Context.Service<
   SecureRandomBytesShape
 >()('app/SecureRandomBytes') {}
 
-export const SecureRandomBytesLive: SecureRandomBytesShape = {
+export const SecureRandomBytesLive = Layer.succeed(SecureRandomBytes, {
   get: (total) =>
     Effect.gen(function* () {
       if (
@@ -41,12 +41,7 @@ export const SecureRandomBytesLive: SecureRandomBytesShape = {
         `Can not to get ${total} bytes.Check bytes length.`,
       );
     }),
-};
-
-export const SecureRandomBytesLiveLayer = Layer.succeed(
-  SecureRandomBytes,
-  SecureRandomBytesLive,
-);
+});
 
 const GeneratedSessionTokenSchema = Schema.Struct({
   credential: CredentialsSchema,

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { secureRandomBytesMaxLength } from '#modules/auth/service/constants.js';
 import {
   SecureRandomBytes,
-  SecureRandomBytesLiveLayer,
+  SecureRandomBytesLive,
   SessionTokenGenerator,
   SessionTokenGeneratorLive,
 } from '#modules/auth/service/session/session-token-generator.js';
@@ -22,7 +22,7 @@ describe('SecureRandomBytes', () => {
       expect(first).not.toEqual(second);
       expect(first.length).toBe(bytes);
       expect(second.length).toBe(bytes);
-    }).pipe(Effect.provide(SecureRandomBytesLiveLayer)),
+    }).pipe(Effect.provide(SecureRandomBytesLive)),
   );
 
   it.effect('rejects invalid lengths as defects', () =>
@@ -44,7 +44,7 @@ describe('SecureRandomBytes', () => {
       expect(withNegativeFloat).toFailWithDie();
       expect(withPositiveFloat).toFailWithDie();
       expect(withZero).toFailWithDie();
-    }).pipe(Effect.provide(SecureRandomBytesLiveLayer)),
+    }).pipe(Effect.provide(SecureRandomBytesLive)),
   );
 });
 
@@ -80,9 +80,7 @@ describe('SessionTokenGenerator', () => {
       );
     }).pipe(
       Effect.provide(
-        SessionTokenGeneratorLive.pipe(
-          Layer.provide(SecureRandomBytesLiveLayer),
-        ),
+        SessionTokenGeneratorLive.pipe(Layer.provide(SecureRandomBytesLive)),
       ),
     ),
   );
