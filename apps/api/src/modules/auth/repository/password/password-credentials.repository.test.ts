@@ -10,11 +10,11 @@ import {
   PasswordCredentialsAlreadyExists,
   PasswordCredentialsInvalidRecord,
   PasswordCredentialsRepositoryError,
-} from '#modules/auth/repository/password-credential.repository.errors.js';
+} from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import {
   PasswordCredentialsRepository,
   PasswordCredentialsRepositoryLive,
-} from '#modules/auth/repository/password-credentials.repository.js';
+} from '#modules/auth/repository/password/password-credentials.repository.js';
 import { serializePasswordHash } from '#modules/auth/service/password-hash-format.js';
 import {
   UserEmailSchema,

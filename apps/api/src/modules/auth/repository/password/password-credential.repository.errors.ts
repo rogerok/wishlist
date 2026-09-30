@@ -1,25 +1,25 @@
 import { Data } from 'effect';
 
-import type { PasswordCredentialsOperation } from '#modules/auth/schemas/password-credentials-operations.schema.js';
+import type { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 
 export class PasswordCredentialsInvalidRecord extends Data.TaggedError(
   'PasswordCredentialsInvalidRecord',
 )<{
   cause: unknown;
-  operation: PasswordCredentialsOperation;
+  operation: PasswordCredentialsOperations;
 }> {}
 
 export class PasswordCredentialsRepositoryError extends Data.TaggedError(
   'PasswordCredentialsRepositoryError',
 )<{
   readonly cause: unknown;
-  readonly operation: PasswordCredentialsOperation;
+  readonly operation: PasswordCredentialsOperations;
 }> {}
 
 export class PasswordCredentialsAlreadyExists extends Data.TaggedError(
   'PasswordCredentialsAlreadyExists',
 )<{
-  readonly operation: PasswordCredentialsOperation;
+  readonly operation: PasswordCredentialsOperations;
 }> {}
 
 export type PasswordCredentialsCreateError =

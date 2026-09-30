@@ -3,18 +3,18 @@ import { Context, Effect, Layer, Option, Schema } from 'effect';
 import type {
   PasswordCredentialsCreateError,
   PasswordCredentialsGetByIdError,
-} from '#modules/auth/repository/password-credential.repository.errors.js';
+} from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import type { PasswordCredentials } from '#modules/auth/schemas/password/password.schema.js';
 import type { StoredPasswordHash } from '#modules/auth/service/password-hash-format.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';
-import { PasswordCredentialsInvalidRecord } from '#modules/auth/repository/password-credential.repository.errors.js';
 import {
   PasswordCredentialsAlreadyExists,
-  PasswordCredentialsRepositoryError,
-} from '#modules/auth/repository/password-credential.repository.errors.js';
-import { PasswordCredentialsOperation } from '#modules/auth/schemas/password-credentials-operations.schema.js';
+  PasswordCredentialsInvalidRecord,
+} from '#modules/auth/repository/password/password-credential.repository.errors.js';
+import { PasswordCredentialsRepositoryError } from '#modules/auth/repository/password/password-credential.repository.errors.js';
+import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 import { PasswordCredentialsSchema } from '#modules/auth/schemas/password/password.schema.js';
 
 const decodePasswordCredentials = Schema.decodeUnknownEffect(
@@ -59,14 +59,14 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
               (cause) =>
                 new PasswordCredentialsRepositoryError({
                   cause,
-                  operation: PasswordCredentialsOperation.create,
+                  operation: PasswordCredentialsOperations.create,
                 }),
             ),
           );
 
         if (row === undefined) {
           return yield* new PasswordCredentialsAlreadyExists({
-            operation: PasswordCredentialsOperation.create,
+            operation: PasswordCredentialsOperations.create,
           });
         }
 
@@ -75,7 +75,7 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
             (cause) =>
               new PasswordCredentialsInvalidRecord({
                 cause,
-                operation: PasswordCredentialsOperation.create,
+                operation: PasswordCredentialsOperations.create,
               }),
           ),
         );
@@ -95,7 +95,7 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
               (cause) =>
                 new PasswordCredentialsRepositoryError({
                   cause,
-                  operation: PasswordCredentialsOperation.getByIdUserId,
+                  operation: PasswordCredentialsOperations.getByIdUserId,
                 }),
             ),
           );
@@ -109,7 +109,7 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
             (cause) =>
               new PasswordCredentialsInvalidRecord({
                 cause,
-                operation: PasswordCredentialsOperation.getByIdUserId,
+                operation: PasswordCredentialsOperations.getByIdUserId,
               }),
           ),
         );
