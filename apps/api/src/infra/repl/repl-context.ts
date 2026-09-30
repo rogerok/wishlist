@@ -1,21 +1,12 @@
 import { Effect } from 'effect';
 
-import type { RunPromise } from '#infra/repl/repl.types.js';
-import type { HealthReplFacade } from '#modules/health/repl/health.repl.js';
-import type { UsersReplFacade } from '#modules/users/repl/users.repl.js';
+import { makeReplFacade } from '#infra/repl/repl-facade.js';
+import { HealthService } from '#modules/health/service/health.service.js';
+import { UsersRepl } from '#modules/users/repl/users.repl.js';
 
-import { makeHealthRepl } from '#modules/health/repl/health.repl.js';
-import { makeUsersRepl } from '#modules/users/repl/users.repl.js';
-
-export interface ReplContext {
-  readonly health: HealthReplFacade;
-  readonly users: UsersReplFacade;
-}
-
-export const makeReplContext = (runPromise: RunPromise) =>
-  Effect.gen(function* () {
-    const users = yield* makeUsersRepl(runPromise);
-    const health = yield* makeHealthRepl(runPromise);
-
-    return { users, health } satisfies ReplContext;
-  });
+export const makeReplContext = Effect.gen(function* () {
+  return {
+    health: yield* makeReplFacade(yield* HealthService),
+    users: yield* makeReplFacade(yield* UsersRepl),
+  };
+});

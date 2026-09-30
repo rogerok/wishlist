@@ -1,13 +1,28 @@
 #!/usr/bin/env -S pnpm exec tsx --conditions=development --env-file=.env.development
 
 import { NodeRuntime } from '@effect/platform-node';
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect } from 'effect';
 import * as repl from 'node:repl';
 
 import { AppServicesLive } from '#app.js';
 import { makeReplContext } from '#infra/repl/repl-context.js';
 
-// TODO: rewrite
+const startRepl = Effect.acquireRelease(
+  Effect.sync(() => repl.start({ useColors: true, prompt: '@wishlist/api> ' })),
+  (replServer) => Effect.sync(() => replServer.close()),
+);
+
+const setupHistory = (replServer: repl.REPLServer) =>
+  Effect.callback<void>((resume) => {
+    replServer.setupHistory('.node_repl_history', (err) => {
+      resume(
+        err
+          ? Effect.logWarning('Failed to load REPL history', err)
+          : Effect.void,
+      );
+    });
+  });
+
 const waitForExit = (replServer: repl.REPLServer) =>
   Effect.callback<void>((resume) => {
     const onExit = () => resume(Effect.void);
@@ -17,35 +32,16 @@ const waitForExit = (replServer: repl.REPLServer) =>
     return Effect.sync(() => replServer.off('exit', onExit));
   });
 
-const setupHistory = (replServer: repl.REPLServer) =>
-  Effect.callback<void>((resume) => {
-    replServer.setupHistory('.node_repl_history', (err) => {
-      if (err) {
-        resume(Effect.logWarning('Failed to load REPL history', err));
-      } else {
-        resume(Effect.void);
-      }
-    });
-  });
+const program = Effect.gen(function* () {
+  const replContext = yield* makeReplContext;
+  const replServer = yield* startRepl;
 
-const program = Effect.acquireUseRelease(
-  Effect.sync(() => ManagedRuntime.make(AppServicesLive)),
-  (runtime) =>
-    Effect.gen(function* () {
-      const context = yield* runtime.contextEffect;
-      const replContext = yield* makeReplContext(runtime.runPromise).pipe(
-        Effect.provide(context),
-      );
+  Object.assign(replServer.context, replContext);
+  // `.clear` creates a fresh context, so the facades have to be added again.
+  replServer.on('reset', (context) => Object.assign(context, replContext));
 
-      const replServer = yield* Effect.sync(() =>
-        repl.start({ useColors: true, prompt: '@wishlist/api> ' }),
-      );
-      Object.assign(replServer.context, replContext);
-
-      yield* setupHistory(replServer);
-      yield* waitForExit(replServer);
-    }),
-  (runtime) => runtime.disposeEffect,
-);
+  yield* setupHistory(replServer);
+  yield* waitForExit(replServer);
+}).pipe(Effect.scoped, Effect.provide(AppServicesLive));
 
 NodeRuntime.runMain(program);
