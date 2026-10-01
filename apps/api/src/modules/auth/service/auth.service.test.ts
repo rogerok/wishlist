@@ -1,10 +1,10 @@
-import { layer } from '@effect/vitest';
+import { describe, it } from '@effect/vitest';
 import { assertSome, assertTrue } from '@effect/vitest/utils';
-import { Effect, Layer, Option, Redacted } from 'effect';
+import { Effect, Encoding, Layer, Option, Redacted } from 'effect';
 import * as TestClock from 'effect/testing/TestClock';
 import { createHash } from 'node:crypto';
 
-import { DBLive } from '#infra/db/db.service.js';
+import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
   PasswordCredentialsRepository,
@@ -14,6 +14,7 @@ import {
   SessionRepository,
   SessionRepositoryLive,
 } from '#modules/auth/repository/session/sesion.repository.js';
+import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/session/session.repository.errors.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
 import {
@@ -26,6 +27,7 @@ import {
 } from '#modules/auth/service/password/password-hasher.service.js';
 import {
   SecureRandomBytesLive,
+  SessionTokenGenerator,
   SessionTokenGeneratorLive,
 } from '#modules/auth/service/session/session-token-generator.js';
 import {
@@ -40,15 +42,28 @@ const repoLayer = Layer.mergeAll(
   PasswordCredentialsRepositoryLive,
   SessionRepositoryLive,
 ).pipe(Layer.provideMerge(DbLayer));
+
+const bytes = Buffer.alloc(32, 0x22);
+const credential = Redacted.make(Encoding.encodeBase64Url(bytes));
+const digest = createHash('sha256').update(bytes).digest();
+const fixedTokenGenerator = Layer.succeed(SessionTokenGenerator, {
+  generate: Effect.succeed({ credential, digest }),
+});
 const cryptoLayer = Layer.mergeAll(
   PasswordHasherLive,
   SessionTokenGeneratorLive.pipe(Layer.provide(SecureRandomBytesLive)),
 );
+const cryptoFixedLayer = Layer.mergeAll(
+  PasswordHasherLive,
+  fixedTokenGenerator,
+);
+
 const authLayer = AuthServiceLive.pipe(
   Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoLayer)),
 );
 
 const email = UserEmailSchema.make('test@example.test');
+const email2 = UserEmailSchema.make('test2@example.test');
 const password = PasswordSchema.make('Password1!');
 const signupInput = SignupInputSchema.make({
   email,
@@ -59,8 +74,9 @@ const signupInput = SignupInputSchema.make({
 });
 
 describe('AuthService', () => {
-  layer(authLayer, { timeout: '60 seconds' })((it) => {
-    it.effect('signup', () =>
+  it.effect(
+    'creates a user with a verifiable password and a session matching the issued token',
+    () =>
       Effect.gen(function* () {
         const auth = yield* AuthService;
         const usersRepo = yield* UsersRepository;
@@ -94,43 +110,48 @@ describe('AuthService', () => {
         assertTrue(Option.isSome(session));
         expect(session.value.userId).toBe(signupResult.user.id);
         expect(session.value.expiresAt).toEqual(signupResult.expiresAt);
-      }),
-    );
-    it.effect('rollback failed transaction', () =>
-      Effect.gen(function* () {
-        const auth = yield* AuthService;
-        const usersRepo = yield* UsersRepository;
-        const sessionRepo = yield* SessionRepository;
-        const passwordRepo = yield* PasswordCredentialsRepository;
-        const hasher = yield* PasswordHasher;
+      }).pipe(Effect.provide(authLayer)),
+  );
 
-        yield* TestClock.setTime(Date.now());
-        const signupResult = yield* auth.signup(signupInput);
-        const savedUser = yield* usersRepo.getById(signupResult.user.id);
-        assertSome(savedUser, signupResult.user);
+  it.effect('rollback failed transaction', () =>
+    Effect.gen(function* () {
+      const auth = yield* AuthService;
+      const db = yield* DB;
 
-        const passwordCredentials = yield* passwordRepo.getByUserId(
-          savedUser.value.id,
-        );
-        assertTrue(Option.isSome(passwordCredentials));
-        assertTrue(
-          yield* hasher.verify(
-            Redacted.make(signupInput.password),
-            passwordCredentials.valueOrUndefined?.passwordHash,
-          ),
-        );
+      yield* TestClock.setTime(Date.now());
+      yield* auth.signup(signupInput);
 
-        const tokenBytes = Buffer.from(
-          Redacted.value(signupResult.credential),
-          'base64url',
-        );
-        const tokenDigest = createHash('sha256').update(tokenBytes).digest();
+      const usersReq = db.selectFrom('users').selectAll().orderBy('id');
+      const sessionsReq = db.selectFrom('sessions').selectAll().orderBy('id');
+      const passwordsReq = db
+        .selectFrom('passwordCredentials')
+        .selectAll()
+        .orderBy('userId');
 
-        const session = yield* sessionRepo.getByTokenDigest(tokenDigest);
-        assertTrue(Option.isSome(session));
-        expect(session.value.userId).toBe(signupResult.user.id);
-        expect(session.value.expiresAt).toEqual(signupResult.expiresAt);
-      }),
-    );
-  });
+      const usersBefore = yield* usersReq;
+      const sessionsBefore = yield* sessionsReq;
+      const passwordsBefore = yield* passwordsReq;
+
+      const signupError = yield* Effect.flip(
+        auth.signup({
+          ...signupInput,
+          email: email2,
+        }),
+      );
+      expect(signupError).toBeInstanceOf(SessionTokenDigestAlreadyExistsError);
+
+      const usersAfter = yield* usersReq;
+      const sessionsAfter = yield* sessionsReq;
+      const passwordsAfter = yield* passwordsReq;
+      expect(usersAfter).toEqual(usersBefore);
+      expect(sessionsAfter).toEqual(sessionsBefore);
+      expect(passwordsAfter).toEqual(passwordsBefore);
+    }).pipe(
+      Effect.provide(
+        AuthServiceLive.pipe(
+          Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoFixedLayer)),
+        ),
+      ),
+    ),
+  );
 });
