@@ -17,6 +17,7 @@ import {
 import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/session/session.repository.errors.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
+import { AuthInternalError } from '#modules/auth/service/auth.service.errors.js';
 import {
   AuthService,
   AuthServiceLive,
@@ -138,7 +139,12 @@ describe('AuthService', () => {
           email: email2,
         }),
       );
-      expect(signupError).toBeInstanceOf(SessionTokenDigestAlreadyExistsError);
+      expect(signupError).toBeInstanceOf(AuthInternalError);
+      if (signupError._tag === 'AuthInternalError') {
+        expect(signupError.cause).toBeInstanceOf(
+          SessionTokenDigestAlreadyExistsError,
+        );
+      }
 
       const usersAfter = yield* usersReq;
       const sessionsAfter = yield* sessionsReq;

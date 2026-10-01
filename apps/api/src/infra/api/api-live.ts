@@ -3,10 +3,15 @@ import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
 import { AppApi } from '#infra/api/api.js';
 import { RequestValidationMiddlewareLive } from '#infra/errors/request-validation.js';
+import { AuthHandlersLive } from '#modules/auth/handlers/auth.handlers.js';
 import { HealthApiLive } from '#modules/health/handlers/health.handlers.js';
 import { UsersHandlersLive } from '#modules/users/handlers/users.handlers.js';
 
-const groupsLive = Layer.mergeAll(HealthApiLive, UsersHandlersLive);
+const groupsLive = Layer.mergeAll(
+  HealthApiLive,
+  UsersHandlersLive,
+  AuthHandlersLive,
+);
 const groupsLiveWithMiddleware = groupsLive.pipe(
   Layer.provide(RequestValidationMiddlewareLive),
 );

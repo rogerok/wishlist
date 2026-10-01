@@ -11,14 +11,28 @@ import type {
 import type { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 import type { UsersRepositoryCreateError } from '#modules/users/repository/users.repository.errors.js';
 
-export class AuthCredentialsError extends Data.TaggedError(
-  'AuthCredentialsError',
+export class AuthEmailAlreadyExistsError extends Data.TaggedError(
+  'AuthEmailAlreadyExistsError',
 )<{
   readonly cause: unknown;
-  readonly message: string;
+}> {}
+
+export class AuthUnavailableError extends Data.TaggedError(
+  'AuthUnavailableError',
+)<{
+  readonly cause: unknown;
+}> {}
+
+export class AuthInternalError extends Data.TaggedError('AuthInternalError')<{
+  readonly cause: unknown;
 }> {}
 
 export type AuthSignupError =
+  | AuthEmailAlreadyExistsError
+  | AuthInternalError
+  | AuthUnavailableError;
+
+export type SignupOperationError =
   | PasswordCredentialsCreateError
   | PasswordHashIntegrityError
   | PasswordHashOverloadedError

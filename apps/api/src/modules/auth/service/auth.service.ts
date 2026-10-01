@@ -1,19 +1,70 @@
-import { Clock, Effect, Layer, Redacted } from 'effect';
-import { Context } from 'effect';
+import { Clock, Context, Effect, Layer, Match, Redacted } from 'effect';
+import { isSqlError } from 'effect/unstable/sql/SqlError';
 
 import type {
   SignupInput,
   SignupResult,
 } from '#modules/auth/schemas/signup/signup.schema.js';
-import type { AuthSignupError } from '#modules/auth/service/auth.service.errors.js';
+import type {
+  AuthSignupError,
+  SignupOperationError,
+} from '#modules/auth/service/auth.service.errors.js';
 
 import { DB } from '#infra/db/db.service.js';
 import { PasswordCredentialsRepository } from '#modules/auth/repository/password/password-credentials.repository.js';
 import { SessionRepository } from '#modules/auth/repository/session/sesion.repository.js';
+import {
+  AuthEmailAlreadyExistsError,
+  AuthInternalError,
+  AuthUnavailableError,
+} from '#modules/auth/service/auth.service.errors.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
 import { PasswordHasher } from '#modules/auth/service/password/password-hasher.service.js';
 import { SessionTokenGenerator } from '#modules/auth/service/session/session-token-generator.js';
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
+
+const mapSignupSqlError = (
+  sqlCause: unknown,
+  originalError: SignupOperationError,
+): AuthInternalError | AuthUnavailableError =>
+  isSqlError(sqlCause) && sqlCause.isRetryable
+    ? new AuthUnavailableError({ cause: originalError })
+    : new AuthInternalError({ cause: originalError });
+
+const mapSignupError = (error: SignupOperationError): AuthSignupError =>
+  Match.value(error).pipe(
+    Match.tag(
+      'UserEmailAlreadyExists',
+      (cause) => new AuthEmailAlreadyExistsError({ cause }),
+    ),
+
+    Match.tag(
+      'PasswordHashOverloadedError',
+      'SecurePrimitiveUnavailableError',
+      (cause) => new AuthUnavailableError({ cause }),
+    ),
+
+    Match.tag(
+      'InvalidUserRecord',
+      'PasswordCredentialsInvalidRecord',
+      'SessionInvalidRecordError',
+      'PasswordHashIntegrityError',
+      'PasswordCredentialsAlreadyExists',
+      'SessionTokenDigestAlreadyExistsError',
+      (cause) => new AuthInternalError({ cause }),
+    ),
+
+    Match.tag(
+      'UsersRepositoryError',
+      'PasswordCredentialsRepositoryError',
+      'SessionRepositoryError',
+      (cause) => mapSignupSqlError(cause.cause, cause),
+    ),
+
+    Match.tag('SqlError', (cause) => mapSignupSqlError(cause, cause)),
+
+    Match.exhaustive,
+  );
 
 interface AuthServiceShape {
   signup: (input: SignupInput) => Effect.Effect<SignupResult, AuthSignupError>;
@@ -53,6 +104,7 @@ export const AuthServiceLive = Layer.effect(
               middleName,
               lastName,
             });
+
             yield* passwordRepo.create(user.id, passwordHash);
 
             const now = yield* Clock.currentTimeMillis;
@@ -69,7 +121,7 @@ export const AuthServiceLive = Layer.effect(
         );
 
         return { user, credential, expiresAt };
-      });
+      }).pipe(Effect.mapError(mapSignupError));
 
     return { signup };
   }),

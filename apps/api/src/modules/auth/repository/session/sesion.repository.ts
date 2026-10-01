@@ -48,7 +48,7 @@ const mapSessionCreateSqlError = (cause: SqlError.SqlError) =>
     .otherwise(
       () =>
         new SessionRepositoryError({
-          cause: cause.cause,
+          cause: cause,
           operation: SessionOperations.create,
         }),
     );
