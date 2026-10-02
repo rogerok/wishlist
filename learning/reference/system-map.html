@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Карта системы Wishlist API</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Справочник · архитектура API · 10 минут</div>
+    <h1>Два графа: что собирается при старте и что выполняется на каждый запрос</h1>
+    <p class="lede">Цель: для любого файла в <code>apps/api/src</code> назвать его место на карте и путь, по которому до него доходит запрос.</p>
+    <div class="toplinks"><a class="button" href="#layers">Сборка</a><a class="button" href="#request">Запрос</a><a class="button" href="#errors">Ошибки</a><a class="button" href="#tables">Таблицы</a><a class="button" href="#folders">Папки модуля</a></div>
+  </header>
+  <div class="shell"><main>
+
+    <section class="card" id="layers">
+      <h2>1. Сборка при старте: граф Layer</h2>
+      <p>Процесс запускает <code>server.ts</code>. Каждый Layer создаётся <strong>один раз</strong> и отдаёт сервис тем, кто его требует. Стрелка значит «нуждается в».</p>
+<pre class="mermaid">
+flowchart TB
+  server["server.ts — запуск процесса"] --> http["HttpLive — Node HTTP сервер, CORS"]
+  server --> app["AppServicesLive — app.ts"]
+  http --> api["AppApiLive — HttpApiBuilder + RequestValidationMiddleware"]
+  api --> hh["HealthApiLive"]
+  api --> uh["UsersHandlersLive"]
+  api --> ah["AuthHandlersLive"]
+  app --> um["UsersModuleLive — UsersService + UsersRepository"]
+  app --> am["AuthModuleLive — AuthService, 3 репозитория, PasswordHasher, TokenGenerator"]
+  uh -. "UsersService" .-> um
+  ah -. "AuthService" .-> am
+  um --> db["DBLive — Kysely + CamelCasePlugin"]
+  am --> db
+  db --> pg["PgClientLive — пул соединений PostgreSQL"]
+</pre>
+      <p class="diagram-caption">Пунктир: handler получает сервис из Context. Связь появляется в <code>server.ts</code>: <code>HttpLive.pipe(Layer.provide(AppServicesLive))</code>.</p>
+      <table><thead><tr><th>Узел</th><th>Файл</th></tr></thead><tbody>
+        <tr><td>Запуск и сервер</td><td><a href="../../apps/api/src/infra/bin/server.ts"><code>infra/bin/server.ts</code></a>, <a href="../../apps/api/src/server.ts"><code>server.ts</code></a></td></tr>
+        <tr><td>Сервисы и БД</td><td><a href="../../apps/api/src/app.ts"><code>app.ts</code></a>, <a href="../../apps/api/src/infra/db/db.service.ts"><code>infra/db/db.service.ts</code></a></td></tr>
+        <tr><td>HTTP-контракт</td><td><a href="../../apps/api/src/infra/api/api.ts"><code>infra/api/api.ts</code></a>, <a href="../../apps/api/src/infra/api/api-live.ts"><code>infra/api/api-live.ts</code></a></td></tr>
+        <tr><td>Auth</td><td><a href="../../apps/api/src/modules/auth/auth.module.ts"><code>modules/auth/auth.module.ts</code></a></td></tr>
+      </tbody></table>
+      <p class="callout"><strong>Почему это важно.</strong> Код внутри конструктора Layer выполняется один раз. Если там вызвать <code>randomBytes</code>, все запросы получат одни и те же байты. Код внутри функции сервиса выполняется на каждый вызов.</p>
+    </section>
+
+    <section class="card" id="request">
+      <h2>2. Один запрос: POST /api/auth/signup</h2>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Клиент
+  participant H as HttpApi
+  participant AH as AuthHandlers
+  participant S as AuthService
+  participant X as Hasher и TokenGenerator
+  participant DB as PostgreSQL
+  C->>H: POST /api/auth/signup, JSON
+  H->>H: Schema проверяет payload
+  alt payload невалиден
+    H-->>C: 400 Problem Details, handler не вызван
+  end
+  H->>AH: payload
+  AH->>S: signup без passwordConfirm
+  S->>X: hash пароля, новый token
+  X-->>S: passwordHash, credential, digest
+  Note over S,X: вне транзакции — scrypt не держит соединение
+  S->>DB: BEGIN
+  S->>DB: INSERT users
+  S->>DB: INSERT password_credentials
+  S->>DB: INSERT sessions с token_digest
+  S->>DB: COMMIT
+  S-->>AH: user, credential, expiresAt
+  AH-->>C: 201, тело UserResponse, Set-Cookie HttpOnly
+</pre>
+      <p class="diagram-caption">В БД попадает только digest токена. Сам credential уходит клиенту в cookie и больше нигде не хранится.</p>
+      <p>Вход, <code>/me</code> и выход в контракте пока закомментированы: <a href="../../apps/api/src/modules/auth/api/auth.api.ts"><code>modules/auth/api/auth.api.ts</code></a>.</p>
+    </section>
+
+    <section class="card" id="errors">
+      <h2>3. Ошибки переводятся на каждой границе</h2>
+<pre class="mermaid">
+flowchart LR
+  subgraph R["Репозитории и crypto"]
+    r1["UserEmailAlreadyExists"]
+    r2["PasswordHashOverloaded, SecurePrimitiveUnavailable, временный SQL-сбой"]
+    r3["повреждённая запись, дубликат digest, прочий SQL-сбой"]
+  end
+  subgraph S["AuthService: mapSignupError"]
+    e1["AuthEmailAlreadyExistsError"]
+    e2["AuthUnavailableError"]
+    e3["AuthInternalError"]
+  end
+  subgraph H["AuthHandlers: catchTags"]
+    h1["409"]
+    h2["503 + лог"]
+    h3["500 + лог"]
+  end
+  r1 --> e1 --> h1
+  r2 --> e2 --> h2
+  r3 --> e3 --> h3
+</pre>
+      <p class="diagram-caption">Около 12 внутренних ошибок → 3 ошибки сервиса → 3 HTTP-статуса. <code>Match.exhaustive</code> в <a href="../../apps/api/src/modules/auth/service/auth.service.ts"><code>auth.service.ts:66</code></a> не даст забыть новую.</p>
+    </section>
+
+    <section class="card" id="tables">
+      <h2>4. Таблицы</h2>
+<pre class="mermaid">
+erDiagram
+  users ||--o| password_credentials : "пароль"
+  users ||--o{ sessions : "сессии"
+  users {
+    uuid id PK
+    varchar email "уникален без учёта регистра"
+    varchar first_name
+    varchar last_name
+    roles role
+  }
+  password_credentials {
+    uuid user_id PK, FK
+    text password_hash "scrypt v1"
+  }
+  sessions {
+    uuid id PK
+    uuid user_id FK
+    bytea token_digest "32 байта, уникален"
+    timestamptz expires_at
+  }
+</pre>
+      <p class="diagram-caption">Обе FK — <code>ON DELETE CASCADE</code>: удаление user удаляет его пароль и все сессии. Миграции: <a href="../../apps/api/src/infra/db/migrations/0001_initial.ts"><code>0001_initial.ts</code></a>, <a href="../../apps/api/src/infra/db/migrations/0002_auth.ts"><code>0002_auth.ts</code></a>.</p>
+    </section>
+
+    <section class="card" id="folders">
+      <h2>5. Папки модуля: у каждой одна работа</h2>
+      <table><thead><tr><th>Папка</th><th>Отвечает за</th><th>Пример в auth</th></tr></thead><tbody>
+        <tr><td><code>api/</code></td><td>HTTP-контракт: путь, payload, ответы, ошибки со статусами</td><td><code>auth.api.ts</code>, <code>auth.api.errors.ts</code></td></tr>
+        <tr><td><code>schemas/</code></td><td>Проверка данных во время выполнения (Schema)</td><td><code>signup/signup.schema.ts</code></td></tr>
+        <tr><td><code>handlers/</code></td><td>Перевод HTTP ↔ сервис: статусы, логи, cookie</td><td><code>auth.handlers.ts</code></td></tr>
+        <tr><td><code>service/</code></td><td>Сценарий целиком: порядок шагов, транзакция, перевод ошибок</td><td><code>auth.service.ts</code></td></tr>
+        <tr><td><code>repository/</code></td><td>Один SQL-запрос → типизированный результат или ошибка</td><td><code>password/password-credentials.repository.ts</code></td></tr>
+        <tr><td><code>*.module.ts</code></td><td>Сборка Layer модуля</td><td><code>auth.module.ts</code></td></tr>
+      </tbody></table>
+    </section>
+
+    <section class="card">
+      <h2>Проверь себя</h2>
+      <details class="quiz"><summary><strong>В signup-запросе нет ключа <code>middleName</code>. На каком шаге диаграммы запроса он остановится и с каким статусом?</strong></summary>
+        <p>Шаг 2: Schema отклонит тело запроса, клиент получит 400. Handler и сервис не вызываются, поэтому строк в БД нет.</p></details>
+      <details class="quiz"><summary><strong>Почему транзакция открывается в AuthService, а не в handler?</strong></summary>
+        <p>Транзакция — часть сценария «создать user, пароль и сессию вместе». Сценарий живёт в service. Handler знает только HTTP: статусы, cookie, логи.</p></details>
+      <details class="quiz"><summary><strong>Пользователя удалили. Что стало с его сессиями и почему?</strong></summary>
+        <p>Удалены: <code>sessions.user_id</code> ссылается на <code>users</code> с <code>ON DELETE CASCADE</code>. Это делает PostgreSQL, а не код приложения.</p></details>
+    </section>
+  </main></div>
+  <footer class="shell">
+    Разбор: <a href="../lessons/0001-debrief-signup.html">signup — три решения</a> · Спецификация: <a href="../../docs/auth/implementation-plan.md">implementation-plan.md</a> · Вопросы — агенту в чате.
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

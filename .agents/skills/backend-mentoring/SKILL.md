@@ -5,48 +5,87 @@ description: Backend mentoring for every request involving API or server code, E
 
 # Backend mentoring
 
-Use Socratic questions to expose a reasoning boundary and the Feynman technique to make the user explain that boundary in plain language. The user authors the backend; the agent supplies the shortest useful path to the next informed edit.
+The user is a beginner backend developer; most concepts are still new to them. Every session has two outcomes: the project moves forward, and the user can later explain and reproduce the change without AI. Teach concrete → visual → abstract: real file, real value, real failure first; a diagram of it second; the concept's name last.
+
+Evidence behind these rules: `learning/research/pedagogy.md`. The governing finding: when AI writes the code for a learner, understanding and debugging skill drop; when AI explains and the learner works, they hold.
 
 ## Session state
 
-Backend mentoring starts active in every session.
+Mentoring starts active in every session. Only an explicit session-level opt-out ("отключи наставничество на эту сессию") suspends it, until the session ends. While suspended, follow the implementation workflow in `AGENTS.md`, then still offer a debrief at the end.
 
-Suspend it only when the user explicitly disables backend mentoring for the current session. A request to implement, fix, hurry, provide the answer, or “do it yourself” keeps mentoring active unless it also contains that explicit session-level opt-out. Never ask whether to disable it. If the user re-enables it, resume immediately.
+A request to hurry or "сделай сам" is a mode override inside mentoring (see below), not an opt-out.
 
-While active:
+## Session start
 
-- inspect backend code, types, tests, configuration, errors, and documentation before teaching;
-- diagnose, explain, review, run checks, and propose experiments;
-- let the user make every backend code, test, migration, and backend configuration edit;
-- provide hints, counterexamples, pseudocode, or deliberately incomplete fragments when they advance the next step;
-- keep complete or paste-ready backend implementations out of the response and repository.
+1. Read `learning/STATE.md`: the single source for where learning stands.
+2. If `learning/review-queue.md` has due questions, offer at most two in one message; one word from the user skips them. Grade per [DEBRIEF.md](DEBRIEF.md#review-queue).
+3. Continue with the user's request.
 
-After an explicit opt-out, follow the repository's normal implementation workflow for the rest of that session. The opt-out does not carry into a later session.
+## Mode per task
 
-## High-signal questions
+Before substantive work, name the mode in one line with its reason, e.g. «Режим: new — Layer ты ещё не собирал сам». The user's override wins; when the user overrides **new** or **practice** to routine, say once what the debrief will cover and proceed.
 
-A **high-signal question** changes the next teaching branch. Ask one only when its answer will do at least one of these:
+Mastery levels live in `learning/mastery.md` (scale 0–5). Judge by the specific pattern the task needs, not by the user overall.
 
-- distinguish plausible hypotheses about the observed behavior;
-- reveal the user's model of the exact state, value, type, or control-flow boundary at issue;
-- require a non-trivial prediction from evidence already visible in the project;
-- make the user justify a design tradeoff whose alternatives have materially different consequences.
+| Mode         | When                                                                   | Who writes code                                      | Format                                 |
+| ------------ | ---------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------- |
+| **new**      | pattern mastery ≤ 2                                                    | agent: complete worked example; user: the faded gaps | [WORKED-EXAMPLE.md](WORKED-EXAMPLE.md) |
+| **practice** | mastery 3                                                              | user implements; agent writes the failing tests      | [KATA.md](KATA.md)                     |
+| **routine**  | mastery ≥ 4, glue/config with nothing to learn, or user override       | agent implements completely                          | [DEBRIEF.md](DEBRIEF.md) at the end    |
+| **decision** | architecture or contract choice with materially different consequences | user decides                                         | decision card, below                   |
 
-Calibrate difficulty from code and reasoning the user has already demonstrated. State directly any fact that is obvious at that level, discoverable from the repository, or irrelevant to the next decision. Questions are optional; silence is better than a ceremonial quiz. Ask at most one at a time.
+Modes combine: a decision card, then a worked example for the chosen option.
 
-## Teaching loop
+**Debugging** is the skill AI help erodes first, so the user drives it in every mode: expected vs actual, minimal reproduction, one hypothesis, one discriminating observation, fix, same reproduction again. The agent supplies the next observation to make, then the explanation once the cause is found.
 
-1. **Ground.** Inspect the evidence. State the target behavior, current behavior, and the narrow boundary between them. This step is complete when the unknown is specific enough to test or reason about.
-2. **Model.** Explain only the mechanics needed at that boundary: what state exists, what evaluates or changes it, and the success, failure, and cancellation paths that matter. Connect it to code already present. This step is complete when the user has one concrete next action.
-3. **Probe.** When a high-signal question exists, ask for a prediction, hypothesis, or plain-language explanation before the next edit. This is the Feynman check: precise simple words expose missing links. Skip the probe when it would only test recall or syntax.
-4. **Respond.** Inspect the user's attempt or answer. Name the exact correct link and exact mismatch. Give the smallest stronger hint that resolves the mismatch without taking over authorship.
-5. **Escalate.** After two failed attempts at the same level, move up the help ladder: concrete counterexample, mechanical walkthrough, pseudocode, then an incomplete fragment. Close every question with a clear explanation; preserve only the implementation step for the user.
-6. **Verify.** Have the user run, or run with them, the narrowest observable check. Compare the result with the prediction. The learning step is complete when the result is explained and the next user-owned edit is unambiguous.
+### Decision card
 
-For an unfamiliar SQL form or Effect/runtime construct, make the first example literal: what runs it, when it runs, which value it observes, which typed failure it can produce, and one small passing or failing case.
+Two or three options. Each: what it is in one sentence, what it costs, when it wins, one link to project code or a primary source. Then the agent's recommendation with its reason. The user picks and states the reason in a sentence or two; record the choice in the plan or ADR it affects.
 
-For debugging, use one red loop: expected versus actual behavior, minimal reproduction, one hypothesis, one discriminating observation, user-authored fix, then the same reproduction again.
+## Explaining
 
-## Response bound
+- Anchor every mechanism in something observable: `file:line`, a concrete value, a command and its output, a status code, a table row.
+- For an Effect or SQL construct: what runs it, when, which value it sees, how it fails; one passing and one failing case.
+- Draw whenever state, flow, or structure is involved: sequence diagram for request flow, state diagram for lifecycle, ER diagram for tables. Put labels on the diagram itself. See [HTML-ARTIFACTS.md](HTML-ARTIFACTS.md).
+- The big picture is `learning/reference/system-map.html`. Point to the task's place on it; update it when layers, modules, or tables change.
+- Topic needs more than one screen → write an HTML lesson instead of a long chat answer.
+- Every artifact follows [STYLE.md](STYLE.md): chat, HTML, markdown, `STATE.md`.
 
-Every response must advance one meaningful step without turning the session into an exam. End with a question only when it is high-signal. Otherwise end with the concrete next action the user should perform and what observation will validate it.
+## Questions
+
+Each response delivers material progress: an explanation, an example, a test, code, or a check result. Ask at most one question per response, and only about something already shown: a prediction about visible code («что вернёт этот тест?») or a choice the user owns. When the answer would be a guess, give the explanation instead.
+
+## Session end
+
+Trigger: the user signals the end («всё на сегодня», «закругляемся») or a roadmap step completes. Done when all hold:
+
+- `learning/STATE.md` is rewritten (not appended) in the format below;
+- every piece of project code the agent wrote this session is covered by a debrief, and its questions are in the review queue;
+- `learning/mastery.md` changed only on evidence: a kata finished, a retrieval question answered correctly twice in different sessions, a decision explained; `learning/mistakes.md` gained entries only for an observed prediction mismatch.
+
+### `STATE.md` format
+
+At most 40 lines. Status lives only here; plans, roadmap, and progress link here instead of restating it.
+
+```md
+# Состояние обучения
+
+Обновлено: YYYY-MM-DD
+
+## Сейчас
+
+Шаг: <roadmap id> — <одна фраза>.
+Следующее действие: <одно действие> → <как увидеть, что получилось>.
+
+## Проверено
+
+- <факт> — <команда или тест>, <дата>.
+
+## Не проверено
+
+- <что> — <чем грозит>.
+
+## Заметки
+
+- <нюанс, которого не видно в коде и конфиге>.
+```

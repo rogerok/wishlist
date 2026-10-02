@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор: signup — три решения</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Разбор · auth · 5 минут</div>
+    <h1>Signup: три решения, которые держат код целым</h1>
+    <p class="lede"><code>AuthService.signup</code> создаёт User, Password Credential и Session за один запрос. Ниже три решения: если отменить любое из них, сломается что-то наблюдаемое.</p>
+    <div class="toplinks"><a class="button" href="../../apps/api/src/modules/auth/service/auth.service.ts">auth.service.ts</a><a class="button" href="../reference/system-map.html#request">Карта: путь запроса</a></div>
+  </header>
+  <div class="shell"><main>
+
+    <section class="card decision" id="d1">
+      <h2>1. Hash и token считаются до транзакции</h2>
+      <p><span class="label">Что</span><a href="../../apps/api/src/modules/auth/service/auth.service.ts"><code>auth.service.ts:96–99</code></a></p>
+<pre><code>const passwordHash = yield* hasher.hash(Redacted.make(password));
+const { credential, digest } = yield* tokenGenerator.generate;
+
+const { user, expiresAt } = yield* db.withTransaction(
+  // ...только запросы к БД</code></pre>
+      <p><span class="label">Почему</span>Транзакция занимает соединение из пула от <code>BEGIN</code> до <code>COMMIT</code>. Один scrypt с <code>N=2^17</code> требует около 128 MiB и заметное время. Если считать хеш внутри транзакции, то при 10 одновременных регистрациях 10 соединений простаивают, пока идёт scrypt. Остальные запросы, даже <code>GET /api/users</code>, ждут свободное соединение.</p>
+      <p><span class="label">Цена</span>Нет. Hash не зависит от данных в БД, поэтому его можно посчитать заранее.</p>
+    </section>
+
+    <section class="card decision" id="d2">
+      <h2>2. Три INSERT в одной транзакции</h2>
+      <p><span class="label">Что</span><a href="../../apps/api/src/modules/auth/service/auth.service.ts"><code>auth.service.ts:99–121</code></a>: <code>usersRepo.create</code> → <code>passwordRepo.create</code> → <code>sessionRepo.create</code> внутри <code>db.withTransaction</code>.</p>
+<pre class="mermaid">
+stateDiagram-v2
+  [*] --> BEGIN
+  BEGIN --> user: INSERT users
+  user --> credential: INSERT password_credentials
+  credential --> session: INSERT sessions
+  session --> COMMIT
+  user --> ROLLBACK: ошибка
+  credential --> ROLLBACK: ошибка
+  session --> ROLLBACK: ошибка
+  COMMIT --> [*]: 3 строки
+  ROLLBACK --> [*]: 0 строк
+</pre>
+      <p><span class="label">Почему</span>Без транзакции сбой на втором INSERT оставит user без пароля. Email уже занят уникальным индексом, а войти нельзя: повторный signup получит 409. Транзакция даёт два исхода: 3 строки или 0.</p>
+      <p><span class="label">Цена</span>Соединение занято на три INSERT. Это миллисекунды, потому что scrypt вынесен наружу (решение 1).</p>
+    </section>
+
+    <section class="card decision" id="d3">
+      <h2>3. Двенадцать внутренних ошибок сводятся к трём</h2>
+      <p><span class="label">Что</span><a href="../../apps/api/src/modules/auth/service/auth.service.ts"><code>auth.service.ts:34–67</code></a>, <code>mapSignupError</code>:</p>
+<pre><code>Match.value(error).pipe(
+  Match.tag('UserEmailAlreadyExists', (cause) => new AuthEmailAlreadyExistsError({ cause })),
+  Match.tag('PasswordHashOverloadedError', 'SecurePrimitiveUnavailableError',
+    (cause) => new AuthUnavailableError({ cause })),
+  // ...повреждённые записи и дубликаты → AuthInternalError
+  Match.exhaustive,
+);</code></pre>
+      <p><span class="label">Почему</span>Handler знает три исхода: 409, 503, 500 (<a href="../reference/system-map.html#errors">карта ошибок</a>). <code>Match.exhaustive</code> превращает новую необработанную ошибку репозитория в ошибку компиляции именно здесь. Без него новая ошибка молча станет дефектом и 500 без понятного лога.</p>
+      <p><span class="label">Цена</span>Каждая новая ошибка репозитория требует строки в <code>mapSignupError</code>. Это и есть цель: решение принимается явно.</p>
+    </section>
+
+    <section class="card">
+      <h2>Собери signup</h2>
+      <div class="parsons" data-answer="hash tx user pass session close map | hash tx user session pass close map">
+        <p>Расставь строки так, чтобы scrypt не держал соединение, а в БД не попал ни пароль, ни сам token. Две строки лишние.</p>
+        <ul>
+          <li data-id="hash"><code>const passwordHash = yield* hasher.hash(Redacted.make(password));<br>const { credential, digest } = yield* tokenGenerator.generate;</code></li>
+          <li data-id="tx"><code>const { user, expiresAt } = yield* db.withTransaction(Effect.gen(function* () {</code></li>
+          <li data-id="user"><code>const user = yield* usersRepo.create({ email, firstName, middleName, lastName });</code></li>
+          <li data-id="pass"><code>yield* passwordRepo.create(user.id, passwordHash);</code></li>
+          <li data-id="session"><code>const session = yield* sessionRepo.create(user.id, digest, expiresAt);</code></li>
+          <li data-id="close"><code>return { user, expiresAt: session.expiresAt }; }));</code></li>
+          <li data-id="map"><code>}).pipe(Effect.mapError(mapSignupError));</code></li>
+          <li data-id="raw-pass"><code>yield* passwordRepo.create(user.id, password);</code></li>
+          <li data-id="raw-token"><code>const session = yield* sessionRepo.create(user.id, credential, expiresAt);</code></li>
+        </ul>
+        <p class="parsons-why">Пароль и session можно записать в любом порядке: обоим нужен только <code>user.id</code>. Лишние строки сохраняют в БД секрет в открытом виде: утечка таблицы отдала бы пароли или готовые cookie.</p>
+      </div>
+      <p class="diagram-caption">Расчёт <code>expiresAt</code> через <code>Clock</code> убран из задачи ради краткости.</p>
+    </section>
+
+    <section class="card">
+      <h2>Вопросы на вспоминание</h2>
+      <p>Ответь через 2–3 дня, не открывая код. Агент покажет их в начале сессии.</p>
+      <details class="quiz"><summary><strong>Пришло 20 signup одновременно, а hash перенесли внутрь транзакции. Что случится с остальными запросами к API?</strong></summary>
+        <p>Соединения пула заняты ожиданием scrypt, и запросы, которым нужна БД, ждут свободное соединение. <a href="#d1">Решение 1</a>.</p></details>
+      <details class="quiz"><summary><strong><code>sessionRepo.create</code> упал. Какие строки этого signup останутся в БД?</strong></summary>
+        <p>Никакие: транзакция откатит user и password_credentials. Клиент получит 500 или 503, cookie не выставляется. <a href="#d2">Решение 2</a>.</p></details>
+      <details class="quiz"><summary><strong>В UsersRepository добавили ошибку <code>UserEmailTooLong</code>. Где и как ты об этом узнаешь?</strong></summary>
+        <p>При <code>check-types</code>: <code>Match.exhaustive</code> в <code>mapSignupError</code> не скомпилируется, пока ошибка не получит ветку. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+
+    <section class="card">
+      <h2>Первоисточник</h2>
+      <p><a href="https://www.postgresql.org/docs/16/tutorial-transactions.html">PostgreSQL 16: Transactions</a> — короткий раздел про атомарность: «всё или ничего» (решение 2).</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="../reference/system-map.html">Карта системы</a> · Следующий урок: login (будет) · Вопросы — агенту в чате.
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+  <script src="../assets/parsons.js"></script>
+</body>
+</html>

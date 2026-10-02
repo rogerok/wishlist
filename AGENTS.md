@@ -17,8 +17,9 @@ The current primary stack is:
 
 ## Permissions
 
-- **Backend:** Read and follow `.agents/skills/backend-mentoring/SKILL.md` for every backend-related request. Its
-  default-on, per-session opt-out and user-authored-code rules are authoritative.
+- **Backend:** Read and follow `.agents/skills/backend-mentoring/SKILL.md` for every backend-related request and
+  whenever the user resumes the plan («продолжаем», «что дальше»). Its default-on, per-session opt-out and per-task
+  mode rules (who writes the code) are authoritative.
 
 Code and configuration are the source of truth. Project plans in the repository root provide context, but if they
 disagree with the working code, the agent must point out the discrepancy instead of silently choosing one version.
@@ -76,7 +77,7 @@ mandatory blanks for the user to fill in. Before a non-trivial change, briefly s
 decisions and invariants.
 
 If the user says “do it yourself,” “no questions,” or indicates urgency, provide the direct solution. For backend work,
-this mode applies only after the user explicitly disables backend mentoring for the current session.
+backend mentoring handles this as its routine mode, followed by a debrief.
 
 ### Review
 

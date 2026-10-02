@@ -2,31 +2,7 @@
 
 ## Текущий checkpoint
 
-- **Текущий приоритет (2026-10-02):** завершить проверку R.5 —
-  [рефакторинг ошибок и логирования](../docs/product/error-handling-refactoring-plan.md).
-  Производственные изменения выполнены: безопасные проекции users/auth, SQL-классификация и общий технический handler users.
-  Auth handler покрыт девятью сценариями; check-types и целевой lint прошли.
-  Полный Vitest suite, общий lint и Node/PostgreSQL smoke ещё не подтверждены.
-- **Последний учебный checkpoint (2026-09-29):** `1.1` реализован, пять интеграционных сценариев credentials repository
-  прошли в той сессии. Это исторический результат, не свежая проверка.
-- **Следующий функциональный шаг:** `roadmap.md` → `R.5` — итоговые проверки и Node/PostgreSQL signup smoke.
-  Ошибки, успешный signup, production-cookie и отказ на лишнее поле проверены с подставленным AuthService.
-  В текущей сессии наставничество явно отключено владельцем; в новой включается по умолчанию.
-- **Статус шагов 0.1–0.7:** реализация есть, feedback loop работает. Вопросы «Проверка понимания» из roadmap устно не
-  пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Остаток `0.3` — нет детерминированного
-  теста, доказывающего два обращения по 32 bytes; готовность hasher этот пробел не закрывает.
-- **Phase 0 не объявлена полностью закрытой:** остаются этот token test и учебные проверки; production memory budget
-  не определён. Локальные лимиты hasher не являются production approval.
-- **`0.4` закрыт с отклонением от roadmap (решение владельца, 2026-09-26):** предусловие `total` (safe integer в
-  `[min, max]`) → `Effect.die`, отказ `randomBytes` после предусловия → `SecurePrimitiveUnavailableError`; тест на 6
-  неверных длин проверяет `Die`. Проверку длины результата не делаем: Node гарантирует длину, дробный `total` закрыт
-  предусловием. Первоначально injected failure test был отложен. На 2026-09-28 он добавлен на уровне потребителя
-  `PasswordHasher`: подмена Node `randomBytes` доказывает typed failure, отсутствие вызова scrypt и восстановление
-  после отказа без введения production-фабрики. HTTP mapping 503 и безопасная диагностика signup реализованы;
-  постоянные проверки настоящего auth handler проходят.
-- **Следующая backend-цель:** проверить успешную регистрацию через Node server с отдельной тестовой БД.
-- **Ближайшая продуктовая цель после блока R:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`).
-  SessionsRepository, signup и live wiring уже есть; перед продолжением сверить оставшиеся критерии, не реализовывать их заново.
+Текущее состояние — [STATE.md](./STATE.md). Ниже — история до 2026-10-02.
 
 ## Наблюдаемое состояние проекта
 
@@ -143,37 +119,9 @@ scrypt на каждую ожидающую операцию, но состоя�
 - Vitest `4.1.10`, FastCheck через `effect/testing`, ESLint `9.39.1`, Prettier `3.7.4`.
 - `ts-pattern` `5.9.0`, `kysely-codegen` `0.20.0`, `tsx` `4.23.11`.
 
-## Предварительная mastery map
+## Mastery map
 
-Шкала: 0 — не встречал; 1 — узнаю; 2 — могу объяснить с помощью; 3 — могу реализовать с помощью; 4 — самостоятельно; 5 —
-объясняю, реализую, отлаживаю и сравниваю альтернативы.
-
-Наличие кода не доказывает mastery. Оценки `2–3` ниже — рабочие гипотезы по коду и git history; их нужно подтвердить
-самостоятельным объяснением и новой задачей.
-
-| Концепция                                             |  Оценка | Основание                                          | Статус проверки                                                      |
-| ----------------------------------------------------- | ------: | -------------------------------------------------- | -------------------------------------------------------------------- |
-| strict TypeScript и ESM imports                       |       3 | строгие config, branded types, NodeNext imports    | Практика видна; самостоятельность не проверена                       |
-| pnpm workspace/Turborepo                              |       2 | scripts и внутренние packages используются         | Trade-offs не проверены                                              |
-| Effect `Effect.gen`, combinators, typed error channel |       3 | services/repositories/handlers и tests             | Failure/defect/interruption model не проверен целиком                |
-| `Context.Service` и `Layer` composition               |       2 | Users/Health/DB Layers собраны                     | Lifetime и requirement reasoning требует проверки                    |
-| Effect Schema boundary validation                     |       3 | transforms, brands, excess-property policy, tests  | Encode/decode boundary требует проверки                              |
-| HttpApi contracts и Problem Details                   |       3 | Users/Auth contracts и middleware                  | Live auth wiring ещё отсутствует                                     |
-| PostgreSQL DDL, FK, indexes, constraints              |       3 | две migrations и invariant tests                   | Concurrency design ещё не проверен                                   |
-| Kysely queries и repository error mapping             |       3 | полный Users CRUD                                  | Transaction ownership и authorization scoping не проверены           |
-| Vitest и example-based tests                          |       2 | 10 файлов / 74 теста проходят                      | Setup исправлен; самостоятельное объяснение test design не проверено |
-| Property-based testing                                |       2 | один FastCheck invariant для passwordConfirm       | Generator/shrinking trade-offs не проверены                          |
-| Session auth domain model                             |       2 | contracts, migration, docs                         | Use cases и live behavior не реализованы                             |
-| Password hash format parsing                          |       3 | parser/serializer и полный hasher с tests          | Самостоятельное объяснение native boundary не подтверждено           |
-| Secure randomness и Session token digest              |       1 | generator реализован, known-vector/freshness tests | Остаток `0.3`: deterministic test двух обращений по 32 bytes         |
-| Async native callback/interruption semantics          |       1 | реализация, concurrency tests и mutation probe     | Самостоятельное понимание не проверено                               |
-| Bounded concurrency/admission                         |       1 | локальные измерения, реализация и capacity tests   | Production budget и самостоятельное обоснование открыты              |
-| Authentication vs authorization                       |       1 | auth ещё не защищает Users CRUD                    | Нужен вертикальный сценарий                                          |
-| Aggregate/ownership modeling                          |       1 | отражено в product docs                            | Wishlist кода нет                                                    |
-| Reservation concurrency/idempotency                   |       1 | ADR и plan                                         | Практики нет                                                         |
-| Guest Session/transactional outbox                    |       1 | ADR и plan                                         | Практики нет                                                         |
-| Object storage/SSRF/async import                      |       0 | только future plans                                | Не изучать до соответствующей проблемы                               |
-| Multi-instance observability/scaling                  | unknown | код не даёт данных                                 | Только после законченного product path                               |
+Перенесена в [mastery.md](./mastery.md).
 
 ## Концепции, которые ещё нельзя считать проверенными
 
