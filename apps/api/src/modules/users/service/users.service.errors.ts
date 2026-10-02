@@ -11,6 +11,9 @@ export class UsersUnavailableError extends Data.TaggedError(
 )<{
   readonly cause: unknown;
 }> {}
+export class UsersInternalError extends Data.TaggedError('UsersInternalError')<{
+  readonly cause: unknown;
+}> {}
 
 export class UserDataIntegrityError extends Data.TaggedError(
   'UserDataIntegrityError',
@@ -28,23 +31,28 @@ export class UserEmailAlreadyExistsError extends Data.TaggedError(
 export type UsersServiceCreateError =
   | UserDataIntegrityError
   | UserEmailAlreadyExistsError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UsersServiceGetAllError =
   | UserDataIntegrityError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UsersServiceGetByIdError =
   | UserDataIntegrityError
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UserServiceUpdateError =
   | UserDataIntegrityError
   | UserEmailAlreadyExistsError
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UserServiceDeleteByIdError =
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;

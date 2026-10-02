@@ -13,6 +13,7 @@ export type UserLogEvent = Schema.Schema.Type<typeof UserLogEventSchema>;
 export const UserFailureReasonSchema = makeLiteralUnionSchema([
   'dataIntegrity',
   'unavailable',
+  'internal',
 ]);
 export const UserFailureReason = UserFailureReasonSchema.values;
 export type UserFailureReason = Schema.Schema.Type<
