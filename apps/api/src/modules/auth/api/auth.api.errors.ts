@@ -35,7 +35,7 @@ export class AuthUnavailableHttpError extends Schema.Error<AuthUnavailableHttpEr
   'AuthUnavailableHttpError',
 )(
   {
-    code: Schema.tag('AUTH_UNAVAILABLE'),
+    code: Schema.tag('AUTH_UNAVAILABLE_ERROR'),
     detail: Schema.tag('Unable to process the request'),
     status: Schema.tag(503),
     title: Schema.tag('Auth service is unavailable'),
