@@ -14,17 +14,17 @@ The target is a production-grade modular monolith used as an iterative scale lab
 
 ## Current repository state
 
-Observed in the working code:
+Observed in the working code during the 2026-10-01 review (not a full end-to-end verification):
 
 - `apps/api` uses Effect Platform, Effect Schema, PostgreSQL, Kysely, and Effect SQL;
-- the running `AppApi` and live Layers expose only health and unauthenticated Users CRUD;
+- the live `AppApi` and Layers include health, unauthenticated Users CRUD, and auth signup;
 - auth request/response contracts, auth tables, validation tests, migration tests, and password-hash format parsing exist;
 - `PasswordHasherLive` and `SessionTokenGeneratorLive` are implemented and tested; hashing has a shared local limit of 2 active operations and 2 waiting operations;
-- auth handlers, `AuthService`, auth repositories, cookie issuance, and auth wiring into `AppApi` remain unimplemented;
+- credentials/Session repositories, signup in `AuthService`, its handler, cookie issuance, and live auth wiring exist; login, `me`, and logout routes are currently commented out;
 - the generated database model contains only Users, Password Credentials, and Sessions;
 - Wishlists, Wishlist Items, Sharing Links, Reservations, Guest Sessions, outbox jobs, images, notifications, and URL import are absent.
 
-The auth plan's [current state and security-primitives checkpoint](../auth/implementation-plan.md#current-state) were synchronized on 2026-09-28. The next functional slice is `PasswordCredentialsRepository`; production memory-budget approval and the explicit deterministic two-call Session-token test remain open in [auth notes](../auth/NOTES.md#открыто). Code remains authoritative; check the installed Effect 4 RC APIs and current implementation before editing.
+**Текущий приоритет (2026-10-01): Milestone R — [рефакторинг ошибок и логирования](./error-handling-refactoring-plan.md).** Выполнить его до дальнейшего расширения auth и следующих продуктовых milestones. Прежний следующий шаг `PasswordCredentialsRepository` устарел: реализация уже есть. После Milestone R сверить оставшиеся критерии Session authentication с кодом, не реализуя заново готовые части. Production memory budget, deterministic token test и самостоятельное понимание не считаются закрытыми этим ревью.
 
 The old product sketch is not the technical plan. Fastify, Zod, JWT/refresh tokens, and nanoid are removed from the roadmap: the repository already chose Effect Platform/Schema, PostgreSQL-backed opaque Sessions in [ADR-0001](../adr/0001-postgresql-backed-sessions.md), and UUID internal IDs. Sharing Links receive their own cryptographically random public keys because they have a different lifecycle from internal entity IDs.
 
@@ -95,6 +95,24 @@ Required email and Import Preview work is persisted in PostgreSQL and claimed by
 ## Delivery roadmap
 
 Each milestone is a complete vertical slice. Do not start the next milestone with known failures in the current one.
+
+### Milestone R — Ошибки и логирование: текущий приоритет
+
+Подробный порядок, границы и критерии готовности: [план рефакторинга](./error-handling-refactoring-plan.md).
+
+1. R.1 — Зафиксировать политику ошибок и регрессионные сценарии.
+2. R.2 — Убрать чувствительные SQL-данные из логов `users`, сохранить безопасную диагностику первопричин в `auth`.
+3. R.3 — Разделить временную недоступность и внутренние SQL-сбои, согласовать сервисные и HTTP-контракты.
+4. R.4 — Сосредоточить технический HTTP-перевод внутри `users`, исправить DELETE `reason` и PUT `instance`.
+5. R.5 — Проверить реальные обработчики, логи и запуск приложения; затем вернуться к оставшимся задачам Milestone 1.
+
+Критерий выхода: матрица ошибок и безопасности логов из отдельного плана проходит; уровни repository → service → HTTP
+сохранены, нет универсального `AppError` и широкого перехвата отмены/непредвиденных сбоев.
+Производственные изменения кода выполнены. Девять тестов настоящего `AuthHandlersLive` покрывают ошибки,
+успешный signup, production-cookie и валидацию лишнего поля; устаревшие API-тесты удалены.
+Проверка типов и целевой lint прошли.
+**Следующий шаг:** R.5 — общие проверки и реальный Node/PostgreSQL signup smoke.
+Полный Vitest suite, общий lint и smoke с БД ещё не подтверждены; весь Milestone R не закрыт.
 
 ### Milestone 1 — Complete thin Session authentication
 

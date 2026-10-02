@@ -2,9 +2,16 @@
 
 ## Текущий checkpoint
 
-- **Текущий checkpoint (2026-09-29):** `1.1` реализован; пять интеграционных сценариев `PasswordCredentialsRepository`
-  проходят.
-- **Следующий функциональный шаг:** `roadmap.md` → `1.2` — `SessionsRepository`.
+- **Текущий приоритет (2026-10-02):** завершить проверку R.5 —
+  [рефакторинг ошибок и логирования](../docs/product/error-handling-refactoring-plan.md).
+  Производственные изменения выполнены: безопасные проекции users/auth, SQL-классификация и общий технический handler users.
+  Auth handler покрыт девятью сценариями; check-types и целевой lint прошли.
+  Полный Vitest suite, общий lint и Node/PostgreSQL smoke ещё не подтверждены.
+- **Последний учебный checkpoint (2026-09-29):** `1.1` реализован, пять интеграционных сценариев credentials repository
+  прошли в той сессии. Это исторический результат, не свежая проверка.
+- **Следующий функциональный шаг:** `roadmap.md` → `R.5` — итоговые проверки и Node/PostgreSQL signup smoke.
+  Ошибки, успешный signup, production-cookie и отказ на лишнее поле проверены с подставленным AuthService.
+  В текущей сессии наставничество явно отключено владельцем; в новой включается по умолчанию.
 - **Статус шагов 0.1–0.7:** реализация есть, feedback loop работает. Вопросы «Проверка понимания» из roadmap устно не
   пройдены, кроме частичного ответа к `0.4` (sync throw scrypt — ошибка в коде). Остаток `0.3` — нет детерминированного
   теста, доказывающего два обращения по 32 bytes; готовность hasher этот пробел не закрывает.
@@ -15,19 +22,21 @@
   неверных длин проверяет `Die`. Проверку длины результата не делаем: Node гарантирует длину, дробный `total` закрыт
   предусловием. Первоначально injected failure test был отложен. На 2026-09-28 он добавлен на уровне потребителя
   `PasswordHasher`: подмена Node `randomBytes` доказывает typed failure, отсутствие вызова scrypt и восстановление
-  после отказа без введения production-фабрики. HTTP mapping 503 ещё не реализован.
-- **Следующая backend-цель:** создание Session, поиск действующей Session по дайджесту и удаление текущей Session.
-- **Ближайшая продуктовая цель:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`) и
-  подключить её к live `AppApi`.
+  после отказа без введения production-фабрики. HTTP mapping 503 и безопасная диагностика signup реализованы;
+  постоянные проверки настоящего auth handler проходят.
+- **Следующая backend-цель:** проверить успешную регистрацию через Node server с отдельной тестовой БД.
+- **Ближайшая продуктовая цель после блока R:** закончить PostgreSQL Session authentication (`signup`, `login`, `me`, `logout`).
+  SessionsRepository, signup и live wiring уже есть; перед продолжением сверить оставшиеся критерии, не реализовывать их заново.
 
 ## Наблюдаемое состояние проекта
 
 - Modular monolith в pnpm/Turborepo workspace.
-- Live API сейчас подключает Health и публичный Users CRUD.
+- При ревью 2026-10-01 live API подключает Health, публичный Users CRUD и auth signup.
 - Users уже проходят цепочку HttpApi/Schema → handlers → `UsersService` → `UsersRepository` → Effect-compatible
   Kysely/PostgreSQL.
-- Auth HttpApi contracts, request schemas, Problem Details errors и isolated contract tests существуют, но auth
-  group/handlers/services не подключены к live application.
+- Credentials/Session repositories, signup transaction, handler, cookie issuance и auth live wiring уже есть.
+  Login/me/logout routes пока закомментированы. Устаревший `auth.api.test.ts` удалён;
+  полезный сценарий валидации перенесён в тест настоящего обработчика.
 - Migration `0002_auth.ts` и generated DB types уже содержат `password_credentials` и `sessions`.
 - Canonical password-hash parser/serializer и тесты существуют.
 - `SessionTokenGenerator` реализован: `SecureRandomBytesLive`, lazy `generate` (bytes на каждый вызов), SHA-256 digest
@@ -37,7 +46,7 @@
   удерживается до callback. Лимиты одного экземпляра: 2 work permits и 4 admission permits (2 active + 2 waiting),
   сверх capacity — immediate overload. Sync throw scrypt остаётся defect, callback failure —
   `SecurePrimitiveUnavailableError`.
-- Тесты token generator и hasher находятся в `apps/api/src/modules/auth/service/test/`.
+- Тесты token generator и hasher находятся рядом с реализациями в `modules/auth/service/session/` и `password/`.
 - `PasswordCredentialsRepository` реализован; `PasswordCredentialsSchema` проверяет даты и формат хеша через
   существующий парсер. Общая подготовка PostgreSQL и миграций вынесена в `infra/db/test-database.layer.ts`.
 - Wishlists, Items, Sharing Links, Reservations, Guest Sessions, outbox, images и Import Preview в коде отсутствуют.
@@ -201,7 +210,9 @@ observable problem и не повышают mastery только по факту
 Отделить функциональную готовность от самостоятельного понимания: объяснить удержание permit до native callback,
 разницу между execution/admission capacity и ограничениями общего пула libuv. Реализация AI и зелёные тесты не повышают
 mastery. Учебный остаток `0.3` — детерминированно доказать два вызова `randomBytes.get(32)` при двух выполнениях
-generator; known-vector и freshness tests уже есть. Следующий функциональный шаг — `1.2`, SessionsRepository.
+generator; known-vector и freshness tests уже есть. Следующий функциональный шаг — `R.5`,
+итоговые проверки и Node/PostgreSQL smoke. Открытые учебные проверки Phase 0 сохраняются;
+освоение Layer и ошибок отдельно не оценивалось.
 
 ## Допущения и открытые вопросы
 

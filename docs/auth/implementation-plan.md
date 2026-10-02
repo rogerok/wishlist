@@ -1,5 +1,16 @@
 # PostgreSQL Session Authentication Plan
 
+## Приоритет перед продолжением auth
+
+**2026-10-01:** сначала выполнить [план рефакторинга ошибок и логирования](../product/error-handling-refactoring-plan.md)
+(Milestone R общего плана, R.1–R.5 учебного roadmap). Затем сверить оставшиеся auth-критерии с текущим кодом.
+Раздел Current state ниже — исторический снимок 2026-09-28: credentials/Session repositories, signup transaction,
+handler/cookie и live wiring уже появились. Это наблюдение ревью, не подтверждение прохождения всех auth-сценариев.
+Текущая точка продолжения: [R.5 — итоговая проверка приложения](../../learning/session.md).
+Производственные изменения рефакторинга выполнены. Девять тестов настоящего AuthHandlersLive покрывают
+ошибки, успех, production-cookie и валидацию; типы и целевой lint прошли.
+Полный API suite, общий lint и успешный signup через Node server с отдельной PostgreSQL ещё не подтверждены.
+
 ## Goal
 
 Implement a small, complete authentication slice in `apps/api` using Effect 4, PostgreSQL-backed Sessions, and HTTP-only
