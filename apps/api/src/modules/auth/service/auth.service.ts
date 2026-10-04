@@ -54,25 +54,26 @@ const unAuthenticatedError = new AuthUnauthenticatedError({
   cause: `Can't authenticate`,
 });
 
-const mapSignupSqlError = (
-  sqlCause: unknown,
-  originalError: SignupOperationError,
-): AuthInternalError | AuthUnavailableError =>
-  isSqlError(sqlCause) && sqlCause.isRetryable
-    ? new AuthUnavailableError({ cause: originalError })
-    : new AuthInternalError({ cause: originalError });
+type TechnicalOperationError = Exclude<
+  AuthenticateOperationError | LoginOperationError | SignupOperationError,
+  {
+    readonly _tag:
+      | 'AuthInvalidCredentialsError'
+      | 'AuthUnauthenticatedError'
+      | 'UserEmailAlreadyExists';
+  }
+>;
 
-const mapSignupError = (error: SignupOperationError): AuthSignupError =>
+const mapTechnicalError = (
+  error: TechnicalOperationError,
+): AuthInternalError | AuthUnavailableError =>
   Match.value(error).pipe(
-    Match.tag(
-      'UserEmailAlreadyExists',
-      (cause) => new AuthEmailAlreadyExistsError({ cause }),
-    ),
     Match.tag(
       'PasswordHashOverloadedError',
       'SecurePrimitiveUnavailableError',
       (cause) => new AuthUnavailableError({ cause }),
     ),
+
     Match.tag(
       'InvalidUserRecord',
       'PasswordCredentialsInvalidRecord',
@@ -82,56 +83,45 @@ const mapSignupError = (error: SignupOperationError): AuthSignupError =>
       'SessionTokenDigestAlreadyExistsError',
       (cause) => new AuthInternalError({ cause }),
     ),
+
     Match.tag(
+      'SqlError',
       'UsersRepositoryError',
       'PasswordCredentialsRepositoryError',
       'SessionRepositoryError',
-      (cause) => mapSignupSqlError(cause.cause, cause),
-    ),
-    Match.tag('SqlError', (cause) => mapSignupSqlError(cause, cause)),
-    Match.exhaustive,
-  );
-const mapLoginError = (error: LoginOperationError): AuthLoginError =>
-  Match.value(error).pipe(
-    Match.tag('AuthInvalidCredentialsError', (error) => error),
-    Match.tag(
-      'PasswordHashOverloadedError',
-      'SecurePrimitiveUnavailableError',
-      (cause) => new AuthUnavailableError({ cause }),
-    ),
-    Match.tag(
-      'InvalidUserRecord',
-      'PasswordCredentialsInvalidRecord',
-      'SessionInvalidRecordError',
-      'PasswordHashIntegrityError',
-      'SessionTokenDigestAlreadyExistsError',
-      (cause) => new AuthInternalError({ cause }),
-    ),
-    Match.tag(
-      'UsersRepositoryError',
-      'PasswordCredentialsRepositoryError',
-      'SessionRepositoryError',
-      (cause) => mapSignupSqlError(cause.cause, cause),
+      (cause) => {
+        const sqlCause = isSqlError(cause) ? cause : cause.cause;
+
+        return isSqlError(sqlCause) && sqlCause.isRetryable
+          ? new AuthUnavailableError({ cause })
+          : new AuthInternalError({ cause });
+      },
     ),
 
     Match.exhaustive,
   );
+
+const mapSignupError = (error: SignupOperationError): AuthSignupError =>
+  Match.value(error).pipe(
+    Match.tag(
+      'UserEmailAlreadyExists',
+      (cause) => new AuthEmailAlreadyExistsError({ cause }),
+    ),
+    Match.orElse(mapTechnicalError),
+  );
+
+const mapLoginError = (error: LoginOperationError): AuthLoginError =>
+  Match.value(error).pipe(
+    Match.tag('AuthInvalidCredentialsError', (error) => error),
+    Match.orElse(mapTechnicalError),
+  );
+
 const mapAuthenticateError = (
   error: AuthenticateOperationError,
 ): AuthAuthenticateError =>
   Match.value(error).pipe(
     Match.tag('AuthUnauthenticatedError', (error) => error),
-
-    Match.tag(
-      'InvalidUserRecord',
-      'SessionInvalidRecordError',
-      (cause) => new AuthInternalError({ cause }),
-    ),
-    Match.tag('SessionRepositoryError', 'UsersRepositoryError', (cause) =>
-      mapSignupSqlError(cause.cause, cause),
-    ),
-
-    Match.exhaustive,
+    Match.orElse(mapTechnicalError),
   );
 
 interface AuthServiceShape {

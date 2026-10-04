@@ -1,3 +1,4 @@
+import type { Redacted } from 'effect';
 import type { Cookie } from 'effect/unstable/http/Cookies';
 
 import { type Cause, Duration, Effect, Layer, Match } from 'effect';
@@ -24,16 +25,16 @@ import {
   AuthEmailAlreadyExistsHttpError,
   AuthInternalHttpError,
   AuthInvalidCredentialsHttpError,
-  AuthUnauthenticatedHttpError,
   AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import {
-  CurrentSession,
   SessionAuthentication,
   sessionCookieSecurity,
 } from '#modules/auth/api/session-authentication.js';
-import { AuthFailureReason } from '#modules/auth/schemas/auth-logs.schema.js';
-import { AuthLogEvent } from '#modules/auth/schemas/auth-logs.schema.js';
+import {
+  AuthFailureReason,
+  AuthLogEvent,
+} from '#modules/auth/schemas/auth-logs.schema.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import { AuthService } from '#modules/auth/service/auth.service.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
@@ -46,6 +47,10 @@ type LogOptions = {
 type TechnicalErrorContext = {
   instance: AuthInternalHttpError['instance'];
 } & Pick<AuthFailureLogAnnotation, 'operation' | 'userId'>;
+type SessionCookieData = {
+  readonly credential: Redacted.Redacted<string>;
+  readonly expiresAt: Date;
+};
 
 const authRepositoryErrorTag = [
   'UsersRepositoryError',
@@ -161,6 +166,15 @@ export const AuthHandlersLive = HttpApiBuilder.group(
   (handlers) =>
     Effect.gen(function* () {
       const mode = yield* ModeConfig;
+      const setSessionCookie = ({ credential, expiresAt }: SessionCookieData) =>
+        HttpApiBuilder.securitySetCookie(sessionCookieSecurity, credential, {
+          httpOnly: true,
+          sameSite: 'lax',
+          path: '/api',
+          secure: mode === 'production',
+          expires: expiresAt,
+          maxAge: Duration.millis(sessionLifetimeMs),
+        });
 
       return handlers
         .handle(AuthOperation.signup, ({ payload }) =>
@@ -183,16 +197,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
               }),
             );
 
-            yield* HttpApiBuilder.securitySetCookie(
-              sessionCookieSecurity,
-              signupResult.credential,
-              {
-                ...securityCookiesBaseOptions,
-                secure: mode === 'production',
-                expires: signupResult.expiresAt,
-                maxAge: Duration.millis(sessionLifetimeMs),
-              },
-            );
+            yield* setSessionCookie(signupResult);
 
             return signupResult.user;
           }),
@@ -214,16 +219,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
               }),
             );
 
-            yield* HttpApiBuilder.securitySetCookie(
-              sessionCookieSecurity,
-              loginResult.credential,
-              {
-                ...securityCookiesBaseOptions,
-                secure: mode === 'production',
-                expires: loginResult.expiresAt,
-                maxAge: Duration.millis(sessionLifetimeMs),
-              },
-            );
+            yield* setSessionCookie(loginResult);
 
             return loginResult.user;
           }),
