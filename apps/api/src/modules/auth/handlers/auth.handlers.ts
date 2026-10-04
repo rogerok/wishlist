@@ -1,4 +1,6 @@
-import { type Cause, Duration, Effect } from 'effect';
+import type { Cookie } from 'effect/unstable/http/Cookies';
+
+import { type Cause, Duration, Effect, Match } from 'effect';
 import { HttpApiBuilder, HttpApiSecurity } from 'effect/unstable/httpapi';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { match, P } from 'ts-pattern';
@@ -14,26 +16,30 @@ import { AppApi } from '#infra/api/api.js';
 import { ModeConfig } from '#infra/config/config.js';
 import {
   authGroupIdentifier,
+  authLoginPath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
 import {
   AuthEmailAlreadyExistsHttpError,
   AuthInternalHttpError,
+  AuthInvalidCredentialsHttpError,
   AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
-import {
-  AuthFailureReason,
-  AuthLogEvent,
-} from '#modules/auth/schemas/auth-logs.schema.js';
+import { AuthFailureReason } from '#modules/auth/schemas/auth-logs.schema.js';
+import { AuthLogEvent } from '#modules/auth/schemas/auth-logs.schema.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import { AuthService } from '#modules/auth/service/auth.service.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
+import { UserFailureReason } from '#modules/users/schemas/user-logs.schema.js';
 
 type SignupOperationsTags = ReadonlyArray<SignupOperationError['_tag']>;
 type LogOptions = {
   cause: AuthInternalError | AuthUnavailableError;
 } & Omit<AuthFailureLogAnnotation, 'event'>;
+type TechnicalErrorContext = {
+  instance: AuthInternalHttpError['instance'];
+} & Pick<AuthFailureLogAnnotation, 'operation' | 'userId'>;
 
 const authRepositoryErrorTag = [
   'UsersRepositoryError',
@@ -51,6 +57,42 @@ const authKnownCauseTags = [
   'PasswordCredentialsAlreadyExists',
   'SessionTokenDigestAlreadyExistsError',
 ] as const satisfies SignupOperationsTags;
+
+const makeTechnicalErrorHandler =
+  ({ operation, userId, instance }: TechnicalErrorContext) =>
+  (
+    cause: LogOptions['cause'],
+  ): Effect.Effect<never, AuthInternalHttpError | AuthUnavailableHttpError> =>
+    Match.value(cause).pipe(
+      Match.tag('AuthInternalError', () =>
+        logAndFail(
+          {
+            operation,
+            cause,
+            userId,
+            reason: UserFailureReason.internal,
+          },
+          new AuthInternalHttpError({
+            instance,
+          }),
+        ),
+      ),
+
+      Match.tag('AuthUnavailableError', () =>
+        logAndFail(
+          {
+            operation,
+            cause,
+            userId,
+            reason: AuthFailureReason.unavailable,
+          },
+          new AuthUnavailableHttpError({
+            instance,
+          }),
+        ),
+      ),
+      Match.exhaustive,
+    );
 
 const toAuthFailureLog = (error: LogOptions['cause']) => {
   const base = { errorTag: error._tag };
@@ -101,6 +143,12 @@ const logAndFail = <E extends Cause.YieldableError>(
     return yield* error;
   });
 
+const securityCookiesBaseOptions: Cookie['options'] = {
+  httpOnly: true,
+  sameSite: 'lax',
+  path: '/api',
+};
+
 export const AuthHandlersLive = HttpApiBuilder.group(
   AppApi,
   authGroupIdentifier,
@@ -112,53 +160,71 @@ export const AuthHandlersLive = HttpApiBuilder.group(
       });
       const mode = yield* ModeConfig;
 
-      return handlers.handle(AuthOperation.signup, ({ payload }) =>
-        Effect.gen(function* () {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { passwordConfirm, ...rest } = payload;
-          const service = yield* AuthService;
-          const signupResult = yield* service.signup(rest).pipe(
-            Effect.catchTags({
-              AuthEmailAlreadyExistsError: () =>
-                new AuthEmailAlreadyExistsHttpError(),
-              AuthInternalError: (cause) =>
-                logAndFail(
-                  {
-                    operation: AuthOperation.signup,
-                    reason: AuthFailureReason.internal,
-                    cause,
-                    userId: null,
-                  },
-                  new AuthInternalHttpError({ instance: authSignupPath }),
-                ),
-              AuthUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: AuthOperation.signup,
-                    reason: AuthFailureReason.unavailable,
-                    cause,
-                    userId: null,
-                  },
-                  new AuthUnavailableHttpError({ instance: authSignupPath }),
-                ),
-            }),
-          );
+      return handlers
+        .handle(AuthOperation.signup, ({ payload }) =>
+          Effect.gen(function* () {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { passwordConfirm, ...rest } = payload;
+            const service = yield* AuthService;
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              instance: authSignupPath,
+              userId: null,
+              operation: AuthOperation.signup,
+            });
 
-          yield* HttpApiBuilder.securitySetCookie(
-            sessionCookies,
-            signupResult.credential,
-            {
-              httpOnly: true,
-              sameSite: 'lax',
-              path: '/api',
-              secure: mode === 'production',
-              expires: signupResult.expiresAt,
-              maxAge: Duration.millis(sessionLifetimeMs),
-            },
-          );
+            const signupResult = yield* service.signup(rest).pipe(
+              Effect.catchTags({
+                AuthEmailAlreadyExistsError: () =>
+                  new AuthEmailAlreadyExistsHttpError(),
+                AuthInternalError: handleTechnicalError,
+                AuthUnavailableError: handleTechnicalError,
+              }),
+            );
 
-          return signupResult.user;
-        }),
-      );
+            yield* HttpApiBuilder.securitySetCookie(
+              sessionCookies,
+              signupResult.credential,
+              {
+                ...securityCookiesBaseOptions,
+                secure: mode === 'production',
+                expires: signupResult.expiresAt,
+                maxAge: Duration.millis(sessionLifetimeMs),
+              },
+            );
+
+            return signupResult.user;
+          }),
+        )
+        .handle(AuthOperation.login, ({ payload }) =>
+          Effect.gen(function* () {
+            const service = yield* AuthService;
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              instance: authLoginPath,
+              userId: null,
+              operation: AuthOperation.login,
+            });
+            const loginResult = yield* service.login(payload).pipe(
+              Effect.catchTags({
+                AuthInvalidCredentialsError: () =>
+                  new AuthInvalidCredentialsHttpError(),
+                AuthInternalError: handleTechnicalError,
+                AuthUnavailableError: handleTechnicalError,
+              }),
+            );
+
+            yield* HttpApiBuilder.securitySetCookie(
+              sessionCookies,
+              loginResult.credential,
+              {
+                ...securityCookiesBaseOptions,
+                secure: mode === 'production',
+                expires: loginResult.expiresAt,
+                maxAge: Duration.millis(sessionLifetimeMs),
+              },
+            );
+
+            return loginResult.user;
+          }),
+        );
     }),
 );

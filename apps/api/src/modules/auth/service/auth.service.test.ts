@@ -1,4 +1,4 @@
-import { describe, it } from '@effect/vitest';
+import { describe, expect, it } from '@effect/vitest';
 import { assertSome, assertTrue } from '@effect/vitest/utils';
 import { Effect, Encoding, Layer, Option, Redacted } from 'effect';
 import * as TestClock from 'effect/testing/TestClock';
@@ -6,6 +6,10 @@ import { createHash } from 'node:crypto';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
+import {
+  PasswordCredentialsInvalidRecord,
+  PasswordCredentialsRepositoryError,
+} from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import {
   PasswordCredentialsRepository,
   PasswordCredentialsRepositoryLive,
@@ -15,6 +19,7 @@ import {
   SessionRepositoryLive,
 } from '#modules/auth/repository/session/sesion.repository.js';
 import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/session/session.repository.errors.js';
+import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
 import { AuthInternalError } from '#modules/auth/service/auth.service.errors.js';
@@ -159,5 +164,100 @@ describe('AuthService', () => {
         ),
       ),
     ),
+  );
+  it.effect('rolls back the user when password credential creation fails', () =>
+    Effect.gen(function* () {
+      const passwordRepo = Layer.succeed(PasswordCredentialsRepository, {
+        create: () =>
+          new PasswordCredentialsRepositoryError({
+            cause: 'error',
+            operation: PasswordCredentialsOperations.create,
+          }),
+        getByUserId: () => Effect.die('Should not be used'),
+      });
+
+      const repos = Layer.mergeAll(
+        UsersRepositoryLive,
+        passwordRepo,
+        SessionRepositoryLive,
+      ).pipe(Layer.provideMerge(DbLayer));
+
+      const program = Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const db = yield* DB;
+
+        yield* TestClock.setTime(Date.now());
+
+        const usersReq = db.selectFrom('users').selectAll().orderBy('id');
+        const sessionsReq = db.selectFrom('sessions').selectAll().orderBy('id');
+        const passwordsReq = db
+          .selectFrom('passwordCredentials')
+          .selectAll()
+          .orderBy('userId');
+
+        const usersBefore = yield* usersReq;
+        const sessionsBefore = yield* sessionsReq;
+        const passwordsBefore = yield* passwordsReq;
+
+        const signupError = yield* Effect.flip(
+          auth.signup({
+            ...signupInput,
+            email: email2,
+          }),
+        );
+        expect(signupError).toBeInstanceOf(AuthInternalError);
+        if (signupError._tag === 'AuthInternalError') {
+          expect(signupError.cause).toBeInstanceOf(
+            PasswordCredentialsRepositoryError,
+          );
+        }
+
+        const usersAfter = yield* usersReq;
+        const sessionsAfter = yield* sessionsReq;
+        const passwordsAfter = yield* passwordsReq;
+        expect(usersAfter).toEqual(usersBefore);
+        expect(sessionsAfter).toEqual(sessionsBefore);
+        expect(passwordsAfter).toEqual(passwordsBefore);
+      }).pipe(
+        Effect.provide(
+          AuthServiceLive.pipe(
+            Layer.provideMerge(Layer.mergeAll(repos, cryptoFixedLayer)),
+          ),
+        ),
+      );
+
+      yield* program;
+    }),
+  );
+
+  it.effect(
+    'returns an internal error when stored password credentials are invalid',
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const usersRepo = yield* UsersRepository;
+        const db = yield* DB;
+
+        yield* TestClock.setTime(Date.now());
+        const signupResult = yield* auth.signup(signupInput);
+        const savedUser = yield* usersRepo.getById(signupResult.user.id);
+
+        assertSome(savedUser, signupResult.user);
+
+        yield* db
+          .updateTable('passwordCredentials')
+          .set('passwordHash', 'brokenHash')
+          .where('userId', '=', savedUser.value.id);
+
+        const sessionsReq = db.selectFrom('sessions').selectAll().orderBy('id');
+        const sessionsBefore = yield* sessionsReq;
+        const loginResult = yield* Effect.flip(auth.login({ email, password }));
+        const sessionsAfter = yield* sessionsReq;
+        expect(sessionsAfter).toEqual(sessionsBefore);
+        expect(loginResult).toBeInstanceOf(AuthInternalError);
+        expect(loginResult.cause).toBeInstanceOf(
+          PasswordCredentialsInvalidRecord,
+        );
+      }).pipe(Effect.provide(authLayer)),
   );
 });

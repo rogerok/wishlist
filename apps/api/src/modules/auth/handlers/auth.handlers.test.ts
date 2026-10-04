@@ -70,6 +70,7 @@ const makeApp = (
 ) => {
   const authLayer = Layer.succeed(AuthService, {
     signup: () => effect,
+    login: () => Effect.die(new Error('Unexpected call: login')),
   });
 
   const config = ConfigProvider.fromUnknown({
@@ -91,7 +92,7 @@ const makeApp = (
   );
 };
 
-const makeRequest = () =>
+const makeSignupRequest = () =>
   new Request(
     `http://localhost/api/${authGroupIdentifier}/${AuthOperation.signup}`,
     {
@@ -120,7 +121,7 @@ describe('signup errors handling', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const request = makeRequest();
+      const request = makeSignupRequest();
       const resp = yield* Effect.promise(() => app.handler(request));
       const json = yield* Effect.promise(() => resp.json());
       const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
@@ -161,7 +162,7 @@ describe('signup errors handling', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const request = makeRequest();
+      const request = makeSignupRequest();
       const resp = yield* Effect.promise(() => app.handler(request));
       const json = yield* Effect.promise(() => resp.json());
       const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
@@ -204,7 +205,7 @@ describe('signup errors handling', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const request = makeRequest();
+      const request = makeSignupRequest();
       const resp = yield* Effect.promise(() => app.handler(request));
       const json = yield* Effect.promise(() => resp.json());
       const body = yield* Schema.decodeUnknownEffect(AuthUnavailableHttpError)(
@@ -244,7 +245,9 @@ describe('signup errors handling', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const resp = yield* Effect.promise(() => app.handler(makeRequest()));
+      const resp = yield* Effect.promise(() =>
+        app.handler(makeSignupRequest()),
+      );
       const json = yield* Effect.promise(() => resp.json());
       const body = yield* Schema.decodeUnknownEffect(AuthUnavailableHttpError)(
         json,
@@ -280,7 +283,9 @@ describe('signup errors handling', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const resp = yield* Effect.promise(() => app.handler(makeRequest()));
+      const resp = yield* Effect.promise(() =>
+        app.handler(makeSignupRequest()),
+      );
       const json = yield* Effect.promise(() => resp.json());
       const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
         json,
@@ -323,7 +328,9 @@ describe('signup errors handling', () => {
           (app) => Effect.promise(() => app.dispose()),
         );
 
-        const resp = yield* Effect.promise(() => app.handler(makeRequest()));
+        const resp = yield* Effect.promise(() =>
+          app.handler(makeSignupRequest()),
+        );
         const json = yield* Effect.promise(() => resp.json());
         const body = yield* Schema.decodeUnknownEffect(
           AuthEmailAlreadyExistsHttpError,
@@ -371,7 +378,9 @@ describe('successful signup', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const resp = yield* Effect.promise(() => app.handler(makeRequest()));
+      const resp = yield* Effect.promise(() =>
+        app.handler(makeSignupRequest()),
+      );
       const json = yield* Effect.promise(() => resp.json());
       const cookies = resp.headers.getSetCookie();
       const credsCookies = cookies[0];
@@ -408,7 +417,9 @@ describe('successful signup', () => {
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const resp = yield* Effect.promise(() => app.handler(makeRequest()));
+      const resp = yield* Effect.promise(() =>
+        app.handler(makeSignupRequest()),
+      );
       const cookies = resp.headers.getSetCookie();
       const credsCookies = cookies[0];
       expect(cookies).toHaveLength(1);
