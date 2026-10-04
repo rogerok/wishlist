@@ -15,7 +15,10 @@ import {
 } from '#infra/errors/request-validation.js';
 import { authGroup } from '#modules/auth/api/auth.api.js';
 import { AuthModuleLive } from '#modules/auth/auth.module.js';
-import { AuthHandlersLive } from '#modules/auth/handlers/auth.handlers.js';
+import {
+  AuthHandlersLive,
+  SessionAuthenticationLive,
+} from '#modules/auth/handlers/auth.handlers.js';
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
 import {
   SessionRepository,
@@ -48,7 +51,11 @@ const makeApp = (
   const routes = HttpApiBuilder.layer(testApi).pipe(
     Layer.provide([
       AuthHandlersLive.pipe(
-        Layer.provide([RequestValidationMiddlewareLive, config]),
+        Layer.provide([
+          RequestValidationMiddlewareLive,
+          SessionAuthenticationLive.pipe(Layer.provide(authLayer)),
+          config,
+        ]),
       ),
       NodeHttpServer.layerHttpServices,
     ]),

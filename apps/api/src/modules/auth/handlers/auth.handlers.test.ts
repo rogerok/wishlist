@@ -27,7 +27,10 @@ import {
   AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import { authGroup } from '#modules/auth/api/auth.api.js';
-import { AuthHandlersLive } from '#modules/auth/handlers/auth.handlers.js';
+import {
+  AuthHandlersLive,
+  SessionAuthenticationLive,
+} from '#modules/auth/handlers/auth.handlers.js';
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import {
@@ -81,7 +84,11 @@ const makeApp = (
   const testAppLive = HttpApiBuilder.layer(testApi).pipe(
     Layer.provide([
       AuthHandlersLive.pipe(
-        Layer.provide([RequestValidationMiddlewareLive, config]),
+        Layer.provide([
+          RequestValidationMiddlewareLive,
+          SessionAuthenticationLive.pipe(Layer.provide(authLayer)),
+          config,
+        ]),
       ),
       NodeHttpServer.layerHttpServices,
     ]),

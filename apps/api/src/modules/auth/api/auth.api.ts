@@ -4,6 +4,7 @@ import { asProblemJson } from '#infra/errors/http-problem.js';
 import {
   authGroupIdentifier,
   authLoginPath,
+  authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
 import {
@@ -12,11 +13,13 @@ import {
   AuthInvalidCredentialsHttpError,
   AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
+import { SessionAuthentication } from '#modules/auth/api/session-authentication.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import {
   LoginRequestBodySchema,
   LoginResponseSuccessSchema,
 } from '#modules/auth/schemas/login/login.schema.js';
+import { MeResponseBodySchema } from '#modules/auth/schemas/me/me.schema.js';
 import {
   SignupRequestBodySchema,
   SignupResponseSuccessSchema,
@@ -44,14 +47,9 @@ export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
       ...authCommonErrors,
     ],
   }),
-  // HttpApiEndpoint.get(AuthOperation.me, authMePath, {
-  //   success: MeResponseBodySchema,
-  //   error: [
-  //     AuthUnauthenticatedHttpError.pipe(asProblemJson),
-  //     AuthInternalHttpError.pipe(asProblemJson),
-  //     AuthUnavailableHttpError.pipe(asProblemJson),
-  //   ],
-  // }),
+  HttpApiEndpoint.get(AuthOperation.me, authMePath, {
+    success: MeResponseBodySchema,
+  }).middleware(SessionAuthentication),
   // HttpApiEndpoint.post(AuthOperation.logout, authLogoutPath, {
   //   success: HttpApiSchema.NoContent,
   //   error: [AuthUnavailableHttpError.pipe(asProblemJson)],

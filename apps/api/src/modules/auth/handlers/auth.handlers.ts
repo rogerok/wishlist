@@ -1,7 +1,7 @@
 import type { Cookie } from 'effect/unstable/http/Cookies';
 
-import { type Cause, Duration, Effect, Match } from 'effect';
-import { HttpApiBuilder, HttpApiSecurity } from 'effect/unstable/httpapi';
+import { type Cause, Duration, Effect, Layer, Match } from 'effect';
+import { HttpApiBuilder } from 'effect/unstable/httpapi';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { match, P } from 'ts-pattern';
 
@@ -17,15 +17,21 @@ import { ModeConfig } from '#infra/config/config.js';
 import {
   authGroupIdentifier,
   authLoginPath,
+  authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
 import {
   AuthEmailAlreadyExistsHttpError,
   AuthInternalHttpError,
   AuthInvalidCredentialsHttpError,
+  AuthUnauthenticatedHttpError,
   AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
-import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
+import {
+  CurrentSession,
+  SessionAuthentication,
+  sessionCookieSecurity,
+} from '#modules/auth/api/session-authentication.js';
 import { AuthFailureReason } from '#modules/auth/schemas/auth-logs.schema.js';
 import { AuthLogEvent } from '#modules/auth/schemas/auth-logs.schema.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
@@ -154,10 +160,6 @@ export const AuthHandlersLive = HttpApiBuilder.group(
   authGroupIdentifier,
   (handlers) =>
     Effect.gen(function* () {
-      const sessionCookies = HttpApiSecurity.apiKey({
-        key: cookieSessionKey,
-        in: 'cookie',
-      });
       const mode = yield* ModeConfig;
 
       return handlers
@@ -182,7 +184,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
             );
 
             yield* HttpApiBuilder.securitySetCookie(
-              sessionCookies,
+              sessionCookieSecurity,
               signupResult.credential,
               {
                 ...securityCookiesBaseOptions,
@@ -213,7 +215,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
             );
 
             yield* HttpApiBuilder.securitySetCookie(
-              sessionCookies,
+              sessionCookieSecurity,
               loginResult.credential,
               {
                 ...securityCookiesBaseOptions,
@@ -225,6 +227,39 @@ export const AuthHandlersLive = HttpApiBuilder.group(
 
             return loginResult.user;
           }),
+        )
+        .handle(AuthOperation.me, () =>
+          Effect.gen(function* () {
+            // Взять User из Context, который заполнил middleware
+            // TODO(you) 3: прочитать CurrentSession и вернуть публичного User.
+            return yield* Effect.die('TODO(you) 3: /me handler');
+          }),
         );
     }),
+);
+
+export const SessionAuthenticationLive = Layer.effect(
+  SessionAuthentication,
+  Effect.gen(function* () {
+    const service = yield* AuthService;
+    const handleTechnicalError = makeTechnicalErrorHandler({
+      instance: authMePath,
+      userId: null,
+      operation: AuthOperation.me,
+    });
+
+    return {
+      cookie: (httpEffect, { credential }) =>
+        Effect.gen(function* () {
+          // Проверить cookie и перевести ошибки сервиса в HTTP-ошибки
+          // TODO(you) 1: вызвать service.authenticate(credential);
+          // отказ → AuthUnauthenticatedHttpError, технические ошибки → handleTechnicalError.
+          const session = yield* Effect.die('TODO(you) 1: authenticate');
+
+          // Пустить запрос дальше с сессией в Context
+          // TODO(you) 2: запустить httpEffect, предоставив ему CurrentSession.
+          return yield* Effect.die('TODO(you) 2: provide CurrentSession');
+        }),
+    };
+  }),
 );
