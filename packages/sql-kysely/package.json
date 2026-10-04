@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "lint": "eslint",
+    "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -32,12 +32,10 @@
   "devDependencies": {
     "@effect/sql-pg": "4.0.0-rc.108",
     "@effect/vitest": "4.0.0-rc.108",
-    "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.15.3",
     "effect": "4.0.0-rc.108",
-    "eslint": "^9.39.1",
     "kysely": "0.29.5",
     "typescript": "7.0.2",
     "vitest": "^4.1.10"

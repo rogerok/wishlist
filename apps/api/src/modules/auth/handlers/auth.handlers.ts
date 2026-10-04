@@ -1,5 +1,4 @@
 import type { Redacted } from 'effect';
-import type { Cookie } from 'effect/unstable/http/Cookies';
 
 import { type Cause, Duration, Effect, Layer, Match } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
@@ -154,12 +153,6 @@ const logAndFail = <E extends Cause.YieldableError>(
     return yield* error;
   });
 
-const securityCookiesBaseOptions: Cookie['options'] = {
-  httpOnly: true,
-  sameSite: 'lax',
-  path: '/api',
-};
-
 export const AuthHandlersLive = HttpApiBuilder.group(
   AppApi,
   authGroupIdentifier,
@@ -179,7 +172,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
       return handlers
         .handle(AuthOperation.signup, ({ payload }) =>
           Effect.gen(function* () {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            // oxlint-disable-next-line no-unused-vars
             const { passwordConfirm, ...rest } = payload;
             const service = yield* AuthService;
             const handleTechnicalError = makeTechnicalErrorHandler({
