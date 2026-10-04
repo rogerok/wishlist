@@ -4,12 +4,12 @@
 
 ## Сейчас
 
-Шаг: 1.6a — ката `AuthService.authenticate` (practice); затем 1.6b — middleware и `/me` (new).
-Следующее действие: владелец реализует `authenticate` в `auth.service.ts` → 7 тестов
-`auth.service.authenticate.test.ts` зелёные. Тесты проверены временной эталонной реализацией, 2026-10-04.
+Шаг: 1.6b — middleware и `/me` (режим new); 1.6a `AuthService.authenticate` закрыт.
+Следующее действие: агент сверяет HttpApiMiddleware rc.108 и готовит рабочий пример с пропусками.
 
 ## Проверено
 
+- Ката 1.6a: 7 из 7; все тесты API — 17 файлов, 100 passed, `--no-file-parallelism`, 2026-10-04.
 - Все тесты API — `vitest run --config vitest.config.ts --no-file-parallelism`: 16 файлов, 93 passed, 2026-10-04.
 - Перегрузка hasher при login → AuthUnavailableError, строки sessions не меняются; тест владельца, коммит 5e5fbf4.
 - `pnpm --filter @wishlist/api check-types` — без диагностик, 2026-10-04.

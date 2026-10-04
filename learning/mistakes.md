@@ -34,6 +34,20 @@ Reusable rule: один тест — один набор слоёв; подме�
 Mastery concept affected: Context.Service и Layer composition.
 ```
 
+### 2026-10-04 — поиск сессии по сырым байтам token
+
+```text
+Date: 2026-10-04
+Context / task: ката 1.6a, AuthService.authenticate.
+My prediction: getByTokenDigest(decodedCred) найдёт сессию, выданную при signup; «что-то не то кладу в session».
+Observed result: тест 5 падал — None, хотя signup записал сессию; signup при этом был верным.
+Root cause in plain language: в sessions хранится sha256 байтов token, а поиск шёл по самим байтам; tokenGenerator.generate создаёт новый token, а не хеширует присланный.
+Correction I made: общая функция digestSessionToken(bytes) в генераторе и в authenticate.
+Verification: ката 7 из 7; все тесты API 100 passed.
+Reusable rule: значение, которое пишется в БД и ищется в ней, вычисляет одна функция; сверяй путь одного значения по шагам.
+Mastery concept affected: Secure randomness и Session token digest.
+```
+
 ## Potential misconception to verify
 
 ### Effect creation может быть перепутан с Effect execution
