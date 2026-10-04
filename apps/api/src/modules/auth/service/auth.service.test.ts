@@ -22,11 +22,15 @@ import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/s
 import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
-import { AuthInternalError } from '#modules/auth/service/auth.service.errors.js';
+import {
+  AuthInternalError,
+  AuthUnavailableError,
+} from '#modules/auth/service/auth.service.errors.js';
 import {
   AuthService,
   AuthServiceLive,
 } from '#modules/auth/service/auth.service.js';
+import { PasswordHashOverloadedError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
@@ -66,6 +70,28 @@ const cryptoFixedLayer = Layer.mergeAll(
 
 const authLayer = AuthServiceLive.pipe(
   Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoLayer)),
+);
+
+const overloadedVerifyHasherLive = Layer.effect(
+  PasswordHasher,
+  Effect.gen(function* () {
+    const hasher = yield* PasswordHasher;
+    return {
+      ...hasher,
+      verify: () =>
+        new PasswordHashOverloadedError({ cause: 'too many requests' }),
+    };
+  }),
+).pipe(Layer.provide(PasswordHasherLive));
+
+const overloadedAuthLayer = AuthServiceLive.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      repoLayer,
+      overloadedVerifyHasherLive,
+      SessionTokenGeneratorLive.pipe(Layer.provide(SecureRandomBytesLive)),
+    ),
+  ),
 );
 
 const email = UserEmailSchema.make('test@example.test');
@@ -259,5 +285,29 @@ describe('AuthService', () => {
           PasswordCredentialsInvalidRecord,
         );
       }).pipe(Effect.provide(authLayer)),
+  );
+
+  it.effect(
+    'returns unavailable when password verification is overloaded',
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const db = yield* DB;
+
+        yield* TestClock.setTime(Date.now());
+        yield* auth.signup(signupInput);
+
+        const sessions = db
+          .selectFrom('sessions')
+          .select(['id', 'userId', 'createdAt', 'expiresAt'])
+          .orderBy('id');
+        const sessionsBefore = yield* sessions;
+        const loginResult = yield* Effect.flip(auth.login({ email, password }));
+        const sessionsAfter = yield* sessions;
+
+        expect(sessionsAfter).toEqual(sessionsBefore);
+        expect(loginResult).toBeInstanceOf(AuthUnavailableError);
+        expect(loginResult.cause).toBeInstanceOf(PasswordHashOverloadedError);
+      }).pipe(Effect.provide(overloadedAuthLayer)),
   );
 });
