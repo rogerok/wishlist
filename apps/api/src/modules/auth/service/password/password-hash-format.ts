@@ -1,61 +1,21 @@
-import { Effect, Encoding, Result, Schema } from 'effect';
+import { Effect, Encoding, Schema } from 'effect';
+
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password.schema.js';
 
 import {
-  base64UrlRegex,
+  DerivedKeyFromBase64Schema,
+  SaltFromBase64Schema,
+} from '#modules/auth/schemas/password/password.schema.js';
+import { StoredPasswordHashSchema } from '#modules/auth/schemas/password/password.schema.js';
+import {
   cryptAlgorithm,
   cryptOptions,
   cryptVersion,
   derivedKeyBytesLength,
-  derivedKeyTextLength,
   saltBytesLength,
-  saltTextLength,
   segmentsLength,
 } from '#modules/auth/service/constants.js';
 import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
-
-const canonicalBase64UrlFilter = Schema.makeFilter<string>(
-  (input) => {
-    const decoded = Encoding.decodeBase64Url(input);
-
-    return Result.match(decoded, {
-      onFailure: () => false,
-      onSuccess: (bytes) => Encoding.encodeBase64Url(bytes) === input,
-    });
-  },
-  {
-    expected: 'a canonical Base64URL string',
-  },
-);
-
-const makeFromBase64Schema = (bytesLength: number, textLength: number) =>
-  Schema.String.check(
-    Schema.isBase64Url(),
-    Schema.isPattern(base64UrlRegex),
-    Schema.isLengthBetween(textLength, textLength),
-    canonicalBase64UrlFilter,
-  ).pipe(
-    Schema.decodeTo(
-      Schema.Uint8ArrayFromBase64Url.check(
-        Schema.isLengthBetween(bytesLength, bytesLength),
-      ),
-    ),
-  );
-
-export const SaltFromBase64Schema = makeFromBase64Schema(
-  saltBytesLength,
-  saltTextLength,
-);
-export const DerivedKeyFromBase64Schema = makeFromBase64Schema(
-  derivedKeyBytesLength,
-  derivedKeyTextLength,
-);
-
-export const StoredPasswordHashSchema = Schema.String.pipe(
-  Schema.brand('StoredPasswordHash'),
-);
-export type StoredPasswordHash = Schema.Schema.Type<
-  typeof StoredPasswordHashSchema
->;
 
 export const serializePasswordHash = (
   salt: Uint8Array,

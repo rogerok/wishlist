@@ -9,6 +9,7 @@ import type {
 } from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import type {
   SessionCreateError,
+  SessionGetByTokenDigestError,
   SessionInvalidRecordError,
   SessionRepositoryError,
   SessionTokenDigestAlreadyExistsError,
@@ -22,6 +23,7 @@ import type {
   UserInvalidRecord,
   UsersRepositoryCreateError,
   UsersRepositoryError,
+  UsersRepositoryGetByError,
 } from '#modules/users/repository/users.repository.errors.js';
 
 export class AuthEmailAlreadyExistsError extends Data.TaggedError(
@@ -42,6 +44,12 @@ export class AuthUnavailableError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+export class AuthUnauthenticatedError extends Data.TaggedError(
+  'AuthUnauthenticatedError',
+)<{
+  readonly cause: unknown;
+}> {}
+
 export class AuthInternalError extends Data.TaggedError('AuthInternalError')<{
   readonly cause: unknown;
 }> {}
@@ -55,6 +63,16 @@ export type AuthLoginError =
   | AuthInternalError
   | AuthInvalidCredentialsError
   | AuthUnavailableError;
+
+export type AuthAuthenticateError =
+  | AuthInternalError
+  | AuthUnauthenticatedError
+  | AuthUnavailableError;
+
+export type AuthenticateOperationError =
+  | AuthUnauthenticatedError
+  | SessionGetByTokenDigestError
+  | UsersRepositoryGetByError;
 
 export type SignupOperationError =
   | PasswordCredentialsCreateError

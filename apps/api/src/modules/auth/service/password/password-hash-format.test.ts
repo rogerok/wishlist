@@ -3,8 +3,10 @@ import { Effect, Result, Schema } from 'effect';
 
 import {
   DerivedKeyFromBase64Schema,
-  parsePasswordHashStructure,
   SaltFromBase64Schema,
+} from '#modules/auth/schemas/password/password.schema.js';
+import {
+  parsePasswordHashStructure,
   serializePasswordHash,
 } from '#modules/auth/service/password/password-hash-format.js';
 import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';

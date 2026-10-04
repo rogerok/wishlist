@@ -10,6 +10,9 @@ import {
 } from '#modules/auth/service/constants.js';
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
+export const digestSessionToken = (tokenBytes: Uint8Array): Uint8Array =>
+  createHash('sha256').update(tokenBytes).digest();
+
 interface SecureRandomBytesShape {
   readonly get: (
     total: number,

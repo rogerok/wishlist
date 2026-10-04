@@ -71,6 +71,7 @@ const makeApp = (
   const authLayer = Layer.succeed(AuthService, {
     signup: () => effect,
     login: () => Effect.die(new Error('Unexpected call: login')),
+    authenticate: () => Effect.die(new Error('Unexpected call: authenticate')),
   });
 
   const config = ConfigProvider.fromUnknown({

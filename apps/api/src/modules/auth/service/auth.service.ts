@@ -1,15 +1,27 @@
-import { Clock, Context, Effect, Layer, Match, Option, Redacted } from 'effect';
+import {
+  Clock,
+  Context,
+  Effect,
+  Layer,
+  Match,
+  Option,
+  Redacted,
+  Schema,
+} from 'effect';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 
 import type {
   LoginRequestBody,
   LoginResult,
 } from '#modules/auth/schemas/login/login.schema.js';
+import type { AuthenticatedSession } from '#modules/auth/schemas/session/authenticated-session.schema.js';
 import type {
   SignupInput,
   SignupResult,
 } from '#modules/auth/schemas/signup/signup.schema.js';
 import type {
+  AuthAuthenticateError,
+  AuthenticateOperationError,
   AuthLoginError,
   AuthSignupError,
   LoginOperationError,
@@ -19,19 +31,27 @@ import type {
 import { DB } from '#infra/db/db.service.js';
 import { PasswordCredentialsRepository } from '#modules/auth/repository/password/password-credentials.repository.js';
 import { SessionRepository } from '#modules/auth/repository/session/sesion.repository.js';
+import { AuthTokenSchema } from '#modules/auth/schemas/auth.schema.js';
 import {
   AuthEmailAlreadyExistsError,
   AuthInternalError,
   AuthInvalidCredentialsError,
+  AuthUnauthenticatedError,
   AuthUnavailableError,
 } from '#modules/auth/service/auth.service.errors.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
 import { PasswordHasher } from '#modules/auth/service/password/password-hasher.service.js';
-import { SessionTokenGenerator } from '#modules/auth/service/session/session-token-generator.js';
+import {
+  digestSessionToken,
+  SessionTokenGenerator,
+} from '#modules/auth/service/session/session-token-generator.js';
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
 
 const invalidCredentialsError = new AuthInvalidCredentialsError({
   cause: 'Invalid credentials',
+});
+const unAuthenticatedError = new AuthUnauthenticatedError({
+  cause: `Can't authenticate`,
 });
 
 const mapSignupSqlError = (
@@ -96,8 +116,28 @@ const mapLoginError = (error: LoginOperationError): AuthLoginError =>
 
     Match.exhaustive,
   );
+const mapAuthenticateError = (
+  error: AuthenticateOperationError,
+): AuthAuthenticateError =>
+  Match.value(error).pipe(
+    Match.tag('AuthUnauthenticatedError', (error) => error),
+
+    Match.tag(
+      'InvalidUserRecord',
+      'SessionInvalidRecordError',
+      (cause) => new AuthInternalError({ cause }),
+    ),
+    Match.tag('SessionRepositoryError', 'UsersRepositoryError', (cause) =>
+      mapSignupSqlError(cause.cause, cause),
+    ),
+
+    Match.exhaustive,
+  );
 
 interface AuthServiceShape {
+  authenticate: (
+    credential: Redacted.Redacted<string>,
+  ) => Effect.Effect<AuthenticatedSession, AuthAuthenticateError>;
   login: (
     input: LoginRequestBody,
   ) => Effect.Effect<LoginResult, AuthLoginError>;
@@ -191,6 +231,33 @@ export const AuthServiceLive = Layer.effect(
         return { user: user.value, expiresAt: session.expiresAt, credential };
       }).pipe(Effect.mapError(mapLoginError));
 
-    return { signup, login };
+    const authenticate: AuthServiceShape['authenticate'] = (credential) =>
+      Effect.gen(function* () {
+        const decodedCred = yield* Schema.decodeEffect(AuthTokenSchema)(
+          Redacted.value(credential),
+        ).pipe(
+          Effect.mapError((cause) => new AuthUnauthenticatedError({ cause })),
+        );
+
+        const session = yield* sessionRepo.getByTokenDigest(
+          digestSessionToken(decodedCred),
+        );
+        if (Option.isNone(session)) {
+          return yield* unAuthenticatedError;
+        }
+
+        const user = yield* usersRepo.getById(session.value.userId);
+        if (Option.isNone(user)) {
+          return yield* unAuthenticatedError;
+        }
+
+        return {
+          user: user.value,
+          expiresAt: session.value.expiresAt,
+          sessionId: session.value.id,
+        };
+      }).pipe(Effect.mapError(mapAuthenticateError));
+
+    return { signup, login, authenticate };
   }),
 );

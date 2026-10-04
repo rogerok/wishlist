@@ -1,7 +1,9 @@
 export const saltBytesLength = 16;
 export const derivedKeyBytesLength = 32;
+export const tokenBytesLength = 32;
 export const saltTextLength = 22;
 export const derivedKeyTextLength = 43;
+export const tokenTextLength = 43;
 export const segmentsLength = 6;
 export const cryptVersion = 1;
 export const cryptAlgorithm = 'scrypt';
