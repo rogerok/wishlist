@@ -4,13 +4,13 @@
 
 ## Сейчас
 
-Шаг: 1.6b — middleware и `/me` (режим new); 1.6a `AuthService.authenticate` закрыт.
-Следующее действие: агент сверяет HttpApiMiddleware rc.108 и готовит рабочий пример с пропусками.
+Шаг: 1.6b — middleware и `/me` (режим new): [урок 0004](lessons/0004-security-middleware.html).
+Следующее действие: владелец заполняет TODO(you) 1–3 в `auth.handlers.ts` → 5 тестов `auth.me.test.ts` зелёные.
+Эталон до вырезания пропусков: 5 из 5. Коммит WIP: эти 5 тестов красные намеренно, остальные зелёные.
 
 ## Проверено
 
 - Ката 1.6a: 7 из 7; все тесты API — 17 файлов, 100 passed, `--no-file-parallelism`, 2026-10-04.
-- Все тесты API — `vitest run --config vitest.config.ts --no-file-parallelism`: 16 файлов, 93 passed, 2026-10-04.
 - Перегрузка hasher при login → AuthUnavailableError, строки sessions не меняются; тест владельца, коммит 5e5fbf4.
 - `pnpm --filter @wishlist/api check-types` — без диагностик, 2026-10-04.
 - `pnpm --filter @wishlist/api lint` — 0 ошибок, 8 предупреждений: вложенность handlers и Schema, используемая только как тип, 2026-10-04.
