@@ -4,14 +4,14 @@
 
 ## Сейчас
 
-Шаг: 1.5 — login реализован; HTTP-сценарии и тест повреждённых credentials проходят.
-Следующее действие: владелец пишет тест перегрузки hasher при login → AuthUnavailableError без изменения сессий.
-Задание и разбор: [ката login](lessons/0003-kata-login.html).
-Команда: `pnpm --filter @wishlist/api exec vitest run --config vitest.config.ts src/modules/auth/service/auth.service.test.ts`.
+Шаг: 1.6a — ката `AuthService.authenticate` (practice); затем 1.6b — middleware и `/me` (new).
+Следующее действие: владелец реализует `authenticate` в `auth.service.ts` → 7 тестов
+`auth.service.authenticate.test.ts` зелёные. Тесты проверены временной эталонной реализацией, 2026-10-04.
 
 ## Проверено
 
-- Перед коммитами: `pnpm --filter @wishlist/api exec vitest run --config vitest.config.ts --no-file-parallelism` — 16 файлов, 92 passed, 2026-10-04.
+- Все тесты API — `vitest run --config vitest.config.ts --no-file-parallelism`: 16 файлов, 93 passed, 2026-10-04.
+- Перегрузка hasher при login → AuthUnavailableError, строки sessions не меняются; тест владельца, коммит 5e5fbf4.
 - `pnpm --filter @wishlist/api check-types` — без диагностик, 2026-10-04.
 - `pnpm --filter @wishlist/api lint` — 0 ошибок, 8 предупреждений: вложенность handlers и Schema, используемая только как тип, 2026-10-04.
 - Настоящий Node server и отдельная PostgreSQL: health 200, signup 201; неизвестный email и неверный пароль дают одинаковый 401 без cookie.
@@ -25,7 +25,7 @@
 
 ## Не проверено
 
-- Технические отказы login: перегрузка hasher и ошибки БД пока отдельно не проверены.
+- Технические отказы login: ошибки БД отдельно не проверены.
 - Me/logout и полный HTTP cookie-jar сценарий; запуск собранного dist вместо tsx.
 - `0.3`: точный тест двух вызовов `randomBytes.get(32)`; production memory budget scrypt; понимание Phase 0.
 - Запас таймаута signup-теста под нагрузкой: ранее был timeout 5 с при параллельных smoke/typecheck; без них прогоны прошли.
@@ -37,3 +37,4 @@
 - Общий контейнер каты освобождается после группы; каждый зарегистрированный User удаляется при закрытии scope теста.
 - Тесты: ступень 1 (чтение); rollback и повреждённые credentials написаны с подсказками; mastery не повышался.
 - TestClock не меняет часы PostgreSQL; тест срока использует локальный TestClock.layer().
+- 1.2: срок проверяет repository по `Clock` (коммит 79d1a5c). Владелец обосновал: те же часы выдают срок, решение в одном месте.

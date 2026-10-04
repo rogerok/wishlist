@@ -20,7 +20,19 @@ Mastery concept affected:
 
 ## Confirmed mistakes
 
-Пока нет. Начальная инициализация не превращает выводы из code review в утверждения о мышлении пользователя.
+### 2026-10-04 — повторный `Effect.provide` вернул уже собранный сервис
+
+```text
+Date: 2026-10-04
+Context / task: тест перегрузки hasher при login, auth.service.test.ts.
+My prediction: Effect.provide(AuthServiceLive.pipe(Layer.provide(overloadedHasher))) внутри теста соберёт новый AuthService.
+Observed result: login прошёл успешно; overloadedAuth === auth.
+Root cause in plain language: внутренний provide наследует таблицу собранных слоёв внешнего и находит AuthServiceLive по ссылке.
+Correction I made: сначала Layer.fresh, затем один слой overloadedAuthLayer на весь тест.
+Verification: 5 из 5 тестов auth.service.test.ts; причина воспроизведена отдельным сценарием с сервисами A и B.
+Reusable rule: один тест — один набор слоёв; подменённая зависимость входит в слой теста, а не во второй provide.
+Mastery concept affected: Context.Service и Layer composition.
+```
 
 ## Potential misconception to verify
 

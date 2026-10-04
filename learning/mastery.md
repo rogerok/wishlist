@@ -22,7 +22,7 @@
 | Kysely queries и repository error mapping             |       3 | полный Users CRUD                                  | Transaction ownership и authorization scoping не проверены           |
 | Vitest и example-based tests                          |       2 | 10 файлов / 74 теста проходят                      | Setup исправлен; самостоятельное объяснение test design не проверено |
 | Property-based testing                                |       2 | один FastCheck invariant для passwordConfirm       | Generator/shrinking trade-offs не проверены                          |
-| Session auth domain model                             |       2 | contracts, migration, docs                         | Use cases и live behavior не реализованы                             |
+| Session auth domain model                             |       3 | ката login пройдена с подсказками, 2026-10-04      | Me/logout и cookie-jar сценарий не реализованы                       |
 | Password hash format parsing                          |       3 | parser/serializer и полный hasher с tests          | Самостоятельное объяснение native boundary не подтверждено           |
 | Secure randomness и Session token digest              |       1 | generator реализован, known-vector/freshness tests | Остаток `0.3`: deterministic test двух обращений по 32 bytes         |
 | Async native callback/interruption semantics          |       1 | реализация, concurrency tests и mutation probe     | Самостоятельное понимание не проверено                               |
