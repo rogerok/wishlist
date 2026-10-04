@@ -14,17 +14,17 @@ The target is a production-grade modular monolith used as an iterative scale lab
 
 ## Current repository state
 
-Observed in the working code during the 2026-10-01 review (not a full end-to-end verification):
+Code inventory updated on 2026-10-04; verification results and limits live in [learning/STATE.md](../../learning/STATE.md).
 
 - `apps/api` uses Effect Platform, Effect Schema, PostgreSQL, Kysely, and Effect SQL;
-- the live `AppApi` and Layers include health, unauthenticated Users CRUD, and auth signup;
+- the live `AppApi` and Layers include health, unauthenticated Users CRUD, auth signup, and login;
 - auth request/response contracts, auth tables, validation tests, migration tests, and password-hash format parsing exist;
 - `PasswordHasherLive` and `SessionTokenGeneratorLive` are implemented and tested; hashing has a shared local limit of 2 active operations and 2 waiting operations;
-- credentials/Session repositories, signup in `AuthService`, its handler, cookie issuance, and live auth wiring exist; login, `me`, and logout routes are currently commented out;
+- credentials/Session repositories, signup and login in `AuthService`, their handlers, cookie issuance, and live auth wiring exist; `me` and logout routes are currently commented out;
 - the generated database model contains only Users, Password Credentials, and Sessions;
 - Wishlists, Wishlist Items, Sharing Links, Reservations, Guest Sessions, outbox jobs, images, notifications, and URL import are absent.
 
-**Текущий приоритет (2026-10-01): Milestone R — [рефакторинг ошибок и логирования](./error-handling-refactoring-plan.md).** Выполнить его до дальнейшего расширения auth и следующих продуктовых milestones. Прежний следующий шаг `PasswordCredentialsRepository` устарел: реализация уже есть. После Milestone R сверить оставшиеся критерии Session authentication с кодом, не реализуя заново готовые части. Production memory budget, deterministic token test и самостоятельное понимание не считаются закрытыми этим ревью.
+**Текущий шаг и результаты проверок:** [состояние обучения](../../learning/STATE.md). Порядок работ: Milestone R → оставшиеся критерии Session authentication. Существующие repositories, signup и сборку auth не реализовывать заново.
 
 The old product sketch is not the technical plan. Fastify, Zod, JWT/refresh tokens, and nanoid are removed from the roadmap: the repository already chose Effect Platform/Schema, PostgreSQL-backed opaque Sessions in [ADR-0001](../adr/0001-postgresql-backed-sessions.md), and UUID internal IDs. Sharing Links receive their own cryptographically random public keys because they have a different lifecycle from internal entity IDs.
 
@@ -96,7 +96,7 @@ Required email and Import Preview work is persisted in PostgreSQL and claimed by
 
 Each milestone is a complete vertical slice. Do not start the next milestone with known failures in the current one.
 
-### Milestone R — Ошибки и логирование: текущий приоритет
+### Milestone R — Ошибки и логирование
 
 Подробный порядок, границы и критерии готовности: [план рефакторинга](./error-handling-refactoring-plan.md).
 
@@ -108,11 +108,7 @@ Each milestone is a complete vertical slice. Do not start the next milestone wit
 
 Критерий выхода: матрица ошибок и безопасности логов из отдельного плана проходит; уровни repository → service → HTTP
 сохранены, нет универсального `AppError` и широкого перехвата отмены/непредвиденных сбоев.
-Производственные изменения кода выполнены. Девять тестов настоящего `AuthHandlersLive` покрывают ошибки,
-успешный signup, production-cookie и валидацию лишнего поля; устаревшие API-тесты удалены.
-Проверка типов и целевой lint прошли.
-**Следующий шаг:** R.5 — общие проверки и реальный Node/PostgreSQL signup smoke.
-Полный Vitest suite, общий lint и smoke с БД ещё не подтверждены; весь Milestone R не закрыт.
+Результаты проверок и следующий шаг — в [состоянии обучения](../../learning/STATE.md).
 
 ### Milestone 1 — Complete thin Session authentication
 

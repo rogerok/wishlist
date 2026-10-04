@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор: точная граница срока сессии</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Разбор · Session и Clock · 5 минут</div>
+    <h1>Сессия перестаёт находиться точно в момент expiresAt</h1>
+    <p class="lede">Ты добавил условие срока в repository. Агент добавил тест перехода через границу. Разберём три решения в этой проверке.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/auth/repository/session/sesion.repository.ts">Repository</a>
+      <a class="button" href="../../apps/api/src/modules/auth/repository/session/session.repository.test.ts">Регрессионный тест</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card decision" id="d1">
+      <h2>1. Тест проверяет точный момент истечения</h2>
+      <p><span class="label">Что</span><code>session.repository.test.ts:40–47</code>: часы переходят через срок с шагом 1 мс.</p>
+<pre><code>yield* TestClock.setTime(expiresAt.getTime() - 1);
+expect(yield* lookup).toBeOptionSome(session);
+
+yield* TestClock.setTime(expiresAt.getTime());
+expect(yield* lookup).toBeOptionNone();
+
+yield* TestClock.setTime(expiresAt.getTime() + 1);
+expect(yield* lookup).toBeOptionNone();</code></pre>
+      <p><span class="label">Почему</span>Проверка только до и после срока не отличает <code>&gt;</code> от <code>&gt;=</code>. Равенство должно давать <code>None</code>.</p>
+      <p><span class="label">Цена</span>Тест фиксирует точность до миллисекунды. В PostgreSQL столбец имеет тип <code>timestamp(3)</code>, а часы приложения возвращают миллисекунды.</p>
+<pre class="mermaid">
+stateDiagram-v2
+  state "Поиск возвращает Some(session)" as valid
+  state "Поиск возвращает None" as expired
+  [*] --> valid: now меньше expiresAt
+  valid --> expired: now достигает expiresAt
+  expired --> expired: now больше expiresAt
+</pre>
+      <p>Это изменение результата поиска, а не удаление строки. Просроченная сессия может оставаться в таблице.</p>
+      <details><summary>Если заменить &gt; на &gt;=, какой из трёх случаев сломается?</summary><p>Точное равенство: запрос вернёт сессию вместо <code>None</code>. <a href="#d1">Решение 1</a>.</p></details>
+    </section>
+    <section class="card decision" id="d2">
+      <h2>2. Один Effect запускается при разном времени</h2>
+      <p><span class="label">Что</span><code>session.repository.test.ts:37–41</code>: описание поиска создаётся до установки времени.</p>
+<pre><code>const session = yield* repo.create(userId, digest, expiresAt);
+const lookup = repo.getByTokenDigest(digest);
+
+yield* TestClock.setTime(expiresAt.getTime() - 1);
+expect(yield* lookup).toBeOptionSome(session);</code></pre>
+      <p><span class="label">Почему</span><code>lookup</code> хранит описание вычисления, а не найденную сессию. Каждый <code>yield* lookup</code> снова читает Clock и выполняет запрос.</p>
+      <p>Если сохранить время при создании Layer, все три запуска будут сравнивать срок с одним старым значением. Тест обнаружит это.</p>
+      <p><span class="label">Цена</span>Тест выполняет три запроса к настоящей PostgreSQL. Это проверяет результат SQL-фильтра, а не только сравнение двух чисел.</p>
+      <details><summary>Часы перешли за expiresAt. Нужно ли заново вызывать getByTokenDigest, если lookup уже создан?</summary><p>Нет. Повторный <code>yield* lookup</code> заново прочитает Clock внутри <code>Effect.gen</code>. <a href="#d2">Решение 2</a>.</p></details>
+    </section>
+    <section class="card decision" id="d3">
+      <h2>3. Новые часы принадлежат только этому тесту</h2>
+      <p><span class="label">Что</span><code>session.repository.test.ts:46–48</code>: тест получает собственный экземпляр часов.</p>
+<pre><code>  yield* TestClock.setTime(expiresAt.getTime() + 1);
+  expect(yield* lookup).toBeOptionNone();
+}).pipe(Effect.provide(TestClock.layer())),</code></pre>
+      <p><span class="label">Почему</span>В первой версии агент сдвинул общие часы группы <code>layer(repoLayer)</code>. Два соседних теста получили <code>None</code> вместо живой сессии.</p>
+      <p>Отдельный <code>TestClock.layer()</code> не меняет часы соседних тестов. Контейнер PostgreSQL при этом остаётся общим для группы.</p>
+      <p><span class="label">Цена</span>У теста появляется отдельный Layer часов. <code>TestClock</code> управляет временем Effect, но не <code>now()</code> PostgreSQL.</p>
+      <p>Поэтому тест создаёт сессию со сроком завтра, чтобы выполнить ограничение БД <code>expires_at &gt; created_at</code>. Затем он перемещает только часы приложения.</p>
+      <details><summary>Тест перевёл TestClock на завтра. Переведётся ли время PostgreSQL и соседних тестов?</summary><p>Нет. PostgreSQL использует собственные часы, а локальный Layer изолирует часы этого теста. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+    <section class="card">
+      <h2>Источники и границы проверки</h2>
+      <p><a href="../../docs/auth/implementation-plan.md">Контракт auth</a> требует, чтобы expiresAt был позже текущего времени приложения.</p>
+      <p><a href="../../apps/api/node_modules/effect/src/testing/TestClock.ts">TestClock установленной версии Effect</a> описывает <code>setTime</code> и <code>layer()</code>.</p>
+      <p>Эта проверка относится к repository. Она не доказывает работу HTTP-аутентификации <code>/me</code>, которая ещё не реализована.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0001-debrief-signup.html">Предыдущий разбор: signup</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

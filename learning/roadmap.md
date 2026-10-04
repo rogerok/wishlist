@@ -15,22 +15,21 @@
 [план рефакторинга ошибок и логирования](../docs/product/error-handling-refactoring-plan.md).
 Это Milestone R [общего плана](../docs/product/implementation-plan.md), а не новая продуктовая фаза.
 
-| Шаг   | Задача владельца                                                              | Проверка агента                                                      |
-| ----- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| R.1   | Политика и воспроизведение зафиксированы; постоянное покрытие добавлено в R.5 | Users regression и девять auth handler tests существуют              |
-| R.2   | Безопасная диагностика `users` и `auth`                                       | Причины различимы, чувствительных значений нет в логах и ответах     |
-| R.3   | Согласовать SQL-классификацию и затронутые контракты                          | Временный отказ — 503, внутренний сбой — 500, 404/409 сохранены      |
-| R.4   | Убрать повторение технического HTTP-перевода в `users`                        | Верные DELETE `reason`, PUT `instance`, узкие типы ошибок            |
-| → R.5 | Завершить проверку приложения целиком                                         | Auth handler: 9 passed; далее общие проверки и Node/PostgreSQL smoke |
+| Шаг | Задача владельца                                                              | Проверка агента                                                  |
+| --- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| R.1 | Политика и воспроизведение зафиксированы; постоянное покрытие добавлено в R.5 | Users regression и девять auth handler tests существуют          |
+| R.2 | Безопасная диагностика `users` и `auth`                                       | Причины различимы, чувствительных значений нет в логах и ответах |
+| R.3 | Согласовать SQL-классификацию и затронутые контракты                          | Временный отказ — 503, внутренний сбой — 500, 404/409 сохранены  |
+| R.4 | Убрать повторение технического HTTP-перевода в `users`                        | Верные DELETE `reason`, PUT `instance`, узкие типы ошибок        |
+| R.5 | Проверить приложение целиком                                                  | Все тесты, lint, настоящий Node/PostgreSQL health/signup/cookie  |
 
 **Точка продолжения:** [STATE.md](./STATE.md).
 
 Проверка понимания по необходимости: какие сведения нужно сохранить внутри цепочки причин, но не выводить в лог?
 Функциональная готовность не означает самостоятельное освоение.
 
-Checkpoint Phase 1 ниже исторический: при ревью уже найдены SessionsRepository, signup transaction, handler/cookie
-и live wiring. Их полная готовность не перепроверялась. После R.5 сверить критерии `1.2–1.4`, `1.8` с кодом;
-не начинать повторную реализацию по старым формулировкам таблицы. Открытые вопросы Phase 0 сохраняются.
+Результаты сверки с кодом и следующий шаг — в [STATE.md](./STATE.md).
+Не реализовывать заново существующие signup transaction, handler/cookie и сборку зависимостей.
 
 ## 0. Feedback loop и security primitives
 
@@ -65,23 +64,22 @@ Production memory budget не определён; локальные лимит�
 
 ## 1. PostgreSQL Session authentication
 
-**Checkpoint 2026-09-29:** `1.1` реализован; пять интеграционных тестов credentials repository на PostgreSQL проходят.
-Совместно с миграциями — 9 passed; детали проверок и учебный статус в [progress](./progress.md).
-Прежний следующий шаг был `1.2`; теперь приоритет — `R.1–R.5` выше. Phase 0 и самостоятельное понимание учитываются отдельно.
+Текущий статус и ограничения проверки — в [STATE.md](./STATE.md).
+История обучения — в [progress](./progress.md).
 
-| Шаг  | Практическая проблема                                           | Концепция                                     | Маленькая задача владельца                                              | Проверка агента                                                             | Проверка понимания                                         |
-| ---- | --------------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1.1  | Credentials repository реализован                               | Repository boundary для чувствительных данных | Выполнено: insert/load Password Credential с точной error mapping       | 5 Testcontainers tests: round-trip, missing, duplicate, invalid record, FK  | Почему обычный User query не выбирает password hash?       |
-| 1.2  | SessionsRepository уже есть; критерии требуют актуальной сверки | Digest lookup и expiration predicate          | После R.5 проверить существующую реализацию вместо повторной разработки | create, valid lookup, expired miss, delete current                          | Где авторитетно решается валидность Session?               |
-| 1.3  | Signup состоит из трёх зависимых writes                         | Transaction boundary                          | Реализовать signup transaction в `AuthService`                          | Fault после каждого insert оставляет 0 частичных строк                      | Почему transaction принадлежит use case?                   |
-| 1.4  | Signup должен вернуть cookie и public User                      | HTTP adapter responsibility                   | Подключить signup handler и cookie issuance                             | HTTP integration: 201, body, cookie attributes                              | Какие данные не должны перейти из service в response/logs? |
-| 1.5  | Login не должен раскрывать, что именно неверно                  | Enumeration-resistant error contract          | Реализовать password lookup/verify и fresh Session                      | Unknown email и wrong password дают один 401; success создаёт новую Session | Почему нельзя вернуть разные ошибки для email и password?  |
-| 1.6  | `/me` пока не получает principal                                | HttpApi security middleware и Context         | Разрешить required cookie в `AuthenticatedSession`                      | missing/malformed/unknown/expired одинаково 401                             | Почему пустой decoded credential нужно проверить явно?     |
-| 1.7  | Logout имеет другую optional credential semantics               | Идемпотентность и optional authentication     | Реализовать delete current Session и expire cookie                      | No cookie/unknown cookie 204; DB failure 503                                | Почему logout не должен ослаблять middleware `/me`?        |
-| 1.8  | Auth contracts существуют только в isolated tests               | Live Layer composition                        | Добавить auth group/handlers/services в `AppApi` и `AppServicesLive`    | App boots; dependency graph без missing services                            | Что предоставляет Layer и что он требует?                  |
-| 1.9  | Старый `POST /api/users` обходит Password Credential            | Clean cutover                                 | Удалить credential-free public creation и мигрировать callers/tests     | Публичного обходного endpoint нет                                           | Какой security invariant ломает старый endpoint?           |
-| 1.10 | In-memory test не доказывает browser transport                  | Process-level smoke test                      | Запустить signup→me→login→logout через cookie jar                       | Реальный Node server и PostgreSQL проходят сценарий                         | Что этот smoke test доказывает сверх HttpApi handler test? |
-| 1.11 | Auth slice должен иметь понятную failure map                    | Feynman checkpoint                            | Нарисовать state transitions и dependency graph                         | Устное/текстовое объяснение без подсказки                                   | Какие строки остаются после failed signup и почему?        |
+| Шаг   | Практическая проблема                                | Концепция                                     | Маленькая задача владельца                                                                                  | Проверка агента                                                             | Проверка понимания                                         |
+| ----- | ---------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 1.1   | Credentials repository реализован                    | Repository boundary для чувствительных данных | Выполнено: insert/load Password Credential с точной error mapping                                           | 5 Testcontainers tests: round-trip, missing, duplicate, invalid record, FK  | Почему обычный User query не выбирает password hash?       |
+| 1.2   | Поиск сессии должен учитывать срок действия          | Digest lookup и expiration predicate          | Сохранять проверку времени при каждом запуске поиска                                                        | До expiresAt — Session; на границе и после — отсутствие Session             | Где авторитетно решается валидность Session?               |
+| 1.3   | Signup состоит из трёх зависимых writes              | Transaction boundary                          | Сохранять проверки отката при отказе записи Password Credential и Session                                   | Ни одного частичного signup после каждого отказа                            | Почему transaction принадлежит use case?                   |
+| 1.4   | Signup должен вернуть cookie и public User           | HTTP adapter responsibility                   | Сохранить существующий signup handler и выдачу cookie                                                       | HTTP integration: 201, body, cookie attributes                              | Какие данные не должны перейти из service в response/logs? |
+| → 1.5 | Login не должен раскрывать, что именно неверно       | Enumeration-resistant error contract          | Пройти [кату login](lessons/0003-kata-login.html): getByEmail, password lookup/verify, fresh Session и HTTP | Unknown email и wrong password дают один 401; success создаёт новую Session | Почему нельзя вернуть разные ошибки для email и password?  |
+| 1.6   | `/me` пока не получает principal                     | HttpApi security middleware и Context         | Разрешить required cookie в `AuthenticatedSession`                                                          | missing/malformed/unknown/expired одинаково 401                             | Почему пустой decoded credential нужно проверить явно?     |
+| 1.7   | Logout имеет другую optional credential semantics    | Идемпотентность и optional authentication     | Реализовать delete current Session и expire cookie                                                          | No cookie/unknown cookie 204; DB failure 503                                | Почему logout не должен ослаблять middleware `/me`?        |
+| 1.8   | Новые auth handlers требуют подключения к приложению | Live Layer composition                        | Расширять существующую сборку auth по мере добавления login/me/logout                                       | App boots; dependency graph без missing services                            | Что предоставляет Layer и что он требует?                  |
+| 1.9   | Старый `POST /api/users` обходит Password Credential | Clean cutover                                 | Удалить credential-free public creation и мигрировать callers/tests                                         | Публичного обходного endpoint нет                                           | Какой security invariant ломает старый endpoint?           |
+| 1.10  | In-memory test не доказывает browser transport       | Process-level smoke test                      | Запустить signup→me→login→logout через cookie jar                                                           | Реальный Node server и PostgreSQL проходят сценарий                         | Что этот smoke test доказывает сверх HttpApi handler test? |
+| 1.11  | Auth slice должен иметь понятную failure map         | Feynman checkpoint                            | Нарисовать state transitions и dependency graph                                                             | Устное/текстовое объяснение без подсказки                                   | Какие строки остаются после failed signup и почему?        |
 
 ## 2. Identity и authorization
 
