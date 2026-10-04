@@ -2,7 +2,7 @@ import { scrypt } from 'crypto';
 import { Context, Effect, Layer, Option, Redacted, Semaphore } from 'effect';
 import { timingSafeEqual } from 'node:crypto';
 
-import type { StoredPasswordHash } from '#modules/auth/schemas/password/password.schema.js';
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
 import type { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 
 import {

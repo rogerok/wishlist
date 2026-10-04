@@ -1,13 +1,9 @@
 import { Effect, Schema, SchemaGetter } from 'effect';
 
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
+
 import { makeBrandedSchema } from '#infra/schemas/utils.js';
-import { makeFromBase64Schema } from '#modules/auth/schemas/base64url.schema.js';
-import {
-  derivedKeyBytesLength,
-  derivedKeyTextLength,
-  saltBytesLength,
-  saltTextLength,
-} from '#modules/auth/service/constants.js';
+import { StoredPasswordHashSchema } from '#modules/auth/schemas/password/password-hash.schema.js';
 import { parsePasswordHashStructure } from '#modules/auth/service/password/password-hash-format.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
@@ -20,13 +16,6 @@ export const PasswordSchema = makeBrandedSchema(
     Schema.isPattern(passwordRegex, { identifier: 'Password' }),
   ),
 );
-
-export const StoredPasswordHashSchema = Schema.String.pipe(
-  Schema.brand('StoredPasswordHash'),
-);
-export type StoredPasswordHash = Schema.Schema.Type<
-  typeof StoredPasswordHashSchema
->;
 
 const checkStoredPasswordHash = SchemaGetter.checkEffect<StoredPasswordHash>(
   (hash) =>
@@ -55,13 +44,3 @@ export const PasswordCredentialsSchema = Schema.Struct({
 export type PasswordCredentials = Schema.Schema.Type<
   typeof PasswordCredentialsSchema
 >;
-
-export const SaltFromBase64Schema = makeFromBase64Schema(
-  saltBytesLength,
-  saltTextLength,
-);
-
-export const DerivedKeyFromBase64Schema = makeFromBase64Schema(
-  derivedKeyBytesLength,
-  derivedKeyTextLength,
-);

@@ -1,12 +1,12 @@
 import { Effect, Encoding, Schema } from 'effect';
 
-import type { StoredPasswordHash } from '#modules/auth/schemas/password/password.schema.js';
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
 
 import {
   DerivedKeyFromBase64Schema,
   SaltFromBase64Schema,
-} from '#modules/auth/schemas/password/password.schema.js';
-import { StoredPasswordHashSchema } from '#modules/auth/schemas/password/password.schema.js';
+  StoredPasswordHashSchema,
+} from '#modules/auth/schemas/password/password-hash.schema.js';
 import {
   cryptAlgorithm,
   cryptOptions,

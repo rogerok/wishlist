@@ -4,10 +4,8 @@ import type {
   PasswordCredentialsCreateError,
   PasswordCredentialsGetByIdError,
 } from '#modules/auth/repository/password/password-credential.repository.errors.js';
-import type {
-  PasswordCredentials,
-  StoredPasswordHash,
-} from '#modules/auth/schemas/password/password.schema.js';
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
+import type { PasswordCredentials } from '#modules/auth/schemas/password/password.schema.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';

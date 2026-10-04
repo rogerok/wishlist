@@ -4,7 +4,7 @@ import { Effect, Result, Schema } from 'effect';
 import {
   DerivedKeyFromBase64Schema,
   SaltFromBase64Schema,
-} from '#modules/auth/schemas/password/password.schema.js';
+} from '#modules/auth/schemas/password/password-hash.schema.js';
 import {
   parsePasswordHashStructure,
   serializePasswordHash,
