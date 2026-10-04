@@ -90,7 +90,7 @@ export const UsersServiceLive = Layer.effect(
 
         return yield* Effect.fromOption(
           option,
-          () => new UserNotFoundError({ id }),
+          () => new UserNotFoundError({ cause: id }),
         );
       });
 
@@ -107,7 +107,7 @@ export const UsersServiceLive = Layer.effect(
 
         return yield* Effect.fromOption(
           option,
-          () => new UserNotFoundError({ id }),
+          () => new UserNotFoundError({ cause: id }),
         );
       });
 
@@ -118,7 +118,7 @@ export const UsersServiceLive = Layer.effect(
           .pipe(Effect.mapError(mapUsersRepositoryError));
 
         if (!deleted) {
-          return yield* new UserNotFoundError({ id });
+          return yield* new UserNotFoundError({ cause: id });
         }
       });
 

@@ -185,7 +185,7 @@ export const UsersHandlersLive = HttpApiBuilder.group(
 
             return yield* service.getById(id).pipe(
               Effect.catchTags({
-                UserNotFoundError: ({ id }) =>
+                UserNotFoundError: () =>
                   new UserNotFoundHttpError({
                     id,
                     instance,
@@ -211,7 +211,7 @@ export const UsersHandlersLive = HttpApiBuilder.group(
                 UserEmailAlreadyExistsError: () =>
                   new UserEmailAlreadyExistsHttpError(),
 
-                UserNotFoundError: ({ id }) =>
+                UserNotFoundError: () =>
                   new UserNotFoundHttpError({
                     id,
                     instance: makeByIdInstance(id),
@@ -234,7 +234,7 @@ export const UsersHandlersLive = HttpApiBuilder.group(
 
             return yield* service.deleteById(id).pipe(
               Effect.catchTags({
-                UserNotFoundError: ({ id }) =>
+                UserNotFoundError: () =>
                   new UserNotFoundHttpError({
                     id,
                     instance: makeByIdInstance(id),

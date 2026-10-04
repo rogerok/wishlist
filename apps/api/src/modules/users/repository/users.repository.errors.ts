@@ -3,10 +3,10 @@ import { Data } from 'effect';
 import type { UserEmail } from '#modules/users/schemas/user.schema.js';
 import type { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
-export class InvalidUserRecord extends Data.TaggedError('InvalidUserRecord')<{
+export class UserInvalidRecord extends Data.TaggedError('InvalidUserRecord')<{
   cause: unknown;
-  id: string;
   operation: UserOperation;
+  id?: unknown;
 }> {}
 
 export class UserEmailAlreadyExists extends Data.TaggedError(
@@ -24,21 +24,21 @@ export class UsersRepositoryError extends Data.TaggedError(
 }> {}
 
 export type UsersRepositoryCreateError =
-  | InvalidUserRecord
   | UserEmailAlreadyExists
+  | UserInvalidRecord
   | UsersRepositoryError;
 
 export type UsersRepositoryGetAllError =
-  | InvalidUserRecord
+  | UserInvalidRecord
   | UsersRepositoryError;
 
-export type UsersRepositoryGetByIdError =
-  | InvalidUserRecord
+export type UsersRepositoryGetByError =
+  | UserInvalidRecord
   | UsersRepositoryError;
 
 export type UsersRepositoryUpdateError =
-  | InvalidUserRecord
   | UserEmailAlreadyExists
+  | UserInvalidRecord
   | UsersRepositoryError;
 
 export type UsersRepositoryDeleteError = UsersRepositoryError;

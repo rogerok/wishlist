@@ -7,6 +7,7 @@ export const UserOperationSchema = makeLiteralUnionSchema([
   'delete',
   'getAll',
   'getById',
+  'getByEmail',
   'update',
 ]);
 export const UserOperation = UserOperationSchema.values;

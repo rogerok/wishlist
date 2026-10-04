@@ -33,6 +33,7 @@ const TestUsersRepositoryLive = Layer.succeed(UsersRepository, {
     cause: sqlError,
   }),
   getById: () => Effect.die(new Error('Unexpected call: getById')),
+  getByEmail: () => Effect.die(new Error('Unexpected call: getByEmail')),
   update: () => Effect.die(new Error('Unexpected call: update')),
   deleteById: () => Effect.die(new Error('Unexpected call: deleteById')),
 });

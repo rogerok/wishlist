@@ -6,25 +6,23 @@ import type {
   UsersRepositoryCreateError,
   UsersRepositoryDeleteError,
   UsersRepositoryGetAllError,
-  UsersRepositoryGetByIdError,
+  UsersRepositoryGetByError,
   UsersRepositoryUpdateError,
 } from '#modules/users/repository/users.repository.errors.js';
 import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
 import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
-import type { UserId } from '#modules/users/schemas/user.schema.js';
+import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';
 import {
-  InvalidUserRecord,
   UserEmailAlreadyExists,
+  UserInvalidRecord,
   UsersRepositoryError,
 } from '#modules/users/repository/users.repository.errors.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
-const decodeUser = Schema.decodeUnknownEffect(UserResponseSchema);
-const USERS_EMAIL_LOWER_UNIQUE_INDEX = 'users_email_lower_unique_idx';
 const userSelection = [
   'id',
   'email',
@@ -33,6 +31,17 @@ const userSelection = [
   'middleName',
 ] as const;
 
+const getSomeOrNone = (row: unknown, operation: UserOperation) =>
+  Option.match(Option.fromUndefinedOr(row), {
+    onNone: () => Effect.succeedNone,
+    onSome: (some) => decodeRow(some, operation).pipe(Effect.map(Option.some)),
+  });
+
+const decodeRow = (row: unknown, operation: UserOperation) =>
+  Schema.decodeUnknownEffect(UserResponseSchema)(row).pipe(
+    Effect.mapError((cause) => new UserInvalidRecord({ cause, operation })),
+  );
+
 const isUsersEmailUniqueViolation = (error: unknown): boolean => {
   if (!SqlError.isSqlError(error)) {
     return false;
@@ -40,9 +49,12 @@ const isUsersEmailUniqueViolation = (error: unknown): boolean => {
 
   return (
     error.reason._tag === 'UniqueViolation' &&
-    error.reason.constraint === USERS_EMAIL_LOWER_UNIQUE_INDEX
+    error.reason.constraint === 'users_email_lower_unique_idx'
   );
 };
+
+const mapRepoError = (operation: UserOperation) => (cause: SqlError.SqlError) =>
+  new UsersRepositoryError({ cause, operation });
 
 export interface UsersRepositoryShape {
   readonly create: (
@@ -54,7 +66,7 @@ export interface UsersRepositoryShape {
   >;
   readonly getById: (
     id: UserId,
-  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByIdError>;
+  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByError>;
   readonly update: (
     id: UserId,
     input: UpdateUserBody,
@@ -62,6 +74,9 @@ export interface UsersRepositoryShape {
   readonly deleteById: (
     id: UserId,
   ) => Effect.Effect<boolean, UsersRepositoryDeleteError>;
+  readonly getByEmail: (
+    id: UserEmail,
+  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByError>;
 }
 
 export class UsersRepository extends Context.Service<
@@ -82,17 +97,9 @@ export const UsersRepositoryLive = Layer.effect(
         const [row] = yield* db
           .insertInto('users')
           .values(input)
-          .onConflict((oc) => oc.doNothing())
+          .onConflict((oc) => oc.expression(sql`lower("email")`).doNothing())
           .returning(userSelection)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new UsersRepositoryError({
-                  cause,
-                  operation: UserOperation.create,
-                }),
-            ),
-          );
+          .pipe(Effect.mapError(mapRepoError(UserOperation.create)));
 
         if (row === undefined) {
           return yield* new UserEmailAlreadyExists({
@@ -101,16 +108,7 @@ export const UsersRepositoryLive = Layer.effect(
           });
         }
 
-        return yield* decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                cause,
-                id: row.id,
-                operation: UserOperation.create,
-              }),
-          ),
-        );
+        return yield* decodeRow(row, UserOperation.create);
       });
 
     const getAll: UsersRepositoryShape['getAll'] = Effect.gen(function* () {
@@ -119,27 +117,10 @@ export const UsersRepositoryLive = Layer.effect(
         .select(userSelection)
         .orderBy('createdAt', 'desc')
         .orderBy('id', 'desc')
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new UsersRepositoryError({
-                cause,
-                operation: UserOperation.getAll,
-              }),
-          ),
-        );
+        .pipe(Effect.mapError(mapRepoError(UserOperation.getAll)));
 
       return yield* Effect.forEach(rows, (row) =>
-        decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                operation: UserOperation.getAll,
-                id: row.id,
-                cause,
-              }),
-          ),
-        ),
+        decodeRow(row, UserOperation.getAll),
       );
     });
 
@@ -150,33 +131,23 @@ export const UsersRepositoryLive = Layer.effect(
           .select(userSelection)
           .where('id', '=', id)
           .limit(1)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new UsersRepositoryError({
-                  cause,
-                  operation: UserOperation.getById,
-                }),
-            ),
-          );
+          .pipe(Effect.mapError(mapRepoError(UserOperation.getById)));
 
-        if (row === undefined) {
-          return Option.none();
-        }
-
-        const user = yield* decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                cause,
-                id,
-                operation: UserOperation.getById,
-              }),
-          ),
-        );
-
-        return Option.some(user);
+        return yield* getSomeOrNone(row, UserOperation.getById);
       });
+
+    const getByEmail: UsersRepositoryShape['getByEmail'] = (email) =>
+      Effect.gen(function* () {
+        const [row] = yield* db
+          .selectFrom('users')
+          .select(userSelection)
+          .where('email', '=', email)
+          .limit(1)
+          .pipe(Effect.mapError(mapRepoError(UserOperation.getByEmail)));
+
+        return yield* getSomeOrNone(row, UserOperation.getByEmail);
+      });
+
     const update: UsersRepositoryShape['update'] = (id, input) =>
       Effect.gen(function* () {
         const [row] = yield* db
@@ -193,29 +164,11 @@ export const UsersRepositoryLive = Layer.effect(
                 });
               }
 
-              return new UsersRepositoryError({
-                cause,
-                operation: UserOperation.update,
-              });
+              return mapRepoError(UserOperation.update)(cause);
             }),
           );
 
-        if (row === undefined) {
-          return Option.none();
-        }
-
-        const user = yield* decodeUser(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new InvalidUserRecord({
-                cause,
-                id: row.id,
-                operation: UserOperation.update,
-              }),
-          ),
-        );
-
-        return Option.some(user);
+        return yield* getSomeOrNone(row, UserOperation.update);
       });
 
     const deleteById: UsersRepositoryShape['deleteById'] = (id) =>
@@ -224,13 +177,7 @@ export const UsersRepositoryLive = Layer.effect(
         .where('id', '=', id)
         .returning('id')
         .pipe(
-          Effect.mapError(
-            (cause) =>
-              new UsersRepositoryError({
-                cause,
-                operation: UserOperation.delete,
-              }),
-          ),
+          Effect.mapError(mapRepoError(UserOperation.delete)),
           Effect.map((rows) => !!rows.length),
         );
 
@@ -240,6 +187,7 @@ export const UsersRepositoryLive = Layer.effect(
       getById,
       update,
       deleteById,
+      getByEmail,
     };
   }),
 );
