@@ -1,5 +1,6 @@
 import { describe, layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
+import * as TestClock from 'effect/testing/TestClock';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
@@ -26,6 +27,27 @@ const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
 describe('SessionRepository', () => {
   layer(repoLayer, { timeout: '60 seconds' })((it) => {
+    it.effect(
+      'finds a session before expiry but not at or after the expiry boundary',
+      () =>
+        Effect.gen(function* () {
+          const repo = yield* SessionRepository;
+
+          yield* insertTestUser(userId, userEmail);
+          const session = yield* repo.create(userId, digest, expiresAt);
+          const lookup = repo.getByTokenDigest(digest);
+
+          yield* TestClock.setTime(expiresAt.getTime() - 1);
+          expect(yield* lookup).toBeOptionSome(session);
+
+          yield* TestClock.setTime(expiresAt.getTime());
+          expect(yield* lookup).toBeOptionNone();
+
+          yield* TestClock.setTime(expiresAt.getTime() + 1);
+          expect(yield* lookup).toBeOptionNone();
+        }).pipe(Effect.provide(TestClock.layer())),
+    );
+
     it.effect(
       'deletes only the matching session and allows repeated deletion',
       () =>

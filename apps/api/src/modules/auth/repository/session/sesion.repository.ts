@@ -1,6 +1,6 @@
 import type { SqlError } from 'effect/unstable/sql';
 
-import { Option } from 'effect';
+import { Clock, Option } from 'effect';
 import { Context, Effect, Layer, Schema } from 'effect';
 import { match } from 'ts-pattern';
 
@@ -96,10 +96,13 @@ export const SessionRepositoryLive = Layer.effect(
       tokenDigest,
     ) =>
       Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+
         const [row] = yield* db
           .selectFrom('sessions')
           .select(sessionSelection)
           .where('tokenDigest', '=', Buffer.from(tokenDigest))
+          .where('expiresAt', '>', new Date(now))
           .limit(1)
           .pipe(
             Effect.mapError(mapRepoError(SessionOperations.getByTokenDigest)),
