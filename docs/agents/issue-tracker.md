@@ -1,6 +1,15 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+
+## Issues track work; OpenSpec owns behavior
+
+Behavior specs live in the repository, not in issues:
+
+- `openspec/specs/<capability>/spec.md` is the source of truth for how the system behaves now.
+- `openspec/changes/<change>/` holds the proposal, delta specs, design, and tasks for one planned behavior change.
+
+A GitHub issue tracks the work and its discussion. When an issue concerns a behavior change, link its OpenSpec change folder in the issue body instead of copying requirements or scenarios into the issue. When a skill looks for "the originating spec", read the linked change folder, falling back to `openspec/specs/`.
 
 ## Conventions
 
