@@ -32,7 +32,7 @@ schema: spec-driven
 #         - Summarize the archive outcome before finishing
 
 context: |
-  Language: Russian
-  Write all artifact prose in Russian.
-  OpenSpec headers, keywords, terminus in English. 
-  Domain terminus, like User, Wish, keep in Russian.
+  Language: Russian. Write all artifact prose in Russian.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Domain terms come from CONTEXT.md: use them verbatim in English and never use the synonyms it lists under "Avoid".
+  Architecture decisions live in docs/adr/: reference an ADR instead of restating it.
