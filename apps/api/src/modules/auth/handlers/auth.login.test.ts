@@ -244,6 +244,11 @@ describe('login with PostgreSQL', () => {
           const repo = yield* SessionRepository;
           const app = yield* acquireApp();
           const signup = yield* register(app, db);
+          const userSessions = db
+            .selectFrom('sessions')
+            .select('id')
+            .where('userId', '=', signup.user.id);
+          expect(yield* userSessions).toHaveLength(1);
           const original = yield* repo.getByTokenDigest(signup.cookie.digest);
           expect(Option.isSome(original)).toBe(true);
           const first = yield* post(
@@ -256,6 +261,7 @@ describe('login with PostgreSQL', () => {
           const firstCookie = readCookie(first);
           const firstSession = yield* repo.getByTokenDigest(firstCookie.digest);
           expect(Option.isSome(firstSession)).toBe(true);
+          expect(yield* userSessions).toHaveLength(2);
           const second = yield* post(
             app,
             '/api/auth/login',
@@ -268,6 +274,7 @@ describe('login with PostgreSQL', () => {
             secondCookie.digest,
           );
           expect(Option.isSome(secondSession)).toBe(true);
+          expect(yield* userSessions).toHaveLength(3);
           expect(firstCookie.credential === signup.cookie.credential).toBe(
             false,
           );
