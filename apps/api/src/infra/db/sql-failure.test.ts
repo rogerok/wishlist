@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@effect/vitest';
 import { Data } from 'effect';
 import {
+  AuthenticationError,
   ConnectionError,
   SqlError,
   UnknownError,
@@ -18,6 +19,14 @@ const retryableSqlError = new SqlError({
 const permanentSqlError = new SqlError({
   reason: new UnknownError({ cause: new Error('syntax') }),
 });
+
+const unknownAt = (operation: string) =>
+  new SqlError({
+    reason: new UnknownError({
+      cause: new Error('Connection terminated unexpectedly'),
+      operation,
+    }),
+  });
 
 describe('isRetryableSqlFailure', () => {
   it.each([
@@ -41,6 +50,36 @@ describe('isRetryableSqlFailure', () => {
     {
       name: 'a SqlError reason outside SqlError',
       error: new ConnectionError({ cause: new Error('connection reset') }),
+      expected: false,
+    },
+    {
+      name: 'an unknown failure while acquiring a connection',
+      error: unknownAt('acquireConnection'),
+      expected: true,
+    },
+    {
+      name: 'an unknown failure while connecting',
+      error: unknownAt('connect'),
+      expected: true,
+    },
+    {
+      name: 'a repository error wrapping an unknown acquireConnection failure',
+      error: new RepositoryTestError({ cause: unknownAt('acquireConnection') }),
+      expected: true,
+    },
+    {
+      name: 'an unknown failure while executing a statement',
+      error: unknownAt('execute'),
+      expected: false,
+    },
+    {
+      name: 'an authentication failure while acquiring a connection',
+      error: new SqlError({
+        reason: new AuthenticationError({
+          cause: new Error('password authentication failed'),
+          operation: 'acquireConnection',
+        }),
+      }),
       expected: false,
     },
     { name: 'a string', error: 'connection reset', expected: false },
