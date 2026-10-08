@@ -845,7 +845,8 @@ companion: [abuse-resistance sources and exercise](./research/primary-sources.md
   rather than permanently locking an account after a small threshold;
 - place rate limiting before expensive hashing and keep rate-limit behavior equivalent for known and unknown
   identifiers;
-- compute a dummy scrypt hash when the login email is unknown to reduce timing-based account enumeration;
+- ~~compute a dummy scrypt hash when the login email is unknown to reduce timing-based account enumeration;~~ done in
+  [equalize-login-timing](../../openspec/changes/archive/2026-10-08-equalize-login-timing/proposal.md);
 - ensure logs and metrics do not reintroduce public distinctions;
 - define behavior under concurrent repeated login attempts and when the hashing queue is saturated (`429` for policy
   throttling; an explicit overload error such as `503` for unavailable hashing capacity).
