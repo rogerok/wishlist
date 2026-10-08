@@ -40,6 +40,14 @@ SHALL отвечать `503 Service Unavailable` с типом содержим�
 - **THEN** API отвечает `503 Service Unavailable` с типом содержимого `application/problem+json`
 - **AND** тело ответа содержит `code: SERVICE_UNAVAILABLE`, `status: 503`, `instance: /api/auth/signup`
 
+#### Scenario: PostgreSQL недоступна до запроса
+
+- **GIVEN** у User есть действующая Session, и клиент передаёт её cookie `wishlist_session`
+- **AND** соединения API с PostgreSQL оборваны до запроса, и новые соединения не устанавливаются
+- **WHEN** клиент отправляет `GET /api/auth/me` с этой cookie
+- **THEN** API отвечает `503 Service Unavailable` с типом содержимого `application/problem+json`
+- **AND** тело ответа содержит `code: SERVICE_UNAVAILABLE`, `status: 503`, `instance: /api/auth/me`
+
 ### Requirement: Нераскрытие причины технического отказа
 
 API SHALL формировать тело ответа на технический отказ без текста и значений исходной ошибки.
