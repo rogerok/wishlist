@@ -1,5 +1,14 @@
-# Import URL metadata through asynchronous best-effort previews
+# Метаданные по URL импортируются асинхронно и без гарантий
 
-Wishlist treats metadata extraction from a pasted product URL as an asynchronous, short-lived Import Preview rather than part of the Wishlist Item write transaction. Fetches run in a worker against a curated HTTPS domain allowlist with strict SSRF, redirect, timeout, content-type, and byte limits; Open Graph or JSON-LD values are untrusted suggestions, and manual entry is always the terminal fallback. Browser automation, private marketplace endpoints, and a promise to parse every Avito, Ozon, or Wildberries page are excluded because those marketplaces do not document an API for arbitrary public product cards and their HTML is not a stable contract.
+Wishlist считает извлечение метаданных из вставленного URL товара асинхронным короткоживущим Import Preview, а не частью
+транзакции записи Wishlist Item. Загрузку выполняет worker и только для доменов из отобранного allowlist по HTTPS, со
+строгими ограничениями против SSRF, на редиректы, таймаут, content-type и размер ответа. Значения Open Graph и JSON-LD —
+недоверенные подсказки, а ручной ввод всегда остаётся последним запасным вариантом. Автоматизация браузера, закрытые
+эндпоинты маркетплейсов и обещание разобрать любую страницу Avito, Ozon или Wildberries исключены: эти маркетплейсы не
+документируют API для произвольных публичных карточек товаров, а их HTML не является стабильным контрактом.
 
-The User chooses which preview fields to copy into the user-owned Wishlist Item snapshot. Later refreshes produce a new preview and diff instead of silently overwriting edits; after object storage exists, an accepted remote image is validated and copied into service-owned storage rather than hotlinked. See [Marketplace URL Import Research](../product/research/marketplace-url-import.md) for the provider evidence and security boundary.
+User сам выбирает, какие поля Import Preview скопировать в свой снимок Wishlist Item. Последующие обновления создают
+новый Import Preview и diff, а не перезаписывают правки молча. Когда появится объектное хранилище, принятое удалённое
+изображение будет проверяться и копироваться в хранилище сервиса, а не подключаться по прямой ссылке (hotlink).
+Доказательства по провайдерам и граница безопасности описаны в [исследовании импорта URL
+маркетплейсов](../product/research/marketplace-url-import.md).

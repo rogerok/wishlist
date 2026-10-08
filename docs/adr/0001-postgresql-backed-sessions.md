@@ -1,3 +1,8 @@
-# Store sessions server-side in PostgreSQL
+# Session хранится на сервере в PostgreSQL
 
-Wishlist uses opaque, server-side Sessions stored in PostgreSQL instead of self-contained JWT access tokens. This makes logout, immediate revocation, fixed expiration, and multiple concurrent Sessions explicit and authoritative on the server; the trade-off is a database lookup during authenticated requests and periodic cleanup of expired Sessions. The client receives a random credential in an HTTP-only cookie, while PostgreSQL stores only its cryptographic digest so that disclosure of the Sessions table does not directly disclose active credentials.
+Wishlist использует непрозрачные (opaque) Session, которые хранятся на сервере в PostgreSQL, вместо самодостаточных JWT
+access-токенов. Благодаря этому logout, немедленный отзыв, фиксированный срок жизни и несколько одновременных Session
+одного User явно задаются сервером, и последнее слово остаётся за ним. Цена — запрос к базе данных при каждом
+аутентифицированном запросе и периодическая очистка истёкших Session. Клиент получает случайный credential в HTTP-only
+cookie, а PostgreSQL хранит только его криптографический digest, поэтому утечка таблицы Session напрямую не раскрывает
+действующие credential.

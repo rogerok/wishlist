@@ -1,5 +1,11 @@
-# Use a PostgreSQL outbox before adding a message broker
+# PostgreSQL outbox — до появления брокера сообщений
 
-Wishlist records required email delivery and URL-import work in PostgreSQL in the same transaction as the domain change, then processes it from separate worker processes with at-least-once delivery and idempotent handlers. This prevents an API crash from losing magic links or reservation lifecycle notifications while keeping the first operational topology to one consistency system.
+Wishlist записывает обязательную отправку email и задачи импорта URL в PostgreSQL в той же транзакции, что и изменение
+данных предметной области. Затем их обрабатывают отдельные worker-процессы с доставкой «хотя бы один раз»
+(at-least-once) и идемпотентными обработчиками. Так падение API не теряет magic link и уведомления о жизненном цикле
+Reservation, а первая схема развёртывания обходится одной системой, отвечающей за согласованность данных.
 
-A separate message broker is intentionally deferred, not rejected. Introduce one only when measured throughput, fan-out to independent consumers, isolation requirements, or outbox contention make PostgreSQL the wrong transport; adding Kafka or RabbitMQ before such a boundary would create a second durability and operations problem without improving the current product invariant.
+Отдельный брокер сообщений намеренно отложен, а не отвергнут. Вводить его стоит, только когда измеренная пропускная
+способность, рассылка независимым потребителям (fan-out), требования изоляции или конкуренция за outbox сделают
+PostgreSQL неподходящим транспортом. Kafka или RabbitMQ до такой границы добавили бы вторую систему, которую нужно
+надёжно хранить и эксплуатировать, и не улучшили бы текущий инвариант продукта.

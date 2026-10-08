@@ -1,5 +1,11 @@
-# Authenticate reservation holders as Users or wishlist-scoped Guests
+# Держатель Reservation — User или Guest, привязанный к одному Wishlist
 
-Wishlist accepts a Reservation from either an authenticated User or a Guest whose email address was verified for exactly one Wishlist. A User's existing Session is sufficient; a Guest receives a separate, time-limited Guest Session through an email magic link, and remains a Guest even when the verified address belongs to a User. This preserves reservation without registration without turning a magic link into passwordless User authentication or creating a global Guest account.
+Wishlist принимает Reservation либо от аутентифицированного User, либо от Guest, чей email подтверждён ровно для одного
+Wishlist. User'у достаточно уже существующей Session. Guest получает отдельную ограниченную по времени Guest Session
+через magic link на email и остаётся Guest, даже если подтверждённый адрес принадлежит User. Так бронирование без
+регистрации сохраняется, но magic link не превращается в беспарольный вход User и не создаёт глобальный аккаунт Guest.
 
-A Reservation has exactly one holder type, but holder identity is never exposed to the Wishlist owner or other visitors. At most one Reservation is active for a Wishlist Item; cancellation, owner release, and deletion move it to a terminal state rather than erasing its history. PostgreSQL must enforce the single-active-reservation invariant so concurrent API instances cannot reserve the same Item twice.
+У Reservation ровно один тип держателя, но личность держателя никогда не раскрывается владельцу Wishlist и другим
+посетителям. Для одного Wishlist Item активна не более чем одна Reservation. Отмена, освобождение владельцем и удаление
+переводят Reservation в конечное состояние, а не стирают её историю. Инвариант «не более одной активной Reservation»
+обеспечивает PostgreSQL, чтобы параллельно работающие экземпляры API не могли дважды зарезервировать один Wishlist Item.
