@@ -1,0 +1,65 @@
+# Spec Delta
+
+## Purpose
+
+Определяет, как API отвечает клиенту, когда запрос не удалось обработать из-за технического отказа на стороне сервера,
+и как такой ответ связывается с диагностикой на сервере.
+
+## ADDED Requirements
+
+### Requirement: Ответ на внутренний технический отказ
+
+Если обработка запроса завершилась внутренним техническим отказом, который повтор запроса не исправит, API SHALL
+отвечать `500 Internal Server Error` с типом содержимого `application/problem+json` и телом, содержащим
+`code: INTERNAL_ERROR`, `status: 500` и `instance`, равный пути запроса.
+
+#### Scenario: Необратимая ошибка базы данных при signup
+
+- **GIVEN** база данных отвечает на запросы signup необратимой ошибкой
+- **WHEN** клиент отправляет `POST /api/auth/signup` с валидным телом
+- **THEN** API отвечает `500 Internal Server Error` с типом содержимого `application/problem+json`
+- **AND** тело ответа содержит `code: INTERNAL_ERROR`, `status: 500`, `instance: /api/auth/signup`
+
+### Requirement: Ответ на временную недоступность
+
+Если обработка запроса завершилась временной недоступностью ресурса, после которой повтор запроса может пройти, API
+SHALL отвечать `503 Service Unavailable` с типом содержимого `application/problem+json` и телом, содержащим
+`code: SERVICE_UNAVAILABLE`, `status: 503` и `instance`, равный пути запроса.
+
+#### Scenario: Перегрузка расчёта хеша пароля при signup
+
+- **GIVEN** все слоты расчёта хеша пароля заняты
+- **WHEN** клиент отправляет `POST /api/auth/signup` с валидным телом
+- **THEN** API отвечает `503 Service Unavailable` с типом содержимого `application/problem+json`
+- **AND** тело ответа содержит `code: SERVICE_UNAVAILABLE`, `status: 503`, `instance: /api/auth/signup`
+
+### Requirement: Идентификатор трассы в ответе на технический отказ
+
+В теле ответа на технический отказ API SHALL возвращать поле `traceId` с идентификатором трассы запроса, равным trace
+id из заголовка `traceparent`, если клиент передал этот заголовок.
+
+#### Scenario: Запрос с заголовком traceparent
+
+- **GIVEN** база данных отвечает на запросы signup необратимой ошибкой
+- **WHEN** клиент отправляет `POST /api/auth/signup` с валидным телом и заголовком
+  `traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01`
+- **THEN** API отвечает `500 Internal Server Error`
+- **AND** тело ответа содержит `traceId: 0af7651916cd43dd8448eb211c80319c`
+
+#### Scenario: Запрос без заголовка traceparent
+
+- **GIVEN** все слоты расчёта хеша пароля заняты
+- **WHEN** клиент отправляет `POST /api/auth/signup` с валидным телом без заголовка `traceparent`
+- **THEN** API отвечает `503 Service Unavailable`
+- **AND** тело ответа содержит `traceId` из 32 шестнадцатеричных символов в нижнем регистре
+
+### Requirement: Нераскрытие причины технического отказа
+
+API SHALL формировать тело ответа на технический отказ без текста и значений исходной ошибки.
+
+#### Scenario: Текст исходной ошибки содержит email
+
+- **GIVEN** обработка signup завершается неизвестной ошибкой с текстом `sensitive@mail.com`
+- **WHEN** клиент отправляет `POST /api/auth/signup` с валидным телом
+- **THEN** API отвечает `500 Internal Server Error`
+- **AND** тело ответа не содержит `sensitive@mail.com`
