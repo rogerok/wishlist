@@ -74,7 +74,7 @@ sequenceDiagram
   AH-->>C: 201, тело UserResponse, Set-Cookie HttpOnly
 </pre>
       <p class="diagram-caption">В БД попадает только digest токена. Сам credential уходит клиенту в cookie и больше нигде не хранится.</p>
-      <p>Вход работает. <code>/me</code> проходит через middleware <code>SessionAuthentication</code>: он вызывает <code>authenticate</code> и кладёт <code>CurrentSession</code> в Context — <a href="../lessons/0004-security-middleware.html">урок 0004</a>. Выход в контракте пока закомментирован: <a href="../../apps/api/src/modules/auth/api/auth.api.ts"><code>modules/auth/api/auth.api.ts</code></a>.</p>
+      <p>Вход работает. <code>/me</code> проходит через middleware <code>SessionAuthentication</code>: он вызывает <code>authenticate</code> и кладёт <code>CurrentSession</code> в Context — <a href="../lessons/0004-security-middleware.html">урок 0004</a>. Выход (<code>POST /api/auth/logout</code>) читает cookie сам, без middleware, и всегда истекает её при 204 — <a href="../lessons/0006-debrief-logout.html">разбор logout</a>.</p>
     </section>
 
     <section class="card" id="errors">

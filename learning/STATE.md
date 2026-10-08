@@ -4,37 +4,34 @@
 
 ## Сейчас
 
-Шаг: 1.7 — logout: удалить текущую Session и истечь cookie; без cookie/неизвестная cookie → 204, сбой БД → 503.
-Следующее действие: убрать 4 новых предупреждения lint в `auth.handlers.ts` и закоммитить 1.6b → `oxlint` показывает только 2 старых `no-nested-functions`.
-Затем: решение по optional cookie для logout (handler читает cookie сам или отдельный middleware); OpenSpec `user-auth` пока без logout.
+Шаг: 1.8 — сборка Live Layer для всех auth handlers; сам запуск уже подтверждён smoke-сценарием 1.7.
+Следующее действие: прочитать [разбор logout](lessons/0006-debrief-logout.html) и ответить на 3 вопроса → ответы сходятся с `<details>`.
+Затем решить, что засчитать в 1.8 и 1.10: smoke 1.7 уже проверил запуск dist и cookie jar; вопросы понимания этих шагов открыты.
 
 ## Проверено
 
-- 1.6b `/me` (TODO 1–3 написал владелец): `auth.me.test.ts` 5 из 5; все тесты API — 22 файла, 164 passed, `--no-file-parallelism`; `check-types` без диагностик, 2026-10-08.
-- Effect 4.0.0-rc.108 без cookie передаёт middleware `Redacted("")` (`HttpApiBuilder.ts:506–509`); 401 даёт `AuthTokenSchema`.
-- Группа `.middleware(...)` действует только на endpoint, добавленные до вызова (`HttpApiGroup.ts:90`); API-уровень — на все группы.
-- Перегрузка hasher при login → AuthUnavailableError, строки sessions не меняются; тест владельца, коммит 5e5fbf4.
+- 1.7 logout (582e26d): `auth.logout.test.ts` 11 из 11 — 204 без cookie/с битой/неизвестной/истекшей, удаляется только предъявленная Session, атрибуты cookie test/production, 503/500 без `Set-Cookie`, 2026-10-08.
+- Smoke на `node dist/infra/bin/server.js` с PostgreSQL в контейнере и cookie jar: signup → login → logout → `/me` (старая cookie 401, вторая 200), повторный logout 204, без cookie 204; обрыв БД через прокси → logout, `/me`, login 503, Session на месте, cookie сохранена; повторный logout после восстановления 204. Сценарий удалён, 2026-10-08.
+- Обрыв PostgreSQL до исправления давал 500 (`UnknownError`, `acquireConnection`); `isRetryableSqlFailure` теперь считает этапы `connect`/`acquireConnection` повторяемыми — таблица 13 из 13.
+- Все тесты API — 23 файла, 180 passed, `--no-file-parallelism`; `check-types` без диагностик; `lint` exit 0, 2026-10-08.
+- OpenSpec: `add-session-logout` и `classify-connection-failures-as-unavailable` в архиве; `openspec validate --specs --strict` 2 из 2.
+- 1.6b `/me` (TODO 1–3 написал владелец): `auth.me.test.ts` 5 из 5 (93a3d64).
 - Login: неизвестный email и неверный пароль → один 401, verify вызывается и для неизвестного email (92b068f).
-- Настоящий Node server и PostgreSQL: health 200, signup 201, два login 200 с новыми cookies, без пароля/tokens в логах (smoke 2026-10-04, удалён).
-- `auth.login.test.ts` 4 из 4 с проверкой точного числа Session (7a15f66); OpenSpec `user-auth`: Signup, Успешный вход, Неразличимый отказ.
 - Повреждённый хеш → AuthDataIntegrityError, строки sessions не меняются; signup rollback при отказе Password Credential/конфликте digest.
 - Срок Session на PostgreSQL: expiresAt − 1 мс → Some(session), равенство и +1 мс → None.
-- Oxlint 1.80.0: lint обоих пакетов exit 0; `turbo run lint --force` → API 44 предупреждения, SQL 1, ошибок 0, 2026-10-04.
 
 ## Не проверено
 
-- `/me` с просроченной Session по HTTP — roadmap требует 401; есть только тест repository.
-- `/me` при `AuthDataIntegrityError`/`AuthInternalError` — HTTP-тест есть только для 503.
-- `/me` и logout на настоящем Node server с cookie jar — шаг 1.10; запуск dist вместо tsx.
-- `lessons/0005-debrief-oxlint.html` нет на диске и в git, а заметка ниже и вопросы 15–17 на него ссылаются.
+- Остановленный сервер БД (`ECONNREFUSED`) — smoke воспроизвёл только обрыв (`ECONNRESET`); обрыв во время запроса (`execute`) остаётся 500.
+- `lint`: в 21:40 полный прогон дал 32 предупреждения, позже стабильно 44 без изменений в конфиге и файлах; лишние 12 — `sonarjs(prefer-specific-assertions)` в нетронутых тестах. Причина не найдена.
+- `/me` с просроченной Session по HTTP — есть только тест repository.
+- `lessons/0005-debrief-oxlint.html` нет на диске и в git; вопросы 15–17 ссылаются на него.
 - `0.3`: тест двух вызовов `randomBytes.get(32)`; production memory budget scrypt.
-- Запас таймаута signup под нагрузкой: ранее timeout 5 с при параллельных smoke/typecheck.
-- OpenSpec `user-auth`: нет HTTP-теста несовпадения паролей signup; нет теста логов login.
+- OpenSpec `user-auth`: нет HTTP-теста несовпадения паролей signup; нет теста логов login; `/me` в спеке не описан.
 
 ## Заметки
 
-- 1.6b: агент сначала заполнил TODO сам по ошибке и откатил; владелец написал заново. Застревал на `catchTag({ AuthTechnicalError })`: тип принят за тег; подсказки — ступень 2 и прямой вопрос про `provideService`. Mastery не повышался.
-- Правило доступа: группа = одно правило; гостевой просмотр wishlist — владелец выбрал middleware на отдельных endpoint.
-- TestClock не меняет часы PostgreSQL; тест срока использует локальный TestClock.layer().
-- [Разбор Oxlint](lessons/0005-debrief-oxlint.html): исходные JS-плагины, warning-only, вложенные конфиги, inputs Turbo.
-- pnpm предупреждает о peer-диапазоне TypeScript <6.1 у Perfectionist при TS 7.0.2; smoke плагинов прошёл.
+- Logout — ката practice: владелец писал сервис и handler, агент — заготовку, тесты и smoke. Подсказки: `Redacted.value`, digest, `yield*` на `Result`, `mapTechnicalError`.
+- Решения владельца: logout читает cookie сам (вариант A, optional middleware — при втором потребителе); отказ соединения классифицируется по `operation` библиотеки.
+- Тесты: ступень 1 (чтение); проверки «сломай и предскажи» для logout предложены, не выполнены.
+- Агент дважды трогал рабочие файлы владельца без проверки (`checkout`, случайный `stash`); всё восстановлено, правило записано в память агента.
