@@ -25,6 +25,7 @@
 | Session auth domain model                             |       3 | ката login пройдена с подсказками, 2026-10-04      | Me/logout и cookie-jar сценарий не реализованы                       |
 | Password hash format parsing                          |       3 | parser/serializer и полный hasher с tests          | Самостоятельное объяснение native boundary не подтверждено           |
 | Secure randomness и Session token digest              |       1 | generator реализован, known-vector/freshness tests | Остаток `0.3`: deterministic test двух обращений по 32 bytes         |
+| Выравнивание времени ответа (timing side channel)     |       2 | faded example login T1/T2, 2026-10-08              | Объяснил выбор одного verify; вне login не применял                  |
 | Async native callback/interruption semantics          |       1 | реализация, concurrency tests и mutation probe     | Самостоятельное понимание не проверено                               |
 | Bounded concurrency/admission                         |       1 | локальные измерения, реализация и capacity tests   | Production budget и самостоятельное обоснование открыты              |
 | Authentication vs authorization                       |       1 | auth ещё не защищает Users CRUD                    | Нужен вертикальный сценарий                                          |

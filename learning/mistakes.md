@@ -48,6 +48,20 @@ Reusable rule: значение, которое пишется в БД и ище
 Mastery concept affected: Secure randomness и Session token digest.
 ```
 
+### 2026-10-08 — при переходе на один `verify` осталась старая копия
+
+```text
+Date: 2026-10-08
+Context / task: equalize-login-timing, пропуск T2 в AuthService.login.
+My prediction: «исправил на каноничный пример» — в login одна проверка пароля.
+Observed result: тесты «runs one password check…» красные: expected [ false, false ] to have a length of 1 but got 2.
+Root cause in plain language: общий verify добавлен до развилки, а прежний verify в ветке отказа не удалён; отказ проходил 2 scrypt.
+Correction I made: удалил verify из ветки отказа; в login один вызов hasher.verify.
+Verification: auth.service.test.ts 9 из 9.
+Reusable rule: переносишь логику в одно место — найди и удали все старые копии (поиск по имени вызова) и посчитай вызовы на каждой дороге.
+Mastery concept affected: Выравнивание времени ответа.
+```
+
 ## Potential misconception to verify
 
 ### Effect creation может быть перепутан с Effect execution

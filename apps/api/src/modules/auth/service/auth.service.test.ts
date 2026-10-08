@@ -25,6 +25,7 @@ import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js
 import {
   AuthDataIntegrityError,
   AuthInternalError,
+  AuthInvalidCredentialsError,
   AuthUnavailableError,
 } from '#modules/auth/service/auth.service.errors.js';
 import {
@@ -124,10 +125,38 @@ const brokenNewHashAuthLayer = makeAuthLayerWithHasher(
       const hasher = yield* PasswordHasher;
       return {
         ...hasher,
-        hash: () =>
-          new PasswordHashIntegrityError({
-            cause: 'Invalid password hash component length',
-          }),
+        // Ломается только на пароле из signup: фиктивный хэш при сборке
+        // AuthService считается как обычно.
+        hash: (input) =>
+          Redacted.value(input) === signupInput.password
+            ? Effect.fail(
+                new PasswordHashIntegrityError({
+                  cause: 'Invalid password hash component length',
+                }),
+              )
+            : hasher.hash(input),
+      };
+    }),
+  ).pipe(Layer.provide(PasswordHasherLive)),
+);
+
+// Настоящий hasher, который запоминает результат каждого успешного verify.
+const verifyResults: Array<boolean> = [];
+const countingVerifyAuthLayer = makeAuthLayerWithHasher(
+  Layer.effect(
+    PasswordHasher,
+    Effect.gen(function* () {
+      const hasher = yield* PasswordHasher;
+      return {
+        ...hasher,
+        verify: (password, hash) =>
+          hasher
+            .verify(password, hash)
+            .pipe(
+              Effect.tap((result) =>
+                Effect.sync(() => verifyResults.push(result)),
+              ),
+            ),
       };
     }),
   ).pipe(Layer.provide(PasswordHasherLive)),
@@ -384,5 +413,37 @@ describe('AuthService', () => {
         expect(signupError).toBeInstanceOf(AuthInternalError);
         expect(signupError.cause).toBeInstanceOf(PasswordHashIntegrityError);
       }).pipe(Effect.provide(brokenNewHashAuthLayer)),
+  );
+  it.effect('runs one password check for an unknown email', () =>
+    Effect.gen(function* () {
+      const auth = yield* AuthService;
+      verifyResults.length = 0;
+
+      const loginError = yield* Effect.flip(auth.login({ email, password }));
+
+      expect(loginError).toBeInstanceOf(AuthInvalidCredentialsError);
+      expect(verifyResults).toHaveLength(1);
+    }).pipe(Effect.provide(countingVerifyAuthLayer)),
+  );
+
+  it.effect(
+    'runs one password check for a User without Password Credential',
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const db = yield* DB;
+
+        yield* TestClock.setTime(Date.now());
+        const signupResult = yield* auth.signup(signupInput);
+        yield* db
+          .deleteFrom('passwordCredentials')
+          .where('userId', '=', signupResult.user.id);
+        verifyResults.length = 0;
+
+        const loginError = yield* Effect.flip(auth.login({ email, password }));
+
+        expect(loginError).toBeInstanceOf(AuthInvalidCredentialsError);
+        expect(verifyResults).toHaveLength(1);
+      }).pipe(Effect.provide(countingVerifyAuthLayer)),
   );
 });

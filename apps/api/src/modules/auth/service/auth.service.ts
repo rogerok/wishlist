@@ -13,6 +13,7 @@ import type {
   LoginRequestBody,
   LoginResult,
 } from '#modules/auth/schemas/login/login.schema.js';
+import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
 import type { AuthenticatedSession } from '#modules/auth/schemas/session/authenticated-session.schema.js';
 import type {
   SignupInput,
@@ -52,12 +53,15 @@ import { UsersRepository } from '#modules/users/repository/users.repository.js';
 const invalidCredentialsError = new AuthInvalidCredentialsError({
   cause: 'Invalid credentials',
 });
+// Строка для фиктивного хэша. Совпадение с ней ничего не даёт
+const dummyHashInput = 'wishlist-dummy-password';
+
 const unAuthenticatedError = new AuthUnauthenticatedError({
   cause: `Can't authenticate`,
 });
 
 // PasswordHashIntegrityError означает разное в разных операциях, поэтому его
-// сопоставляют mapSignupError и mapLoginError, а не общая функция.
+// сопоставляют mapSignupError и mapLoginError
 type TechnicalOperationError = Exclude<
   AuthenticateOperationError | LoginOperationError | SignupOperationError,
   {
@@ -164,6 +168,10 @@ export const AuthServiceLive = Layer.effect(
     const hasher = yield* PasswordHasher;
     const tokenGenerator = yield* SessionTokenGenerator;
 
+    const dummyPasswordHash: StoredPasswordHash = yield* hasher.hash(
+      Redacted.make(dummyHashInput),
+    );
+
     const signup: AuthServiceShape['signup'] = ({
       password,
       email,
@@ -205,20 +213,20 @@ export const AuthServiceLive = Layer.effect(
     const login: AuthServiceShape['login'] = (input) =>
       Effect.gen(function* () {
         const user = yield* usersRepo.getByEmail(input.email);
-        if (Option.isNone(user)) {
-          return yield* invalidCredentialsError;
-        }
-
-        const passCreds = yield* passwordRepo.getByUserId(user.value.id);
-        if (Option.isNone(passCreds)) {
-          return yield* invalidCredentialsError;
-        }
+        const passCreds = Option.isSome(user)
+          ? yield* passwordRepo.getByUserId(user.value.id)
+          : Option.none();
 
         const verified = yield* hasher.verify(
           Redacted.make(input.password),
-          passCreds.value.passwordHash,
+          passCreds.pipe(
+            Option.map((creds) => creds.passwordHash),
+            Option.getOrElse(() => dummyPasswordHash),
+          ),
         );
-        if (!verified) {
+
+        // Отказать, если User или Password Credential нет, даже когда фиктивная проверка совпала
+        if (Option.isNone(user) || Option.isNone(passCreds) || !verified) {
           return yield* invalidCredentialsError;
         }
 
