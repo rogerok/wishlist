@@ -12,8 +12,10 @@ import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
 import {
   AuthEmailAlreadyExistsHttpError,
   AuthInvalidCredentialsHttpError,
+  AuthUnauthenticatedHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import {
+  CurrentSession,
   SessionAuthentication,
   sessionCookieSecurity,
 } from '#modules/auth/api/session-authentication.js';
@@ -22,7 +24,7 @@ import { AuthService } from '#modules/auth/service/auth.service.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
 
 type SessionCookieData = {
-  readonly credential: Redacted.Redacted<string>;
+  readonly credential: Redacted.Redacted;
   readonly expiresAt: Date;
 };
 
@@ -56,8 +58,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
       return handlers
         .handle(AuthOperation.signup, ({ payload }) =>
           Effect.gen(function* () {
-            // oxlint-disable-next-line no-unused-vars
-            const { passwordConfirm, ...rest } = payload;
+            const { passwordConfirm: __, ...rest } = payload;
             const service = yield* AuthService;
             const handleTechnicalError = makeTechnicalErrorHandler({
               userId: null,
@@ -103,9 +104,8 @@ export const AuthHandlersLive = HttpApiBuilder.group(
         )
         .handle(AuthOperation.me, () =>
           Effect.gen(function* () {
-            // Взять User из Context, который заполнил middleware
-            // TODO(you) 3: прочитать CurrentSession и вернуть публичного User.
-            return yield* Effect.die('TODO(you) 3: /me handler');
+            const currentSession = yield* CurrentSession;
+            return currentSession.user;
           }),
         );
     }),
@@ -123,14 +123,19 @@ export const SessionAuthenticationLive = Layer.effect(
     return {
       cookie: (httpEffect, { credential }) =>
         Effect.gen(function* () {
-          // Проверить cookie и перевести ошибки сервиса в HTTP-ошибки
-          // TODO(you) 1: вызвать service.authenticate(credential);
-          // отказ → AuthUnauthenticatedHttpError, технические ошибки → handleTechnicalError.
-          const session = yield* Effect.die('TODO(you) 1: authenticate');
+          const session = yield* service.authenticate(credential).pipe(
+            Effect.catchTags({
+              AuthUnauthenticatedError: () =>
+                new AuthUnauthenticatedHttpError(),
+              AuthDataIntegrityError: handleTechnicalError,
+              AuthInternalError: handleTechnicalError,
+              AuthUnavailableError: handleTechnicalError,
+            }),
+          );
 
-          // Пустить запрос дальше с сессией в Context
-          // TODO(you) 2: запустить httpEffect, предоставив ему CurrentSession.
-          return yield* Effect.die('TODO(you) 2: provide CurrentSession');
+          return yield* httpEffect.pipe(
+            Effect.provideService(CurrentSession, session),
+          );
         }),
     };
   }),
