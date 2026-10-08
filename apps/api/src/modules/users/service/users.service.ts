@@ -1,5 +1,4 @@
 import { Context, Effect, Layer } from 'effect';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
 
 import type { UsersRepositoryError } from '#modules/users/repository/users.repository.errors.js';
 import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
@@ -14,6 +13,7 @@ import type {
   UsersServiceGetByIdError,
 } from '#modules/users/service/users.service.errors.js';
 
+import { isRetryableSqlFailure } from '#infra/db/sql-failure.js';
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
 import {
   UserDataIntegrityError,
@@ -26,12 +26,13 @@ import {
 const mapUsersRepositoryError = (
   error: UsersRepositoryError,
 ): UsersInternalError | UsersUnavailableError => {
-  if (isSqlError(error.cause) && error.cause.isRetryable) {
+  if (isRetryableSqlFailure(error)) {
     return new UsersUnavailableError({ cause: error });
   }
 
   return new UsersInternalError({ cause: error });
 };
+
 export interface UsersServiceShape {
   readonly create: (
     input: CreateUserBody,

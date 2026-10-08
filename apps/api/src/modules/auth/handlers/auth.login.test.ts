@@ -1,6 +1,6 @@
 import { NodeHttpServer } from '@effect/platform-node';
 import { describe, expect, layer } from '@effect/vitest';
-import { ConfigProvider, Effect, Layer, Option, Schema } from 'effect';
+import { ConfigProvider, Effect, Layer, Logger, Option, Schema } from 'effect';
 import { HttpRouter } from 'effect/unstable/http';
 import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
 import { createHash } from 'node:crypto';
@@ -17,6 +17,8 @@ import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#infra/errors/request-validation.js';
+import { operationFailedEvent } from '#infra/errors/technical-failure.js';
+import { InternalHttpError } from '#infra/errors/technical-http-errors.js';
 import { authGroup } from '#modules/auth/api/auth.api.js';
 import { AuthModuleLive } from '#modules/auth/auth.module.js';
 import {
@@ -45,6 +47,18 @@ const email = 'login@example.test';
 const password = 'Password1!';
 const unknownEmail = 'unknown@example.test';
 
+const logs: Array<ReturnType<typeof Logger.formatStructured.log>> = [];
+const logger = Logger.make(
+  (options) => void logs.push(Logger.formatStructured.log(options)),
+);
+
+beforeEach(() => {
+  logs.length = 0;
+});
+
+const failedLogs = () =>
+  logs.filter((log) => log.annotations.event === operationFailedEvent);
+
 const makeApp = (
   auth: Effect.Success<typeof AuthService>,
   mode: 'production' | 'test' = 'test',
@@ -67,7 +81,9 @@ const makeApp = (
     ]),
     HttpRouter.provideRequest(authLayer),
   );
-  return HttpRouter.toWebHandler(routes);
+  return HttpRouter.toWebHandler(
+    routes.pipe(Layer.provide(Logger.layer([logger]))),
+  );
 };
 
 interface TestApp {
@@ -301,6 +317,51 @@ describe('login with PostgreSQL', () => {
             expect(secondSession.value.userId).toBe(signup.user.id);
             expect(firstSession.value.id).not.toBe(secondSession.value.id);
           }
+        }),
+    );
+    it.effect(
+      'returns 500 and logs data integrity when the stored credentials are corrupted',
+      () =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const app = yield* acquireApp();
+          const signup = yield* register(app, db);
+          yield* db
+            .updateTable('passwordCredentials')
+            .set('passwordHash', 'brokenHash')
+            .where('userId', '=', signup.user.id);
+          const sessionsBefore = yield* sessionsSnapshot(db);
+          logs.length = 0;
+
+          const response = yield* post(app, '/api/auth/login', {
+            email,
+            password,
+          });
+          const json: unknown = yield* Effect.promise(() => response.json());
+          const body =
+            yield* Schema.decodeUnknownEffect(InternalHttpError)(json);
+
+          expect(response.status).toBe(500);
+          expect(response.headers.get('set-cookie')).toBeNull();
+          expect(body.instance).toBe('/api/auth/login');
+          expect(yield* sessionsSnapshot(db)).toEqual(sessionsBefore);
+          expect(failedLogs()).toHaveLength(1);
+          expect(failedLogs()[0]?.annotations).toMatchObject({
+            kind: 'failure',
+            module: 'auth',
+            operation: 'login',
+            reason: 'dataIntegrity',
+            errorId: body.errorId,
+            errorChain: [
+              { tag: 'AuthDataIntegrityError' },
+              {
+                tag: 'PasswordCredentialsInvalidRecord',
+                operation: 'getByIdUserId',
+              },
+              { tag: 'SchemaError' },
+            ],
+          });
+          expect(JSON.stringify(logs)).not.toContain('brokenHash');
         }),
     );
   });

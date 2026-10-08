@@ -54,20 +54,27 @@ export class AuthInternalError extends Data.TaggedError('AuthInternalError')<{
   readonly cause: unknown;
 }> {}
 
-export type AuthSignupError =
-  | AuthEmailAlreadyExistsError
+// В базе лежит запись, которую нельзя разобрать: строка не проходит схему или
+// сохранённый хэш пароля повреждён.
+export class AuthDataIntegrityError extends Data.TaggedError(
+  'AuthDataIntegrityError',
+)<{
+  readonly cause: unknown;
+}> {}
+
+// Ошибки, которые handler переводит в 5xx через makeTechnicalFailureHandler.
+export type AuthTechnicalError =
+  | AuthDataIntegrityError
   | AuthInternalError
   | AuthUnavailableError;
 
-export type AuthLoginError =
-  | AuthInternalError
-  | AuthInvalidCredentialsError
-  | AuthUnavailableError;
+export type AuthSignupError = AuthEmailAlreadyExistsError | AuthTechnicalError;
+
+export type AuthLoginError = AuthInvalidCredentialsError | AuthTechnicalError;
 
 export type AuthAuthenticateError =
-  | AuthInternalError
-  | AuthUnauthenticatedError
-  | AuthUnavailableError;
+  | AuthTechnicalError
+  | AuthUnauthenticatedError;
 
 export type AuthenticateOperationError =
   | AuthUnauthenticatedError

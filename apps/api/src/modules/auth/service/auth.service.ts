@@ -8,7 +8,6 @@ import {
   Redacted,
   Schema,
 } from 'effect';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
 
 import type {
   LoginRequestBody,
@@ -24,15 +23,18 @@ import type {
   AuthenticateOperationError,
   AuthLoginError,
   AuthSignupError,
+  AuthTechnicalError,
   LoginOperationError,
   SignupOperationError,
 } from '#modules/auth/service/auth.service.errors.js';
 
 import { DB } from '#infra/db/db.service.js';
+import { isRetryableSqlFailure } from '#infra/db/sql-failure.js';
 import { PasswordCredentialsRepository } from '#modules/auth/repository/password/password-credentials.repository.js';
 import { SessionRepository } from '#modules/auth/repository/session/sesion.repository.js';
 import { AuthTokenSchema } from '#modules/auth/schemas/auth.schema.js';
 import {
+  AuthDataIntegrityError,
   AuthEmailAlreadyExistsError,
   AuthInternalError,
   AuthInvalidCredentialsError,
@@ -54,19 +56,22 @@ const unAuthenticatedError = new AuthUnauthenticatedError({
   cause: `Can't authenticate`,
 });
 
+// PasswordHashIntegrityError означает разное в разных операциях, поэтому его
+// сопоставляют mapSignupError и mapLoginError, а не общая функция.
 type TechnicalOperationError = Exclude<
   AuthenticateOperationError | LoginOperationError | SignupOperationError,
   {
     readonly _tag:
       | 'AuthInvalidCredentialsError'
       | 'AuthUnauthenticatedError'
+      | 'PasswordHashIntegrityError'
       | 'UserEmailAlreadyExists';
   }
 >;
 
 const mapTechnicalError = (
   error: TechnicalOperationError,
-): AuthInternalError | AuthUnavailableError =>
+): AuthTechnicalError =>
   Match.value(error).pipe(
     Match.tag(
       'PasswordHashOverloadedError',
@@ -78,7 +83,10 @@ const mapTechnicalError = (
       'InvalidUserRecord',
       'PasswordCredentialsInvalidRecord',
       'SessionInvalidRecordError',
-      'PasswordHashIntegrityError',
+      (cause) => new AuthDataIntegrityError({ cause }),
+    ),
+
+    Match.tag(
       'PasswordCredentialsAlreadyExists',
       'SessionTokenDigestAlreadyExistsError',
       (cause) => new AuthInternalError({ cause }),
@@ -89,13 +97,10 @@ const mapTechnicalError = (
       'UsersRepositoryError',
       'PasswordCredentialsRepositoryError',
       'SessionRepositoryError',
-      (cause) => {
-        const sqlCause = isSqlError(cause) ? cause : cause.cause;
-
-        return isSqlError(sqlCause) && sqlCause.isRetryable
+      (cause) =>
+        isRetryableSqlFailure(cause)
           ? new AuthUnavailableError({ cause })
-          : new AuthInternalError({ cause });
-      },
+          : new AuthInternalError({ cause }),
     ),
 
     Match.exhaustive,
@@ -107,12 +112,22 @@ const mapSignupError = (error: SignupOperationError): AuthSignupError =>
       'UserEmailAlreadyExists',
       (cause) => new AuthEmailAlreadyExistsError({ cause }),
     ),
+    // При signup хэш только что посчитан: неверная длина его частей — ошибка кода.
+    Match.tag(
+      'PasswordHashIntegrityError',
+      (cause) => new AuthInternalError({ cause }),
+    ),
     Match.orElse(mapTechnicalError),
   );
 
 const mapLoginError = (error: LoginOperationError): AuthLoginError =>
   Match.value(error).pipe(
     Match.tag('AuthInvalidCredentialsError', (error) => error),
+    // При login хэш прочитан из базы: не разбирается — значит, запись повреждена.
+    Match.tag(
+      'PasswordHashIntegrityError',
+      (cause) => new AuthDataIntegrityError({ cause }),
+    ),
     Match.orElse(mapTechnicalError),
   );
 

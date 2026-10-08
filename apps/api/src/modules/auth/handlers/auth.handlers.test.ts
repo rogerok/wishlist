@@ -40,6 +40,7 @@ import {
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import {
+  AuthDataIntegrityError,
   AuthEmailAlreadyExistsError,
   AuthInternalError,
   AuthUnavailableError,
@@ -47,7 +48,10 @@ import {
 import { AuthService } from '#modules/auth/service/auth.service.js';
 import { PasswordHashOverloadedError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
-import { UsersRepositoryError } from '#modules/users/repository/users.repository.errors.js';
+import {
+  UserInvalidRecord,
+  UsersRepositoryError,
+} from '#modules/users/repository/users.repository.errors.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
@@ -159,6 +163,19 @@ describe('signup errors handling', () => {
       name: 'unknown cause',
       failure: new AuthInternalError({ cause: new Error(sensitiveMarker) }),
       reason: 'internal',
+      status: 500,
+      schema: InternalHttpError,
+      code: 'INTERNAL_ERROR',
+    },
+    {
+      name: 'corrupted record',
+      failure: new AuthDataIntegrityError({
+        cause: new UserInvalidRecord({
+          cause: new Error(sensitiveMarker),
+          operation: UserOperation.create,
+        }),
+      }),
+      reason: 'dataIntegrity',
       status: 500,
       schema: InternalHttpError,
       code: 'INTERNAL_ERROR',

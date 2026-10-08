@@ -21,6 +21,11 @@ export class UserDataIntegrityError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
+export type UsersTechnicalError =
+  | UserDataIntegrityError
+  | UsersInternalError
+  | UsersUnavailableError;
+
 export class UserEmailAlreadyExistsError extends Data.TaggedError(
   'UserEmailAlreadyExistsError',
 )<{

@@ -3,6 +3,8 @@ import type { Redacted } from 'effect';
 import { Duration, Effect, Layer } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
+import type { AuthTechnicalError } from '#modules/auth/service/auth.service.errors.js';
+
 import { AppApi } from '#infra/api/api.js';
 import { ModeConfig } from '#infra/config/config.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
@@ -24,14 +26,16 @@ type SessionCookieData = {
   readonly expiresAt: Date;
 };
 
-const makeTechnicalErrorHandler = makeTechnicalFailureHandler({
-  module: 'auth',
-  operations: AuthOperation,
-  reasons: {
-    AuthInternalError: 'internal',
-    AuthUnavailableError: 'unavailable',
-  },
-});
+const makeTechnicalErrorHandler =
+  makeTechnicalFailureHandler<AuthTechnicalError>()({
+    module: 'auth',
+    operations: AuthOperation,
+    reasons: {
+      AuthDataIntegrityError: 'dataIntegrity',
+      AuthInternalError: 'internal',
+      AuthUnavailableError: 'unavailable',
+    },
+  });
 
 export const AuthHandlersLive = HttpApiBuilder.group(
   AppApi,
@@ -64,6 +68,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
               Effect.catchTags({
                 AuthEmailAlreadyExistsError: () =>
                   new AuthEmailAlreadyExistsHttpError(),
+                AuthDataIntegrityError: handleTechnicalError,
                 AuthInternalError: handleTechnicalError,
                 AuthUnavailableError: handleTechnicalError,
               }),
@@ -85,6 +90,7 @@ export const AuthHandlersLive = HttpApiBuilder.group(
               Effect.catchTags({
                 AuthInvalidCredentialsError: () =>
                   new AuthInvalidCredentialsHttpError(),
+                AuthDataIntegrityError: handleTechnicalError,
                 AuthInternalError: handleTechnicalError,
                 AuthUnavailableError: handleTechnicalError,
               }),

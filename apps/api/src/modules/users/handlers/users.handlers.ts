@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
+import type { UsersTechnicalError } from '#modules/users/service/users.service.errors.js';
+
 import { AppApi } from '#infra/api/api.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
 import { usersGroupIdentifier } from '#modules/users/api/users.api.constants.js';
@@ -12,15 +14,16 @@ import {
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 import { UsersService } from '#modules/users/service/users.service.js';
 
-const makeTechnicalErrorHandler = makeTechnicalFailureHandler({
-  module: 'users',
-  operations: UserOperation,
-  reasons: {
-    UserDataIntegrityError: 'dataIntegrity',
-    UsersInternalError: 'internal',
-    UsersUnavailableError: 'unavailable',
-  },
-});
+const makeTechnicalErrorHandler =
+  makeTechnicalFailureHandler<UsersTechnicalError>()({
+    module: 'users',
+    operations: UserOperation,
+    reasons: {
+      UserDataIntegrityError: 'dataIntegrity',
+      UsersInternalError: 'internal',
+      UsersUnavailableError: 'unavailable',
+    },
+  });
 
 export const UsersHandlersLive = HttpApiBuilder.group(
   AppApi,

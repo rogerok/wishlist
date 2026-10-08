@@ -23,6 +23,7 @@ import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/pa
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
 import {
+  AuthDataIntegrityError,
   AuthInternalError,
   AuthUnavailableError,
 } from '#modules/auth/service/auth.service.errors.js';
@@ -30,7 +31,10 @@ import {
   AuthService,
   AuthServiceLive,
 } from '#modules/auth/service/auth.service.js';
-import { PasswordHashOverloadedError } from '#modules/auth/service/password/password-hasher.service.errors.js';
+import {
+  PasswordHashIntegrityError,
+  PasswordHashOverloadedError,
+} from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
@@ -72,6 +76,17 @@ const authLayer = AuthServiceLive.pipe(
   Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoLayer)),
 );
 
+const makeAuthLayerWithHasher = (hasherLive: Layer.Layer<PasswordHasher>) =>
+  AuthServiceLive.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        repoLayer,
+        hasherLive,
+        SessionTokenGeneratorLive.pipe(Layer.provide(SecureRandomBytesLive)),
+      ),
+    ),
+  );
+
 const overloadedVerifyHasherLive = Layer.effect(
   PasswordHasher,
   Effect.gen(function* () {
@@ -84,14 +99,38 @@ const overloadedVerifyHasherLive = Layer.effect(
   }),
 ).pipe(Layer.provide(PasswordHasherLive));
 
-const overloadedAuthLayer = AuthServiceLive.pipe(
-  Layer.provideMerge(
-    Layer.mergeAll(
-      repoLayer,
-      overloadedVerifyHasherLive,
-      SessionTokenGeneratorLive.pipe(Layer.provide(SecureRandomBytesLive)),
-    ),
-  ),
+const overloadedAuthLayer = makeAuthLayerWithHasher(overloadedVerifyHasherLive);
+
+const brokenStoredHashAuthLayer = makeAuthLayerWithHasher(
+  Layer.effect(
+    PasswordHasher,
+    Effect.gen(function* () {
+      const hasher = yield* PasswordHasher;
+      return {
+        ...hasher,
+        verify: () =>
+          new PasswordHashIntegrityError({
+            cause: 'Invalid stored password hash structure',
+          }),
+      };
+    }),
+  ).pipe(Layer.provide(PasswordHasherLive)),
+);
+
+const brokenNewHashAuthLayer = makeAuthLayerWithHasher(
+  Layer.effect(
+    PasswordHasher,
+    Effect.gen(function* () {
+      const hasher = yield* PasswordHasher;
+      return {
+        ...hasher,
+        hash: () =>
+          new PasswordHashIntegrityError({
+            cause: 'Invalid password hash component length',
+          }),
+      };
+    }),
+  ).pipe(Layer.provide(PasswordHasherLive)),
 );
 
 const email = UserEmailSchema.make('test@example.test');
@@ -257,7 +296,7 @@ describe('AuthService', () => {
   );
 
   it.effect(
-    'returns an internal error when stored password credentials are invalid',
+    'returns a data integrity error when stored password credentials are invalid',
     () =>
       Effect.gen(function* () {
         const auth = yield* AuthService;
@@ -280,7 +319,7 @@ describe('AuthService', () => {
         const loginResult = yield* Effect.flip(auth.login({ email, password }));
         const sessionsAfter = yield* sessionsReq;
         expect(sessionsAfter).toEqual(sessionsBefore);
-        expect(loginResult).toBeInstanceOf(AuthInternalError);
+        expect(loginResult).toBeInstanceOf(AuthDataIntegrityError);
         expect(loginResult.cause).toBeInstanceOf(
           PasswordCredentialsInvalidRecord,
         );
@@ -309,5 +348,41 @@ describe('AuthService', () => {
         expect(loginResult).toBeInstanceOf(AuthUnavailableError);
         expect(loginResult.cause).toBeInstanceOf(PasswordHashOverloadedError);
       }).pipe(Effect.provide(overloadedAuthLayer)),
+  );
+  it.effect(
+    'returns a data integrity error when the stored password hash cannot be parsed',
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const db = yield* DB;
+
+        yield* TestClock.setTime(Date.now());
+        yield* auth.signup(signupInput);
+
+        const sessions = db.selectFrom('sessions').select('id').orderBy('id');
+        const sessionsBefore = yield* sessions;
+        const loginResult = yield* Effect.flip(auth.login({ email, password }));
+        const sessionsAfter = yield* sessions;
+
+        expect(sessionsAfter).toEqual(sessionsBefore);
+        expect(loginResult).toBeInstanceOf(AuthDataIntegrityError);
+        expect(loginResult.cause).toBeInstanceOf(PasswordHashIntegrityError);
+      }).pipe(Effect.provide(brokenStoredHashAuthLayer)),
+  );
+
+  it.effect(
+    'returns an internal error when a new password hash is malformed',
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* AuthService;
+        const db = yield* DB;
+
+        const signupError = yield* Effect.flip(auth.signup(signupInput));
+        const users = yield* db.selectFrom('users').select('id');
+
+        expect(users).toEqual([]);
+        expect(signupError).toBeInstanceOf(AuthInternalError);
+        expect(signupError.cause).toBeInstanceOf(PasswordHashIntegrityError);
+      }).pipe(Effect.provide(brokenNewHashAuthLayer)),
   );
 });

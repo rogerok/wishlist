@@ -21,12 +21,18 @@ type TechnicalFailureContext<Operation extends string> = {
   readonly userId: string | null;
 };
 
-type TechnicalFailureOptions<Operation extends string, Tag extends string> = {
+type TaggedError = { readonly _tag: string };
+
+type TechnicalFailureOptions<
+  Operation extends string,
+  TechnicalError extends TaggedError,
+> = {
   readonly module: string;
   // Нужно только для вывода типа Operation из значений вроде AuthOperation.
   readonly operations: Readonly<Record<string, Operation>>;
   // Тег технической ошибки сервиса → причина в логе и статус ответа.
-  readonly reasons: Readonly<Record<Tag, FailureReason>>;
+  // Ключи — ровно теги TechnicalError: лишний или пропущенный тег не скомпилируется.
+  readonly reasons: Readonly<Record<TechnicalError['_tag'], FailureReason>>;
 };
 
 type TechnicalFailure = {
@@ -40,6 +46,28 @@ type ProblemContext = {
   readonly errorId: string;
   readonly instance: string;
 };
+
+type TechnicalHttpError = InternalHttpError | ServiceUnavailableHttpError;
+
+// Всегда завершается ошибкой 5xx; instance для ответа берёт из текущего запроса.
+type TechnicalFailureResponse = Effect.Effect<
+  never,
+  TechnicalHttpError,
+  HttpServerRequest.HttpServerRequest
+>;
+
+// Обработчик для catchTags: переводит ошибку сервиса в 5xx.
+type TechnicalErrorHandler<TechnicalError extends TaggedError> = (
+  error: TechnicalError,
+) => TechnicalFailureResponse;
+
+// Привязывает обработчик к операции и пользователю конкретного запроса.
+type MakeTechnicalErrorHandler<
+  Operation extends string,
+  TechnicalError extends TaggedError,
+> = (
+  context: TechnicalFailureContext<Operation>,
+) => TechnicalErrorHandler<TechnicalError>;
 
 // Свой идентификатор, а не trace id: trace id Effect берёт из заголовков
 // traceparent/b3, которые выбирает клиент (ADR-0005).
@@ -79,13 +107,7 @@ export const logTechnicalFailure = ({
     return { errorId, instance: getRequestPathname(request) };
   });
 
-const failTechnically = (
-  failure: TechnicalFailure,
-): Effect.Effect<
-  never,
-  InternalHttpError | ServiceUnavailableHttpError,
-  HttpServerRequest.HttpServerRequest
-> =>
+const failTechnically = (failure: TechnicalFailure): TechnicalFailureResponse =>
   Effect.gen(function* () {
     const problem = yield* logTechnicalFailure(failure);
 
@@ -94,17 +116,22 @@ const failTechnically = (
       : new InternalHttpError(problem);
   });
 
+// Первый вызов принимает тип ошибок явно, второй выводит Operation из
+// operations: TypeScript не умеет задать один параметр типа и вывести другой.
 export const makeTechnicalFailureHandler =
-  <Operation extends string, Tag extends string>({
-    module,
-    reasons,
-  }: TechnicalFailureOptions<Operation, Tag>) =>
-  (context: TechnicalFailureContext<Operation>) =>
-  (error: { readonly _tag: Tag }) =>
-    failTechnically({
+  <TechnicalError extends TaggedError>() =>
+  <Operation extends string>(
+    options: TechnicalFailureOptions<Operation, TechnicalError>,
+  ): MakeTechnicalErrorHandler<Operation, TechnicalError> =>
+  (context) =>
+  (error) => {
+    const tag: TechnicalError['_tag'] = error._tag;
+
+    return failTechnically({
       ...context,
       error,
       kind: 'failure',
-      module,
-      reason: reasons[error._tag],
+      module: options.module,
+      reason: options.reasons[tag],
     });
+  };

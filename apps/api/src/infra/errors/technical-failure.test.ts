@@ -79,7 +79,7 @@ const probeApi = HttpApi.make('probe')
   )
   .middleware(DefectBoundaryMiddleware);
 
-const handleTechnicalFailure = makeTechnicalFailureHandler({
+const handleTechnicalFailure = makeTechnicalFailureHandler<ProbeError>()({
   module: 'probe',
   operations: ProbeOperation,
   reasons: {
@@ -161,6 +161,36 @@ beforeEach(() => {
 });
 
 describe('makeTechnicalFailureHandler', () => {
+  // Проверка выполняется в check-types: если ошибка типа исчезнет,
+  // директива ts-expect-error ниже сама станет ошибкой.
+  it('accepts reasons only for exactly the technical error tags', () => {
+    const makeProbeHandler = makeTechnicalFailureHandler<ProbeError>();
+
+    const withUnknownTag = makeProbeHandler({
+      module: 'probe',
+      operations: ProbeOperation,
+      reasons: {
+        ProbeDataIntegrityError: 'dataIntegrity',
+        ProbeInternalError: 'internal',
+        ProbeUnavailableError: 'unavailable',
+        // @ts-expect-error тег, которого нет среди ошибок модуля
+        ProbeUnavailableEror: 'unavailable',
+      },
+    });
+    const withMissingTag = makeProbeHandler({
+      module: 'probe',
+      operations: ProbeOperation,
+      // @ts-expect-error нет причины для ProbeUnavailableError
+      reasons: {
+        ProbeDataIntegrityError: 'dataIntegrity',
+        ProbeInternalError: 'internal',
+      },
+    });
+
+    expect(withUnknownTag).toBeTypeOf('function');
+    expect(withMissingTag).toBeTypeOf('function');
+  });
+
   it.effect.each([
     {
       reason: 'internal',
