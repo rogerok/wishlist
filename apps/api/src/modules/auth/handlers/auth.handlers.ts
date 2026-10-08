@@ -1,8 +1,10 @@
 import type { Redacted } from 'effect';
+import type { Cookie } from 'effect/unstable/http/Cookies';
 
 import { Duration, Effect, Layer } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
+import type { Mode } from '#infra/config/config.js';
 import type { AuthTechnicalError } from '#modules/auth/service/auth.service.errors.js';
 
 import { AppApi } from '#infra/api/api.js';
@@ -39,18 +41,23 @@ const makeTechnicalErrorHandler =
     },
   });
 
+const getBaseCookieOptions = (mode: Mode): Cookie['options'] => ({
+  httpOnly: true,
+  sameSite: 'lax',
+  path: '/api',
+  secure: mode === 'production',
+});
+
 export const AuthHandlersLive = HttpApiBuilder.group(
   AppApi,
   authGroupIdentifier,
   (handlers) =>
     Effect.gen(function* () {
       const mode = yield* ModeConfig;
+      const baseCookieOptions = getBaseCookieOptions(mode);
       const setSessionCookie = ({ credential, expiresAt }: SessionCookieData) =>
         HttpApiBuilder.securitySetCookie(sessionCookieSecurity, credential, {
-          httpOnly: true,
-          sameSite: 'lax',
-          path: '/api',
-          secure: mode === 'production',
+          ...baseCookieOptions,
           expires: expiresAt,
           maxAge: Duration.millis(sessionLifetimeMs),
         });
@@ -106,6 +113,33 @@ export const AuthHandlersLive = HttpApiBuilder.group(
           Effect.gen(function* () {
             const currentSession = yield* CurrentSession;
             return currentSession.user;
+          }),
+        )
+        .handle(AuthOperation.logout, () =>
+          Effect.gen(function* () {
+            const service = yield* AuthService;
+            const cookie = yield* HttpApiBuilder.securityDecode(
+              sessionCookieSecurity,
+            );
+
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              userId: null,
+              operation: AuthOperation.logout,
+            });
+
+            yield* service.logout(cookie).pipe(
+              Effect.catchTags({
+                AuthUnavailableError: handleTechnicalError,
+                AuthInternalError: handleTechnicalError,
+                AuthDataIntegrityError: handleTechnicalError,
+              }),
+            );
+
+            yield* HttpApiBuilder.securitySetCookie(sessionCookieSecurity, '', {
+              ...baseCookieOptions,
+              expires: new Date(0),
+              maxAge: 0,
+            });
           }),
         );
     }),

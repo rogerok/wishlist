@@ -1,3 +1,4 @@
+import type { SchemaError } from 'effect/Schema';
 import type { SqlError } from 'effect/unstable/sql';
 
 import { Data } from 'effect';
@@ -9,6 +10,7 @@ import type {
 } from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import type {
   SessionCreateError,
+  SessionDeleteByTokenDigestError,
   SessionGetByTokenDigestError,
   SessionInvalidRecordError,
   SessionRepositoryError,
@@ -54,8 +56,6 @@ export class AuthInternalError extends Data.TaggedError('AuthInternalError')<{
   readonly cause: unknown;
 }> {}
 
-// В базе лежит запись, которую нельзя разобрать: строка не проходит схему или
-// сохранённый хэш пароля повреждён.
 export class AuthDataIntegrityError extends Data.TaggedError(
   'AuthDataIntegrityError',
 )<{
@@ -69,7 +69,6 @@ export type AuthTechnicalError =
   | AuthUnavailableError;
 
 export type AuthSignupError = AuthEmailAlreadyExistsError | AuthTechnicalError;
-
 export type AuthLoginError = AuthInvalidCredentialsError | AuthTechnicalError;
 
 export type AuthAuthenticateError =
@@ -78,8 +77,11 @@ export type AuthAuthenticateError =
 
 export type AuthenticateOperationError =
   | AuthUnauthenticatedError
+  | SchemaError
   | SessionGetByTokenDigestError
   | UsersRepositoryGetByError;
+
+export type LogoutOperationError = SessionDeleteByTokenDigestError;
 
 export type SignupOperationError =
   | PasswordCredentialsCreateError

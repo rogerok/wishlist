@@ -4,6 +4,7 @@ export const ModeConfig = Config.literals(
   ['development', 'test', 'production'],
   'MODE',
 );
+export type Mode = Config.Success<typeof ModeConfig>;
 
 // Печатать текст и stack дефектов для отладки; при MODE=production игнорируется.
 export const DefectDetailsConfig = Config.boolean('LOG_DEFECT_DETAILS').pipe(

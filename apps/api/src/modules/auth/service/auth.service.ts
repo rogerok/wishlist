@@ -6,6 +6,7 @@ import {
   Match,
   Option,
   Redacted,
+  Result,
   Schema,
 } from 'effect';
 
@@ -26,6 +27,7 @@ import type {
   AuthSignupError,
   AuthTechnicalError,
   LoginOperationError,
+  LogoutOperationError,
   SignupOperationError,
 } from '#modules/auth/service/auth.service.errors.js';
 
@@ -63,12 +65,16 @@ const unAuthenticatedError = new AuthUnauthenticatedError({
 // PasswordHashIntegrityError означает разное в разных операциях, поэтому его
 // сопоставляют mapSignupError и mapLoginError
 type TechnicalOperationError = Exclude<
-  AuthenticateOperationError | LoginOperationError | SignupOperationError,
+  | AuthenticateOperationError
+  | LoginOperationError
+  | LogoutOperationError
+  | SignupOperationError,
   {
     readonly _tag:
       | 'AuthInvalidCredentialsError'
       | 'AuthUnauthenticatedError'
       | 'PasswordHashIntegrityError'
+      | 'SchemaError'
       | 'UserEmailAlreadyExists';
   }
 >;
@@ -126,7 +132,7 @@ const mapSignupError = (error: SignupOperationError): AuthSignupError =>
 
 const mapLoginError = (error: LoginOperationError): AuthLoginError =>
   Match.value(error).pipe(
-    Match.tag('AuthInvalidCredentialsError', (error) => error),
+    Match.tag('AuthInvalidCredentialsError', (cause) => cause),
     // При login хэш прочитан из базы: не разбирается — значит, запись повреждена.
     Match.tag(
       'PasswordHashIntegrityError',
@@ -139,17 +145,24 @@ const mapAuthenticateError = (
   error: AuthenticateOperationError,
 ): AuthAuthenticateError =>
   Match.value(error).pipe(
-    Match.tag('AuthUnauthenticatedError', (error) => error),
+    Match.tag(
+      'SchemaError',
+      (cause) => new AuthUnauthenticatedError({ cause }),
+    ),
+    Match.tag('AuthUnauthenticatedError', (cause) => cause),
     Match.orElse(mapTechnicalError),
   );
 
 interface AuthServiceShape {
   authenticate: (
-    credential: Redacted.Redacted<string>,
+    credential: Redacted.Redacted,
   ) => Effect.Effect<AuthenticatedSession, AuthAuthenticateError>;
   login: (
     input: LoginRequestBody,
   ) => Effect.Effect<LoginResult, AuthLoginError>;
+  logout: (
+    credential: Redacted.Redacted,
+  ) => Effect.Effect<void, AuthTechnicalError>;
   signup: (input: SignupInput) => Effect.Effect<SignupResult, AuthSignupError>;
 }
 
@@ -248,8 +261,6 @@ export const AuthServiceLive = Layer.effect(
       Effect.gen(function* () {
         const decodedCred = yield* Schema.decodeEffect(AuthTokenSchema)(
           Redacted.value(credential),
-        ).pipe(
-          Effect.mapError((cause) => new AuthUnauthenticatedError({ cause })),
         );
 
         const session = yield* sessionRepo.getByTokenDigest(
@@ -271,6 +282,21 @@ export const AuthServiceLive = Layer.effect(
         };
       }).pipe(Effect.mapError(mapAuthenticateError));
 
-    return { signup, login, authenticate };
+    const logout: AuthServiceShape['logout'] = (credential) =>
+      Effect.gen(function* () {
+        const decodedCred = Schema.decodeResult(AuthTokenSchema)(
+          Redacted.value(credential),
+        );
+
+        if (Result.isFailure(decodedCred)) {
+          return yield* Effect.void;
+        }
+
+        return yield* sessionRepo.deleteByTokenDigest(
+          digestSessionToken(decodedCred.success),
+        );
+      }).pipe(Effect.mapError(mapTechnicalError));
+
+    return { signup, login, authenticate, logout };
   }),
 );

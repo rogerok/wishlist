@@ -175,6 +175,7 @@ describe('GET /api/auth/me technical failures', () => {
       const app = yield* acquireApp({
         signup: () => Effect.die(new Error('Unexpected call: signup')),
         login: () => Effect.die(new Error('Unexpected call: login')),
+        logout: () => Effect.die(new Error('Unexpected call: logout')),
         authenticate: () =>
           new AuthUnavailableError({ cause: 'connection reset' }),
       });

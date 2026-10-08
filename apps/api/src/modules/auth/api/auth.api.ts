@@ -1,10 +1,15 @@
-import { HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi';
+import {
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpApiSchema,
+} from 'effect/unstable/httpapi';
 
 import { asProblemJson } from '#infra/errors/http-problem.js';
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   authGroupIdentifier,
   authLoginPath,
+  authLogoutPath,
   authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
@@ -44,8 +49,8 @@ export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
   HttpApiEndpoint.get(AuthOperation.me, authMePath, {
     success: MeResponseBodySchema,
   }).middleware(SessionAuthentication),
-  // HttpApiEndpoint.post(AuthOperation.logout, authLogoutPath, {
-  //   success: HttpApiSchema.NoContent,
-  //   error: technicalHttpErrors,
-  // }),
+  HttpApiEndpoint.post(AuthOperation.logout, authLogoutPath, {
+    success: HttpApiSchema.NoContent,
+    error: technicalHttpErrors,
+  }),
 );
