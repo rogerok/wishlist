@@ -1,157 +1,37 @@
 import type { Redacted } from 'effect';
 
-import { type Cause, Duration, Effect, Layer, Match } from 'effect';
+import { Duration, Effect, Layer } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
-import { match, P } from 'ts-pattern';
-
-import type { AuthFailureLogAnnotation } from '#modules/auth/schemas/auth-logs.schema.js';
-import type {
-  AuthInternalError,
-  AuthUnavailableError,
-  SignupOperationError,
-} from '#modules/auth/service/auth.service.errors.js';
 
 import { AppApi } from '#infra/api/api.js';
 import { ModeConfig } from '#infra/config/config.js';
-import {
-  authGroupIdentifier,
-  authLoginPath,
-  authMePath,
-  authSignupPath,
-} from '#modules/auth/api/auth.api.constants.js';
+import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
+import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
 import {
   AuthEmailAlreadyExistsHttpError,
-  AuthInternalHttpError,
   AuthInvalidCredentialsHttpError,
-  AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import {
   SessionAuthentication,
   sessionCookieSecurity,
 } from '#modules/auth/api/session-authentication.js';
-import {
-  AuthFailureReason,
-  AuthLogEvent,
-} from '#modules/auth/schemas/auth-logs.schema.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import { AuthService } from '#modules/auth/service/auth.service.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
-import { UserFailureReason } from '#modules/users/schemas/user-logs.schema.js';
 
-type SignupOperationsTags = ReadonlyArray<SignupOperationError['_tag']>;
-type LogOptions = {
-  cause: AuthInternalError | AuthUnavailableError;
-} & Omit<AuthFailureLogAnnotation, 'event'>;
-type TechnicalErrorContext = {
-  instance: AuthInternalHttpError['instance'];
-} & Pick<AuthFailureLogAnnotation, 'operation' | 'userId'>;
 type SessionCookieData = {
   readonly credential: Redacted.Redacted<string>;
   readonly expiresAt: Date;
 };
 
-const authRepositoryErrorTag = [
-  'UsersRepositoryError',
-  'PasswordCredentialsRepositoryError',
-  'SessionRepositoryError',
-] as const satisfies SignupOperationsTags;
-const authKnownCauseTags = [
-  ...authRepositoryErrorTag,
-  'PasswordHashOverloadedError',
-  'SecurePrimitiveUnavailableError',
-  'PasswordHashIntegrityError',
-  'InvalidUserRecord',
-  'PasswordCredentialsInvalidRecord',
-  'SessionInvalidRecordError',
-  'PasswordCredentialsAlreadyExists',
-  'SessionTokenDigestAlreadyExistsError',
-] as const satisfies SignupOperationsTags;
-
-const makeTechnicalErrorHandler =
-  ({ operation, userId, instance }: TechnicalErrorContext) =>
-  (
-    cause: LogOptions['cause'],
-  ): Effect.Effect<never, AuthInternalHttpError | AuthUnavailableHttpError> =>
-    Match.value(cause).pipe(
-      Match.tag('AuthInternalError', () =>
-        logAndFail(
-          {
-            operation,
-            cause,
-            userId,
-            reason: UserFailureReason.internal,
-          },
-          new AuthInternalHttpError({
-            instance,
-          }),
-        ),
-      ),
-
-      Match.tag('AuthUnavailableError', () =>
-        logAndFail(
-          {
-            operation,
-            cause,
-            userId,
-            reason: AuthFailureReason.unavailable,
-          },
-          new AuthUnavailableHttpError({
-            instance,
-          }),
-        ),
-      ),
-      Match.exhaustive,
-    );
-
-const toAuthFailureLog = (error: LogOptions['cause']) => {
-  const base = { errorTag: error._tag };
-
-  return match(error.cause)
-    .with(P.when(isSqlError), (cause) => ({
-      ...base,
-      causeTag: cause._tag,
-      sqlReason: cause.reason._tag,
-    }))
-    .with(
-      { _tag: P.union(...authRepositoryErrorTag), cause: P.when(isSqlError) },
-      ({ _tag, cause }) => ({
-        ...base,
-        causeTag: _tag,
-        sqlReason: cause.reason._tag,
-      }),
-    )
-    .with(
-      {
-        _tag: P.union(...authKnownCauseTags),
-      },
-      ({ _tag }) => ({
-        ...base,
-        causeTag: _tag,
-      }),
-    )
-    .otherwise(() => base);
-};
-
-const logFailure = ({ operation, userId, reason, cause }: LogOptions) =>
-  Effect.logError('Auth operation failed').pipe(
-    Effect.annotateLogs({
-      event: AuthLogEvent['auth.operation.failed'],
-      operation,
-      userId,
-      reason,
-      ...toAuthFailureLog(cause),
-    }),
-  );
-
-const logAndFail = <E extends Cause.YieldableError>(
-  options: LogOptions,
-  error: E,
-) =>
-  Effect.gen(function* () {
-    yield* logFailure(options);
-    return yield* error;
-  });
+const makeTechnicalErrorHandler = makeTechnicalFailureHandler({
+  module: 'auth',
+  operations: AuthOperation,
+  reasons: {
+    AuthInternalError: 'internal',
+    AuthUnavailableError: 'unavailable',
+  },
+});
 
 export const AuthHandlersLive = HttpApiBuilder.group(
   AppApi,
@@ -176,7 +56,6 @@ export const AuthHandlersLive = HttpApiBuilder.group(
             const { passwordConfirm, ...rest } = payload;
             const service = yield* AuthService;
             const handleTechnicalError = makeTechnicalErrorHandler({
-              instance: authSignupPath,
               userId: null,
               operation: AuthOperation.signup,
             });
@@ -199,7 +78,6 @@ export const AuthHandlersLive = HttpApiBuilder.group(
           Effect.gen(function* () {
             const service = yield* AuthService;
             const handleTechnicalError = makeTechnicalErrorHandler({
-              instance: authLoginPath,
               userId: null,
               operation: AuthOperation.login,
             });
@@ -232,7 +110,6 @@ export const SessionAuthenticationLive = Layer.effect(
   Effect.gen(function* () {
     const service = yield* AuthService;
     const handleTechnicalError = makeTechnicalErrorHandler({
-      instance: authMePath,
       userId: null,
       operation: AuthOperation.me,
     });

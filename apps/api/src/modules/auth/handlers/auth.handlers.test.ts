@@ -16,16 +16,22 @@ import type { SignupResult } from '#modules/auth/schemas/signup/signup.schema.js
 import type { AuthSignupError } from '#modules/auth/service/auth.service.errors.js';
 
 import {
+  DefectBoundaryMiddleware,
+  DefectBoundaryMiddlewareLive,
+} from '#infra/errors/defect-boundary.js';
+import {
   RequestValidationHttpError,
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#infra/errors/request-validation.js';
-import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
+import { operationFailedEvent } from '#infra/errors/technical-failure.js';
 import {
-  AuthEmailAlreadyExistsHttpError,
-  AuthInternalHttpError,
-  AuthUnavailableHttpError,
-} from '#modules/auth/api/auth.api.errors.js';
+  InternalHttpError,
+  ServiceUnavailableHttpError,
+} from '#infra/errors/technical-http-errors.js';
+import { captureConsole } from '#infra/logging/capture-console.js';
+import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
+import { AuthEmailAlreadyExistsHttpError } from '#modules/auth/api/auth.api.errors.js';
 import { authGroup } from '#modules/auth/api/auth.api.js';
 import {
   AuthHandlersLive,
@@ -65,7 +71,8 @@ const logger = Logger.make(
 
 const testApi = HttpApi.make('app')
   .add(authGroup)
-  .middleware(RequestValidationMiddleware);
+  .middleware(RequestValidationMiddleware)
+  .middleware(DefectBoundaryMiddleware);
 
 const makeApp = (
   effect: Effect.Effect<SignupResult, AuthSignupError>,
@@ -85,6 +92,7 @@ const makeApp = (
     Layer.provide([
       AuthHandlersLive.pipe(
         Layer.provide([
+          DefectBoundaryMiddlewareLive.pipe(Layer.provide(config)),
           RequestValidationMiddlewareLive,
           SessionAuthenticationLive.pipe(Layer.provide(authLayer)),
           config,
@@ -121,203 +129,189 @@ beforeEach(() => {
   logs.length = 0;
 });
 
+const failedLogs = () =>
+  logs.filter((log) => log.annotations.event === operationFailedEvent);
+
+const usersRepositoryError = new UsersRepositoryError({
+  cause: sqlError,
+  operation: UserOperation.create,
+});
+
 describe('signup errors handling', () => {
-  it.effect('internal error return 500 code', () =>
+  it.effect.each([
+    {
+      name: 'SQL error',
+      failure: new AuthInternalError({ cause: sqlError }),
+      reason: 'internal',
+      status: 500,
+      schema: InternalHttpError,
+      code: 'INTERNAL_ERROR',
+    },
+    {
+      name: 'repository error',
+      failure: new AuthInternalError({ cause: usersRepositoryError }),
+      reason: 'internal',
+      status: 500,
+      schema: InternalHttpError,
+      code: 'INTERNAL_ERROR',
+    },
+    {
+      name: 'unknown cause',
+      failure: new AuthInternalError({ cause: new Error(sensitiveMarker) }),
+      reason: 'internal',
+      status: 500,
+      schema: InternalHttpError,
+      code: 'INTERNAL_ERROR',
+    },
+    {
+      name: 'password hasher overload',
+      failure: new AuthUnavailableError({
+        cause: new PasswordHashOverloadedError({
+          cause: new Error(sensitiveMarker),
+        }),
+      }),
+      reason: 'unavailable',
+      status: 503,
+      schema: ServiceUnavailableHttpError,
+      code: 'SERVICE_UNAVAILABLE',
+    },
+    {
+      name: 'secure primitive failure',
+      failure: new AuthUnavailableError({
+        cause: new SecurePrimitiveUnavailableError({
+          cause: new Error(sensitiveMarker),
+        }),
+      }),
+      reason: 'unavailable',
+      status: 503,
+      schema: ServiceUnavailableHttpError,
+      code: 'SERVICE_UNAVAILABLE',
+    },
+  ] as const)(
+    'returns a safe $status for $name',
+    ({ failure, reason, status, schema, code }) =>
+      Effect.gen(function* () {
+        const app = yield* Effect.acquireRelease(
+          Effect.sync(() => makeApp(failure)),
+          (app) => Effect.promise(() => app.dispose()),
+        );
+
+        const resp = yield* Effect.promise(() =>
+          app.handler(makeSignupRequest()),
+        );
+        const json = yield* Effect.promise(() => resp.json());
+        const body = yield* Schema.decodeUnknownEffect(schema)(json);
+
+        expect(resp.status).toBe(status);
+        expect(resp.headers.get('content-type')).toBe(
+          'application/problem+json',
+        );
+        expect(resp.headers.get('set-cookie')).toBeNull();
+        expect(body.code).toBe(code);
+        expect(body.instance).toBe('/api/auth/signup');
+        expect(body.errorId).toMatch(/^[0-9a-f]{32}$/);
+        expect(failedLogs()).toHaveLength(1);
+        expect(failedLogs()[0]?.annotations).toMatchObject({
+          kind: 'failure',
+          module: 'auth',
+          operation: 'signup',
+          userId: null,
+          reason,
+          errorId: body.errorId,
+        });
+        expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
+        expect(JSON.stringify(json)).not.toContain(sensitiveMarker);
+      }),
+  );
+
+  it.effect.each([
+    {
+      header: 'traceparent',
+      traceHeaders: {
+        traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
+      },
+      clientValue: '0af7651916cd43dd8448eb211c80319c',
+    },
+    {
+      header: 'x-b3-traceid',
+      traceHeaders: { 'x-b3-traceid': 'forged-by-client', 'x-b3-spanid': 'x' },
+      clientValue: 'forged-by-client',
+    },
+  ])('ignores an incoming $header header', ({ traceHeaders, clientValue }) =>
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(new AuthInternalError({ cause: sqlError }))),
         (app) => Effect.promise(() => app.dispose()),
       );
-
       const request = makeSignupRequest();
+      for (const [name, value] of Object.entries(traceHeaders)) {
+        request.headers.set(name, value);
+      }
+
       const resp = yield* Effect.promise(() => app.handler(request));
       const json = yield* Effect.promise(() => resp.json());
-      const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
-        json,
-      );
+      const body = yield* Schema.decodeUnknownEffect(InternalHttpError)(json);
 
-      const failedLogs = logs.filter(
-        (log) => log.annotations.event === 'auth.operation.failed',
-      );
-
-      expect(failedLogs).toHaveLength(1);
-      expect(failedLogs[0]?.annotations).toMatchObject({
-        event: 'auth.operation.failed',
-        operation: 'signup',
-        userId: null,
-        reason: 'internal',
-        errorTag: 'AuthInternalError',
-        causeTag: 'SqlError',
-        sqlReason: 'UnknownError',
-      });
-      expect(JSON.stringify(logs)).not.include(sensitiveMarker);
       expect(resp.status).toBe(500);
-      expect(resp.headers.get('content-type')).toBe('application/problem+json');
-      expect(resp.headers.get('set-cookie')).toBe(null);
-      expect(body.code).toBe('AUTH_INTERNAL_ERROR');
-      expect(JSON.stringify(json)).not.include(sensitiveMarker);
+      expect(body.errorId).toMatch(/^[0-9a-f]{32}$/);
+      expect(failedLogs()[0]?.annotations).toMatchObject({
+        errorId: body.errorId,
+      });
+      expect(JSON.stringify(json)).not.toContain(clientValue);
+      expect(JSON.stringify(logs)).not.toContain(clientValue);
     }),
   );
 
-  it.effect('repository error return 500 code', () =>
+  it.effect('returns a safe 500 for an unexpected exception', () =>
     Effect.gen(function* () {
-      const repoError = new UsersRepositoryError({
-        cause: sqlError,
-        operation: UserOperation.create,
-      });
+      const consoleOutput = yield* captureConsole;
       const app = yield* Effect.acquireRelease(
-        Effect.sync(() => makeApp(new AuthInternalError({ cause: repoError }))),
+        Effect.sync(() => makeApp(Effect.die(new Error(sensitiveMarker)))),
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const request = makeSignupRequest();
-      const resp = yield* Effect.promise(() => app.handler(request));
+      const resp = yield* Effect.promise(() =>
+        app.handler(makeSignupRequest()),
+      );
       const json = yield* Effect.promise(() => resp.json());
-      const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
-        json,
-      );
+      const body = yield* Schema.decodeUnknownEffect(InternalHttpError)(json);
 
-      const failedLogs = logs.filter(
-        (log) => log.annotations.event === 'auth.operation.failed',
-      );
-
-      expect(failedLogs).toHaveLength(1);
-      expect(failedLogs[0]?.annotations).toMatchObject({
-        event: 'auth.operation.failed',
-        operation: 'signup',
-        userId: null,
-        reason: 'internal',
-        errorTag: 'AuthInternalError',
-        causeTag: 'UsersRepositoryError',
-        sqlReason: 'UnknownError',
-      });
-      expect(JSON.stringify(logs)).not.include(sensitiveMarker);
       expect(resp.status).toBe(500);
       expect(resp.headers.get('content-type')).toBe('application/problem+json');
-      expect(resp.headers.get('set-cookie')).toBe(null);
-      expect(body.code).toBe('AUTH_INTERNAL_ERROR');
-      expect(JSON.stringify(json)).not.include(sensitiveMarker);
+      expect(resp.headers.get('set-cookie')).toBeNull();
+      expect(body.code).toBe('INTERNAL_ERROR');
+      expect(body.instance).toBe('/api/auth/signup');
+      expect(failedLogs()).toHaveLength(1);
+      expect(failedLogs()[0]?.annotations).toMatchObject({
+        kind: 'defect',
+        module: 'auth',
+        operation: 'signup',
+        reason: 'internal',
+        errorId: body.errorId,
+      });
+      expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
+      expect(JSON.stringify(json)).not.toContain(sensitiveMarker);
+      expect(consoleOutput.join('\n')).not.toContain(sensitiveMarker);
     }),
   );
 
-  it.effect('password overload error', () =>
+  it.effect('logs the error chain down to the SQL reason', () =>
     Effect.gen(function* () {
-      const authError = new PasswordHashOverloadedError({
-        cause: new Error(sensitiveMarker),
-      });
-
       const app = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          makeApp(new AuthUnavailableError({ cause: authError })),
+          makeApp(new AuthInternalError({ cause: usersRepositoryError })),
         ),
         (app) => Effect.promise(() => app.dispose()),
       );
 
-      const request = makeSignupRequest();
-      const resp = yield* Effect.promise(() => app.handler(request));
-      const json = yield* Effect.promise(() => resp.json());
-      const body = yield* Schema.decodeUnknownEffect(AuthUnavailableHttpError)(
-        json,
-      );
+      yield* Effect.promise(() => app.handler(makeSignupRequest()));
 
-      const failedLogs = logs.filter(
-        (log) => log.annotations.event === 'auth.operation.failed',
-      );
-
-      expect(failedLogs).toHaveLength(1);
-      expect(failedLogs[0]?.annotations).toMatchObject({
-        event: 'auth.operation.failed',
-        operation: 'signup',
-        userId: null,
-        reason: 'unavailable',
-        errorTag: 'AuthUnavailableError',
-        causeTag: 'PasswordHashOverloadedError',
-      });
-      expect(failedLogs[0]?.annotations).not.toHaveProperty('sqlReason');
-      expect(JSON.stringify(logs)).not.include(sensitiveMarker);
-      expect(resp.status).toBe(503);
-      expect(resp.headers.get('content-type')).toBe('application/problem+json');
-      expect(resp.headers.get('set-cookie')).toBe(null);
-      expect(body.code).toBe('AUTH_UNAVAILABLE_ERROR');
-      expect(JSON.stringify(json)).not.include(sensitiveMarker);
-    }),
-  );
-
-  it.effect('returns a diagnostic 503 when a secure primitive fails', () =>
-    Effect.gen(function* () {
-      const cause = new SecurePrimitiveUnavailableError({
-        cause: new Error(sensitiveMarker),
-      });
-      const app = yield* Effect.acquireRelease(
-        Effect.sync(() => makeApp(new AuthUnavailableError({ cause }))),
-        (app) => Effect.promise(() => app.dispose()),
-      );
-
-      const resp = yield* Effect.promise(() =>
-        app.handler(makeSignupRequest()),
-      );
-      const json = yield* Effect.promise(() => resp.json());
-      const body = yield* Schema.decodeUnknownEffect(AuthUnavailableHttpError)(
-        json,
-      );
-      const failedLogs = logs.filter(
-        (log) => log.annotations.event === 'auth.operation.failed',
-      );
-
-      expect(failedLogs).toHaveLength(1);
-      expect(failedLogs[0]?.annotations).toMatchObject({
-        event: 'auth.operation.failed',
-        operation: 'signup',
-        userId: null,
-        reason: 'unavailable',
-        errorTag: 'AuthUnavailableError',
-        causeTag: 'SecurePrimitiveUnavailableError',
-      });
-      expect(failedLogs[0]?.annotations).not.toHaveProperty('sqlReason');
-      expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
-      expect(resp.status).toBe(503);
-      expect(resp.headers.get('content-type')).toBe('application/problem+json');
-      expect(resp.headers.get('set-cookie')).toBeNull();
-      expect(body.code).toBe('AUTH_UNAVAILABLE_ERROR');
-      expect(JSON.stringify(json)).not.toContain(sensitiveMarker);
-    }),
-  );
-
-  it.effect('returns a safe 500 without exposing an unknown cause', () =>
-    Effect.gen(function* () {
-      const cause = new Error(sensitiveMarker);
-      const app = yield* Effect.acquireRelease(
-        Effect.sync(() => makeApp(new AuthInternalError({ cause }))),
-        (app) => Effect.promise(() => app.dispose()),
-      );
-
-      const resp = yield* Effect.promise(() =>
-        app.handler(makeSignupRequest()),
-      );
-      const json = yield* Effect.promise(() => resp.json());
-      const body = yield* Schema.decodeUnknownEffect(AuthInternalHttpError)(
-        json,
-      );
-      const failedLogs = logs.filter(
-        (log) => log.annotations.event === 'auth.operation.failed',
-      );
-
-      expect(failedLogs).toHaveLength(1);
-      expect(failedLogs[0]?.annotations).toMatchObject({
-        event: 'auth.operation.failed',
-        operation: 'signup',
-        userId: null,
-        reason: 'internal',
-        errorTag: 'AuthInternalError',
-      });
-      expect(failedLogs[0]?.annotations).not.toHaveProperty('causeTag');
-      expect(failedLogs[0]?.annotations).not.toHaveProperty('sqlReason');
-      expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
-      expect(resp.status).toBe(500);
-      expect(resp.headers.get('content-type')).toBe('application/problem+json');
-      expect(resp.headers.get('set-cookie')).toBeNull();
-      expect(body.code).toBe('AUTH_INTERNAL_ERROR');
-      expect(JSON.stringify(json)).not.toContain(sensitiveMarker);
+      expect(failedLogs()[0]?.annotations.errorChain).toEqual([
+        { tag: 'AuthInternalError' },
+        { tag: 'UsersRepositoryError', operation: UserOperation.create },
+        { tag: 'SqlError' },
+        { tag: 'UnknownError' },
+      ]);
     }),
   );
 
@@ -343,11 +337,7 @@ describe('signup errors handling', () => {
         const body = yield* Schema.decodeUnknownEffect(
           AuthEmailAlreadyExistsHttpError,
         )(json);
-        const failedLogs = logs.filter(
-          (log) => log.annotations.event === 'auth.operation.failed',
-        );
-
-        expect(failedLogs).toHaveLength(0);
+        expect(failedLogs()).toHaveLength(0);
         expect(logs.filter((log) => log.level === 'ERROR')).toHaveLength(0);
         expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
         expect(resp.status).toBe(409);
@@ -497,9 +487,7 @@ describe('signup request validation', () => {
       ]);
       expect(signupExecutions).toBe(0);
       expect(resp.headers.getSetCookie()).toEqual([]);
-      expect(
-        logs.filter((log) => log.annotations.event === 'auth.operation.failed'),
-      ).toHaveLength(0);
+      expect(failedLogs()).toHaveLength(0);
       expect(logs.filter((log) => log.level === 'ERROR')).toHaveLength(0);
     }),
   );

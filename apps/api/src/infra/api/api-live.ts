@@ -2,6 +2,7 @@ import { Layer } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
 import { AppApi } from '#infra/api/api.js';
+import { DefectBoundaryMiddlewareLive } from '#infra/errors/defect-boundary.js';
 import { RequestValidationMiddlewareLive } from '#infra/errors/request-validation.js';
 import {
   AuthHandlersLive,
@@ -16,7 +17,11 @@ const groupsLive = Layer.mergeAll(
   AuthHandlersLive,
 );
 const groupsLiveWithMiddleware = groupsLive.pipe(
-  Layer.provide([RequestValidationMiddlewareLive, SessionAuthenticationLive]),
+  Layer.provide([
+    DefectBoundaryMiddlewareLive,
+    RequestValidationMiddlewareLive,
+    SessionAuthenticationLive,
+  ]),
 );
 
 export const AppApiLive = HttpApiBuilder.layer(AppApi).pipe(

@@ -5,7 +5,10 @@ import { HttpServerRequest } from 'effect/unstable/http';
 import { HttpApiMiddleware } from 'effect/unstable/httpapi';
 import { match } from 'ts-pattern';
 
-import { asProblemJson } from '#infra/errors/http-problem.js';
+import {
+  asProblemJson,
+  getRequestPathname,
+} from '#infra/errors/http-problem.js';
 import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 
 export const ValidationIssueLocationSchema = makeLiteralUnionSchema([
@@ -88,7 +91,7 @@ export const RequestValidationMiddlewareLive =
 
       return Effect.gen(function* () {
         const req = yield* HttpServerRequest.HttpServerRequest;
-        const pathname = new URL(req.originalUrl, 'http://localhost').pathname;
+        const pathname = getRequestPathname(req);
         const formattedIssues = formatSchemaIssue(err.cause.issue).issues;
         return yield* new RequestValidationHttpError({
           instance: pathname,

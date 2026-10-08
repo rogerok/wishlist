@@ -5,6 +5,11 @@ export const ModeConfig = Config.literals(
   'MODE',
 );
 
+// Печатать текст и stack дефектов для отладки; при MODE=production игнорируется.
+export const DefectDetailsConfig = Config.boolean('LOG_DEFECT_DETAILS').pipe(
+  Config.withDefault(false),
+);
+
 export const AppConfig = Config.all({
   appName: Config.string('APP_NAME'),
   appPort: Config.port('APP_PORT'),

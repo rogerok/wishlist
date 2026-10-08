@@ -1,6 +1,7 @@
 import { HttpApiEndpoint, HttpApiGroup } from 'effect/unstable/httpapi';
 
 import { asProblemJson } from '#infra/errors/http-problem.js';
+import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   authGroupIdentifier,
   authLoginPath,
@@ -9,9 +10,7 @@ import {
 } from '#modules/auth/api/auth.api.constants.js';
 import {
   AuthEmailAlreadyExistsHttpError,
-  AuthInternalHttpError,
   AuthInvalidCredentialsHttpError,
-  AuthUnavailableHttpError,
 } from '#modules/auth/api/auth.api.errors.js';
 import { SessionAuthentication } from '#modules/auth/api/session-authentication.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
@@ -25,18 +24,13 @@ import {
   SignupResponseSuccessSchema,
 } from '#modules/auth/schemas/signup/signup.schema.js';
 
-const authCommonErrors = [
-  AuthInternalHttpError.pipe(asProblemJson),
-  AuthUnavailableHttpError.pipe(asProblemJson),
-];
-
 export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
   HttpApiEndpoint.post(AuthOperation.signup, authSignupPath, {
     payload: SignupRequestBodySchema,
     success: SignupResponseSuccessSchema,
     error: [
       AuthEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      ...authCommonErrors,
+      ...technicalHttpErrors,
     ],
   }),
   HttpApiEndpoint.post(AuthOperation.login, authLoginPath, {
@@ -44,7 +38,7 @@ export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
     success: LoginResponseSuccessSchema,
     error: [
       AuthInvalidCredentialsHttpError.pipe(asProblemJson),
-      ...authCommonErrors,
+      ...technicalHttpErrors,
     ],
   }),
   HttpApiEndpoint.get(AuthOperation.me, authMePath, {
@@ -52,6 +46,6 @@ export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
   }).middleware(SessionAuthentication),
   // HttpApiEndpoint.post(AuthOperation.logout, authLogoutPath, {
   //   success: HttpApiSchema.NoContent,
-  //   error: [AuthUnavailableHttpError.pipe(asProblemJson)],
+  //   error: technicalHttpErrors,
   // }),
 );

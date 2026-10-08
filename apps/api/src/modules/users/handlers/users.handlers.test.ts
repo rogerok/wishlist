@@ -6,9 +6,14 @@ import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
 import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
 
 import {
+  DefectBoundaryMiddleware,
+  DefectBoundaryMiddlewareLive,
+} from '#infra/errors/defect-boundary.js';
+import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#infra/errors/request-validation.js';
+import { operationFailedEvent } from '#infra/errors/technical-failure.js';
 import { usersGroup } from '#modules/users/api/users.api.js';
 import { UsersHandlersLive } from '#modules/users/handlers/users.handlers.js';
 import { UsersRepositoryError } from '#modules/users/repository/users.repository.errors.js';
@@ -44,7 +49,8 @@ const UsersServiceTest = UsersServiceLive.pipe(
 
 const TestApi = HttpApi.make('app')
   .add(usersGroup)
-  .middleware(RequestValidationMiddleware);
+  .middleware(RequestValidationMiddleware)
+  .middleware(DefectBoundaryMiddleware);
 
 const logs: Array<ReturnType<typeof Logger.formatStructured.log>> = [];
 
@@ -55,7 +61,12 @@ const captureLogger = Logger.make((options) => {
 
 const TestAppLive = HttpApiBuilder.layer(TestApi).pipe(
   Layer.provide([
-    UsersHandlersLive.pipe(Layer.provide(RequestValidationMiddlewareLive)),
+    UsersHandlersLive.pipe(
+      Layer.provide([
+        DefectBoundaryMiddlewareLive,
+        RequestValidationMiddlewareLive,
+      ]),
+    ),
     NodeHttpServer.layerHttpServices,
   ]),
   Layer.provide(UsersServiceTest),
@@ -81,19 +92,26 @@ describe('UsersHandlers', () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.code).toBe('USERS_INTERNAL_ERROR');
+    expect(body.code).toBe('INTERNAL_ERROR');
 
-    const failureLog = logs.find(
-      (entry) => entry.annotations.event === 'users.operation.failed',
+    const failureLogs = logs.filter(
+      (entry) => entry.annotations.event === operationFailedEvent,
     );
 
-    expect(failureLog?.annotations).toEqual(
+    expect(failureLogs).toHaveLength(1);
+    expect(failureLogs[0]?.annotations).toEqual(
       expect.objectContaining({
+        module: 'users',
         operation: 'getAll',
+        userId: null,
         reason: 'internal',
-        errorTag: 'UsersInternalError',
-        repositoryErrorTag: 'UsersRepositoryError',
-        sqlReason: 'UnknownError',
+        errorId: body.errorId,
+        errorChain: [
+          { tag: 'UsersInternalError' },
+          { tag: 'UsersRepositoryError', operation: UserOperation.getAll },
+          { tag: 'SqlError' },
+          { tag: 'UnknownError' },
+        ],
       }),
     );
     expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);

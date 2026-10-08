@@ -6,6 +6,7 @@ import {
 } from 'effect/unstable/httpapi';
 
 import { asProblemJson } from '#infra/errors/http-problem.js';
+import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   userByIdPath,
   usersCollectionPath,
@@ -14,8 +15,6 @@ import {
 import {
   UserEmailAlreadyExistsHttpError,
   UserNotFoundHttpError,
-  UsersInternalHttpError,
-  UsersUnavailableHttpError,
 } from '#modules/users/api/users.api.errors.js';
 import {
   CreateUserBodySchema,
@@ -26,11 +25,6 @@ import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
-const commonErrors = [
-  UsersInternalHttpError.pipe(asProblemJson),
-  UsersUnavailableHttpError.pipe(asProblemJson),
-] as const;
-
 //TODO: put переписать на патч.
 export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
   HttpApiEndpoint.post(UserOperation.create, usersCollectionPath, {
@@ -38,24 +32,24 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
     success: CreateUserResponseSchema,
     error: [
       UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      ...commonErrors,
+      ...technicalHttpErrors,
     ],
   }),
   HttpApiEndpoint.get(UserOperation.getAll, usersCollectionPath, {
     success: Schema.Array(UserResponseSchema),
-    error: commonErrors,
+    error: technicalHttpErrors,
   }),
   HttpApiEndpoint.get(UserOperation.getById, userByIdPath, {
     params: { id: UserIdSchema },
     success: UserResponseSchema,
-    error: [...commonErrors, UserNotFoundHttpError.pipe(asProblemJson)],
+    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
   }),
   HttpApiEndpoint.put(UserOperation.update, userByIdPath, {
     params: { id: UserIdSchema },
     payload: UpdateUserBodySchema,
     success: UserResponseSchema,
     error: [
-      ...commonErrors,
+      ...technicalHttpErrors,
       UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
       UserNotFoundHttpError.pipe(asProblemJson),
     ],
@@ -63,6 +57,6 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
   HttpApiEndpoint.delete(UserOperation.delete, userByIdPath, {
     params: { id: UserIdSchema },
     success: HttpApiSchema.NoContent,
-    error: [...commonErrors, UserNotFoundHttpError.pipe(asProblemJson)],
+    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
   }),
 );

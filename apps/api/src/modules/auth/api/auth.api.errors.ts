@@ -1,19 +1,10 @@
 import { Schema } from 'effect';
 
-import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import {
   authLoginPath,
-  authLogoutPath,
   authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
-
-export const AuthInstanceSchema = makeLiteralUnionSchema([
-  authSignupPath,
-  authLoginPath,
-  authLogoutPath,
-  authMePath,
-]);
 
 export class AuthEmailAlreadyExistsHttpError extends Schema.Error<AuthEmailAlreadyExistsHttpError>(
   'AuthEmailAlreadyExistsHttpError',
@@ -28,38 +19,6 @@ export class AuthEmailAlreadyExistsHttpError extends Schema.Error<AuthEmailAlrea
   },
   {
     httpApiStatus: 409,
-  },
-) {}
-
-export class AuthUnavailableHttpError extends Schema.Error<AuthUnavailableHttpError>(
-  'AuthUnavailableHttpError',
-)(
-  {
-    code: Schema.tag('AUTH_UNAVAILABLE_ERROR'),
-    detail: Schema.tag('Unable to process the request'),
-    status: Schema.tag(503),
-    title: Schema.tag('Auth service is unavailable'),
-    type: Schema.tag('/errors/auth-unavailable'),
-    instance: AuthInstanceSchema,
-  },
-  {
-    httpApiStatus: 503,
-  },
-) {}
-
-export class AuthInternalHttpError extends Schema.Error<AuthInternalHttpError>(
-  'AuthInternalHttpError',
-)(
-  {
-    code: Schema.tag('AUTH_INTERNAL_ERROR'),
-    detail: Schema.tag('Unable to process the request'),
-    status: Schema.tag(500),
-    title: Schema.tag('Internal auth service error'),
-    type: Schema.tag('/errors/auth-internal-error'),
-    instance: AuthInstanceSchema,
-  },
-  {
-    httpApiStatus: 500,
   },
 ) {}
 

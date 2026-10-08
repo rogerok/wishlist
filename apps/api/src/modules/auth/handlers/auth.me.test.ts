@@ -9,6 +9,10 @@ import type { DBKysely } from '#infra/db/db.service.js';
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
+  DefectBoundaryMiddleware,
+  DefectBoundaryMiddlewareLive,
+} from '#infra/errors/defect-boundary.js';
+import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#infra/errors/request-validation.js';
@@ -27,7 +31,8 @@ const databaseLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 const servicesLayer = AuthModuleLive.pipe(Layer.provideMerge(databaseLayer));
 const testApi = HttpApi.make('app')
   .add(authGroup)
-  .middleware(RequestValidationMiddleware);
+  .middleware(RequestValidationMiddleware)
+  .middleware(DefectBoundaryMiddleware);
 
 const email = 'me@example.test';
 const password = 'Password1!';
@@ -42,6 +47,7 @@ const makeApp = (auth: Effect.Success<typeof AuthService>) => {
     Layer.provide([
       AuthHandlersLive.pipe(
         Layer.provide([
+          DefectBoundaryMiddlewareLive,
           RequestValidationMiddlewareLive,
           SessionAuthenticationLive.pipe(Layer.provide(authLayer)),
           config,
