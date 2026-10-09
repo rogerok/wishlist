@@ -62,6 +62,20 @@ Reusable rule: переносишь логику в одно место — на
 Mastery concept affected: Выравнивание времени ответа.
 ```
 
+### 2026-10-09 — пропущенная зависимость слоя принята за ошибку при запуске
+
+```text
+Date: 2026-10-09
+Context / task: засчёт шага 1.8, тип AuthModuleLive.
+My prediction: слой «может упасть, если не будут переданы нужные зависимости».
+Observed result: tsc показал Layer<AuthService, PasswordHasherHashErrors, DB>; ошибка сборки — от hasher.hash для фиктивного хэша.
+Root cause in plain language: пропущенная зависимость (третий параметр, R) — ошибка компиляции, до запуска дело не доходит; падение при сборке задаёт второй параметр (E) — эффекты, которые слой выполняет при построении.
+Correction I made: —
+Verification: probe-файл с присваиванием в Layer<never>; сообщение TS2375 и missingLayerContext.
+Reusable rule: R проверяет компилятор, E случается при запуске; чтобы узнать E, ищи yield* в теле Layer.effect.
+Mastery concept affected: Context.Service и Layer composition.
+```
+
 ## Potential misconception to verify
 
 ### Effect creation может быть перепутан с Effect execution
