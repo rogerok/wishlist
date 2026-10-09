@@ -10,16 +10,17 @@ type CreateUserInput = Schema.Codec.Encoded<typeof CreateUserBodySchema>;
 
 const makeCreateUserInput = (): CreateUserInput => {
   const sex = faker.person.sexType();
-  const firstName = faker.person.firstName(sex);
-  const lastName = faker.person.lastName(sex);
-  const username = faker.internet.username({ firstName, lastName });
+  const givenName = faker.person.firstName(sex);
+  const familyName = faker.person.lastName(sex);
+  const username = faker.internet.username({
+    firstName: givenName,
+    lastName: familyName,
+  });
   // A random suffix keeps emails unique across REPL sessions.
   const suffix = faker.string.alphanumeric({ length: 8, casing: 'lower' });
 
   return {
-    firstName,
-    middleName: faker.datatype.boolean() ? faker.person.middleName(sex) : null,
-    lastName,
+    displayName: `${givenName} ${familyName}`,
     email: `${username}.${suffix}@example.test`,
   };
 };

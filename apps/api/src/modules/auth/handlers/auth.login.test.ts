@@ -140,9 +140,7 @@ const register = (app: TestApp, db: DBKysely) =>
         email,
         password,
         passwordConfirm: password,
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        middleName: null,
+        displayName: 'Ada Lovelace',
       });
       expect(response.status).toBe(201);
       const json: unknown = yield* Effect.promise(() => response.json());

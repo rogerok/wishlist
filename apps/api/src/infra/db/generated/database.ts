@@ -3,14 +3,13 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from 'kysely';
+import type { ColumnType } from "kysely";
 
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
-export type Roles = 'admin' | 'user';
+export type Roles = "admin" | "user";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
@@ -31,11 +30,9 @@ export interface Sessions {
 
 export interface Users {
   createdAt: Generated<Timestamp>;
+  displayName: string;
   email: string;
-  firstName: string | null;
   id: Generated<string>;
-  lastName: string | null;
-  middleName: string | null;
   role: Generated<Roles>;
   updatedAt: Generated<Timestamp>;
 }

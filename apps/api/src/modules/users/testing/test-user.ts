@@ -13,8 +13,8 @@ export const insertTestUser = (id: UserId, email: UserEmail) =>
 
     yield* Effect.acquireRelease(
       sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${id}, ${email})
+        INSERT INTO "public"."users" ("id", "email", "display_name")
+        VALUES (${id}, ${email}, 'Test User')
       `,
       () =>
         sql`DELETE FROM "public"."users" WHERE "id" = ${id}`.pipe(Effect.orDie),

@@ -15,8 +15,8 @@ layer(TestDatabaseLive, { timeout: '60 seconds' })('Auth migrations', (it) => {
 
       // arrange
       yield* sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${userId}, ${email})
+        INSERT INTO "public"."users" ("id", "email", "display_name")
+        VALUES (${userId}, ${email}, 'Test User')
       `;
 
       yield* sql`
@@ -77,8 +77,8 @@ layer(TestDatabaseLive, { timeout: '60 seconds' })('Auth migrations', (it) => {
 
       // arrange
       yield* sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${userId}, ${email})
+        INSERT INTO "public"."users" ("id", "email", "display_name")
+        VALUES (${userId}, ${email}, 'Test User')
       `;
 
       yield* sql`
@@ -143,8 +143,8 @@ layer(TestDatabaseLive, { timeout: '60 seconds' })('Auth migrations', (it) => {
 
       // arrange
       yield* sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${userId}, ${email})
+        INSERT INTO "public"."users" ("id", "email", "display_name")
+        VALUES (${userId}, ${email}, 'Test User')
       `;
 
       yield* sql`
@@ -216,8 +216,8 @@ layer(TestDatabaseLive, { timeout: '60 seconds' })('Auth migrations', (it) => {
 
       // arrange
       yield* sql`
-        INSERT INTO "public"."users" ("id", "email")
-        VALUES (${userId}, ${email})
+        INSERT INTO "public"."users" ("id", "email", "display_name")
+        VALUES (${userId}, ${email}, 'Test User')
       `;
 
       // act and assert

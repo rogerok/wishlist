@@ -70,9 +70,7 @@ const sessionsNotQueried = Layer.succeed(SessionRepository, {
 const signupInput = SignupInputSchema.make({
   email: UserEmailSchema.make('test@example.test'),
   password: PasswordSchema.make('Password1!'),
-  lastName: null,
-  middleName: null,
-  firstName: null,
+  displayName: 'Test User',
 });
 
 const credentialOf = (bytes: Uint8Array) =>

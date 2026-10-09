@@ -188,9 +188,7 @@ export const AuthServiceLive = Layer.effect(
     const signup: AuthServiceShape['signup'] = ({
       password,
       email,
-      lastName,
-      firstName,
-      middleName,
+      displayName,
     }) =>
       Effect.gen(function* () {
         const passwordHash = yield* hasher.hash(Redacted.make(password));
@@ -198,12 +196,7 @@ export const AuthServiceLive = Layer.effect(
 
         const { user, expiresAt } = yield* db.withTransaction(
           Effect.gen(function* () {
-            const user = yield* usersRepo.create({
-              email,
-              firstName,
-              middleName,
-              lastName,
-            });
+            const user = yield* usersRepo.create({ email, displayName });
 
             yield* passwordRepo.create(user.id, passwordHash);
 

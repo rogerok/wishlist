@@ -168,9 +168,7 @@ const password = PasswordSchema.make('Password1!');
 const signupInput = SignupInputSchema.make({
   email,
   password,
-  lastName: null,
-  middleName: null,
-  firstName: null,
+  displayName: 'Test User',
 });
 
 describe('AuthService', () => {

@@ -123,9 +123,7 @@ const makeSignupRequest = () =>
         email,
         password,
         passwordConfirm: password,
-        firstName: null,
-        middleName: null,
-        lastName: null,
+        displayName: 'Test User',
       }),
     },
   );
@@ -375,9 +373,7 @@ const expiresAt = new Date('2030-01-01T00:00:00.000Z');
 const publicUser = Schema.decodeSync(UserResponseSchema)({
   id: '00000000-0000-4000-8000-000000000001',
   email,
-  firstName: null,
-  lastName: null,
-  middleName: null,
+  displayName: 'Test User',
 });
 
 const signupResult: SignupResult = {
@@ -477,9 +473,7 @@ describe('signup request validation', () => {
           email,
           password,
           passwordConfirm: password,
-          firstName: null,
-          middleName: null,
-          lastName: null,
+          displayName: 'Test User',
           role: 'admin',
         }),
       });
@@ -508,5 +502,47 @@ describe('signup request validation', () => {
       expect(failedLogs()).toHaveLength(0);
       expect(logs.filter((log) => log.level === 'ERROR')).toHaveLength(0);
     }),
+  );
+
+  it.effect(
+    'rejects a displayName of only spaces before executing signup',
+    () =>
+      Effect.gen(function* () {
+        let signupExecutions = 0;
+        const signup = Effect.sync(() => {
+          signupExecutions += 1;
+          return signupResult;
+        });
+        const request = new Request('http://localhost/api/auth/signup', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            email,
+            password,
+            passwordConfirm: password,
+            displayName: '   ',
+          }),
+        });
+        const app = yield* Effect.acquireRelease(
+          Effect.sync(() => makeApp(signup)),
+          (app) => Effect.promise(() => app.dispose()),
+        );
+        const resp = yield* Effect.promise(() => app.handler(request));
+        const json = yield* Effect.promise(() => resp.json());
+        const body = yield* Schema.decodeUnknownEffect(
+          RequestValidationHttpError,
+        )(json);
+
+        expect(resp.status).toBe(400);
+        expect(body.code).toBe('REQUEST_VALIDATION_FAILED');
+        expect(body.errors).toEqual([
+          expect.objectContaining({
+            location: 'payload',
+            path: ['displayName'],
+          }),
+        ]);
+        expect(signupExecutions).toBe(0);
+        expect(resp.headers.getSetCookie()).toEqual([]);
+      }),
   );
 });

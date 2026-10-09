@@ -3,3 +3,5 @@
 /coverage
 /.nx/cache
 /.nx/workspace-data
+# Сгенерированные типы Kysely: формат задаёт kysely-codegen, иначе db:check видит расхождение
+apps/api/src/infra/db/generated

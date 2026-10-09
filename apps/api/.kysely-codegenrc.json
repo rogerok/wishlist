@@ -4,6 +4,6 @@
   "dialect": "postgres",
   "envFile": ".env.development",
   "excludePattern": "public.effect_sql_migrations",
-  "outFile": "src/db/generated/database.ts",
+  "outFile": "src/infra/db/generated/database.ts",
   "url": "env(POSTGRES_URL)"
 }

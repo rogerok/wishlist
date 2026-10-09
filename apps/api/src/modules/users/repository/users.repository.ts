@@ -23,13 +23,7 @@ import {
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 
-const userSelection = [
-  'id',
-  'email',
-  'firstName',
-  'lastName',
-  'middleName',
-] as const;
+const userSelection = ['id', 'email', 'displayName'] as const;
 
 const getSomeOrNone = (row: unknown, operation: UserOperation) =>
   Option.match(Option.fromUndefinedOr(row), {

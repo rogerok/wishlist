@@ -19,6 +19,7 @@
 | Effect Schema boundary validation                     |       3 | transforms, brands, excess-property policy, tests           | Encode/decode boundary требует проверки                                       |
 | HttpApi contracts и Problem Details                   |       3 | Users/Auth contracts и middleware                           | Live auth wiring ещё отсутствует                                              |
 | PostgreSQL DDL, FK, indexes, constraints              |       3 | две migrations и invariant tests                            | Concurrency design ещё не проверен                                            |
+| Миграция с переносом данных                           |       2 | faded example 0003 Display Name, 2026-10-09                 | Предсказание порядка шагов не дано; откат миграций не изучен                  |
 | Kysely queries и repository error mapping             |       3 | полный Users CRUD                                           | Transaction ownership и authorization scoping не проверены                    |
 | Vitest и example-based tests                          |       2 | 10 файлов / 74 теста проходят                               | Setup исправлен; самостоятельное объяснение test design не проверено          |
 | Property-based testing                                |       2 | один FastCheck invariant для passwordConfirm                | Generator/shrinking trade-offs не проверены                                   |

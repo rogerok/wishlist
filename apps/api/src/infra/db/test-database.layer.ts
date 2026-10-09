@@ -33,9 +33,15 @@ const PgClientLive = Layer.unwrap(
   }),
 ).pipe(Layer.provide(PostgresContainerLive));
 
-const migrationsDir = fileURLToPath(new URL('./migrations/', import.meta.url));
+export const migrationsDir = fileURLToPath(
+  new URL('./migrations/', import.meta.url),
+);
 
-const MigrationDepsLive = Layer.mergeAll(PgClientLive, NodeServices.layer);
+// Пустая БД без миграций: для тестов, которые применяют миграции по шагам.
+export const EmptyTestDatabaseLive = Layer.mergeAll(
+  PgClientLive,
+  NodeServices.layer,
+);
 const MigrationsLive = Layer.effectDiscard(
   PgMigrator.run({
     loader: PgMigrator.fromFileSystem(migrationsDir),
@@ -43,5 +49,5 @@ const MigrationsLive = Layer.effectDiscard(
 );
 
 export const TestDatabaseLive = MigrationsLive.pipe(
-  Layer.provideMerge(MigrationDepsLive),
+  Layer.provideMerge(EmptyTestDatabaseLive),
 );

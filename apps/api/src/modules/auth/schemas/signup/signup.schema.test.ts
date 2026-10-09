@@ -29,9 +29,7 @@ const differentPasswordsArbitrary = FastCheck.tuple(
 ).filter(([password, passwordConfirm]) => password !== passwordConfirm);
 
 const commonBodyFields = {
-  middleName: null,
-  lastName: null,
-  firstName: null,
+  displayName: 'Ada Lovelace',
   email: '1@gmail.com',
 };
 
@@ -43,10 +41,10 @@ const passwords = {
   passwordConfirm: password,
 };
 
-const missingNameCases = [
-  { field: 'firstName' },
-  { field: 'lastName' },
-  { field: 'middleName' },
+const invalidDisplayNameCases = [
+  { name: 'only spaces', displayName: '   ' },
+  { name: 'an empty string', displayName: '' },
+  { name: '101 characters', displayName: 'a'.repeat(101) },
 ] as const;
 
 describe('SignupBodySchema', () => {
@@ -79,29 +77,51 @@ describe('SignupBodySchema', () => {
     ]);
   });
 
-  it.each(missingNameCases)(
-    'rejects signup payload without $field',
-    ({ field }) => {
-      const fullPayload = {
+  it('rejects signup payload without displayName', () => {
+    const { displayName, ...fieldsWithoutName } = commonBodyFields;
+
+    expect(displayName).toBe('Ada Lovelace');
+
+    const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
+      ...fieldsWithoutName,
+      ...passwords,
+    });
+
+    expect(result).toBeResultSchemaFailure([
+      expect.objectContaining({ path: ['displayName'] }),
+    ]);
+  });
+
+  it.each(invalidDisplayNameCases)(
+    'rejects displayName of $name',
+    ({ displayName }) => {
+      const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
         ...commonBodyFields,
         ...passwords,
-      };
-
-      const { [field]: removedValue, ...payloadWithoutField } = fullPayload;
-
-      expect(removedValue).toBe(null);
-
-      const result = Schema.decodeUnknownResult(SignupRequestBodySchema)(
-        payloadWithoutField,
-      );
+        displayName,
+      });
 
       expect(result).toBeResultSchemaFailure([
-        expect.objectContaining({
-          path: [field],
-        }),
+        expect.objectContaining({ path: ['displayName'] }),
       ]);
     },
   );
+
+  it('trims spaces around displayName', () => {
+    const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
+      ...commonBodyFields,
+      ...passwords,
+      displayName: '  Ada  ',
+    });
+
+    expect(result).toBeResultSuccess({
+      ...commonBodyFields,
+      password: PasswordSchema.make(password),
+      passwordConfirm: PasswordSchema.make(password),
+      email: UserEmailSchema.make('1@gmail.com'),
+      displayName: 'Ada',
+    });
+  });
 
   it('rejects different passwords at passwordConfirm', () => {
     const result = Schema.decodeResult(SignupRequestBodySchema)({

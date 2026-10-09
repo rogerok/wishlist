@@ -9,8 +9,8 @@ import {
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import {
+  UserDisplayNameInputSchema,
   UserEmailSchema,
-  UserNameInputSchema,
 } from '#modules/users/schemas/user.schema.js';
 
 export const passwordConfirmIssue = {
@@ -22,9 +22,7 @@ export const SignupRequestBodySchema = Schema.Struct({
   email: UserEmailSchema,
   password: PasswordSchema,
   passwordConfirm: PasswordSchema,
-  firstName: UserNameInputSchema,
-  lastName: UserNameInputSchema,
-  middleName: UserNameInputSchema,
+  displayName: UserDisplayNameInputSchema,
 })
   .check(
     Schema.makeFilter(({ password, passwordConfirm }) =>

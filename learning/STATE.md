@@ -4,30 +4,30 @@
 
 ## Сейчас
 
-Шаг: 2.1 — Display Name вместо `firstName`/`middleName`/`lastName`; раздел 1 roadmap закрыт, 1.9 перенесён в 2.5.
-Следующее действие: прочитать [разбор технических ошибок](lessons/0007-debrief-technical-errors.html) и ответить на
-3 вопроса → ответы сходятся с `<details>`; затем decision card для контракта Display Name.
+Шаг: 2.3 — свой профиль через текущего User вместо произвольного `:id`; 2.1–2.2 Display Name закрыты.
+Следующее действие: decision card «обратные миграции»: `Migrator` Effect 4.0.0-rc.108 не умеет откат — выбрать механизм
+до следующей миграции → решение записано в ADR; затем разбор 0007 (3 вопроса).
 
 ## Проверено
 
+- 2.1–2.2: миграция `0003` (написал владелец) — тест переноса 4 строк; локальная БД мигрирована, `db:check` ✓;
+  полный прогон 184 из 184, 2026-10-09.
 - 1.11: жизненный цикл Session объяснён таблицей — signup → действует, `expiresAt` → 401, login не трогает старые
   Session, повторный logout 204; транзакция signup откатывает все 3 строки, 2026-10-09.
 - 1.8 и 1.10 засчитаны по smoke 1.7 (`node dist`, cookie jar) и проводке `api-live.ts`/`app.ts`; тип
   `AuthModuleLive` = `Layer<AuthService, PasswordHasherHashErrors, DB>` подтверждён `tsc`, 2026-10-09.
 - Login: фиктивный хэш при сборке `AuthService`, один `verify` до развилки (T1/T2 написал владелец, 92b068f); замер
   314–328 мс против 316–325 мс; `auth.service.test.ts` 9 из 9, 2026-10-08.
-- Технические ошибки: `AuthDataIntegrityError`, общий `isRetryableSqlFailure`, типизированные ключи `reasons`
-  (2f474da); `check-types` 0, `lint` 0 ошибок, 2026-10-08.
+- Технические ошибки (2f474da): `AuthDataIntegrityError`, общий `isRetryableSqlFailure`, типизированные `reasons`.
 - 1.7 logout: `auth.logout.test.ts` 11 из 11; smoke с обрывом PostgreSQL → 503, Session и cookie сохранены, 2026-10-08.
-- 1.6b `/me`: `auth.me.test.ts` 5 из 5 (93a3d64).
 
 ## Не проверено
 
 - 1.10, вопрос понимания: что cookie jar доказывает сверх проверки заголовка — объяснён агентом, владелец не повторил.
 - Дорога «неверный пароль» не считает вызовы `verify`: лишний scrypt удвоит время отказа незаметно для тестов.
 - Первые тесты с контейнером PostgreSQL иногда падают по таймауту 5 с при полном прогоне; отдельно файлы проходят.
-- Остановленный сервер БД (`ECONNREFUSED`) не воспроизведён; обрыв во время `execute` остаётся 500.
-- `/me` с просроченной Session по HTTP — есть только тест repository.
+- Остановленный сервер БД (`ECONNREFUSED`) не воспроизведён; обрыв во время `execute` остаётся 500; `/me` с
+  просроченной Session по HTTP — есть только тест repository.
 - `lessons/0005-debrief-oxlint.html` нет на диске; вопросы 15–17 ссылаются на него.
 - `0.3`: тест двух вызовов `randomBytes.get(32)`; production memory budget scrypt.
 
