@@ -16,9 +16,9 @@
 
 - **GIVEN** - User с email "example@email.com" незарегистрирован
 - **WHEN** - клиент отправляет запрос `POST /api/auth/signup` с почтой,
-  валидным password, совпадающим с password passwordConfirm, поля с именем опциональны - могут быть `null`
+  валидным password, совпадающим с password passwordConfirm, и непустым `displayName`
 - **THEN** - API отвечает `201 Created`
-- **AND** - тело ответа содержит `id`, `email`, `firstName`, `lastName`, `middleName` созданного User
+- **AND** - тело ответа содержит `id`, `email`, `displayName` созданного User
 - **AND** - ни ответ, ни логи не содержат Session token
 
 #### Scenario: Session cookie атрибуты
@@ -38,7 +38,7 @@
 
 - **GIVEN** - User с email "example@email.com" зарегистрирован
 - **WHEN** - клиент отправляет запрос `POST /api/auth/signup` с почтой "example@email.com",
-  валидным password, совпадающим с password passwordConfirm, поля с именем опциональны - могут быть `null`
+  валидным password, совпадающим с password passwordConfirm, и непустым `displayName`
 - **THEN** - API отвечает `409 Conflict`
 - **AND** - тело ответа содержит Problem Details для `USER_EMAIL_ALREADY_EXISTS`
 - **AND** - User не создан второй раз
@@ -48,7 +48,7 @@
 
 - **GIVEN** - User с email "example@email.com" незарегистрирован
 - **WHEN** - клиент отправляет запрос `POST /api/auth/signup` с почтой "example@email.com",
-  валидным password, несовпадающим с password passwordConfirm, поля с именем опциональны - могут быть `null`
+  валидным password, несовпадающим с password passwordConfirm, и непустым `displayName`
 - **THEN** - API отвечает `400 Bad Request`
 - **AND** - тело ответа содержит Problem Details для `REQUEST_VALIDATION_FAILED`
 - **AND** - User не создан
@@ -57,7 +57,7 @@
 ### Requirement: Успешный вход
 
 При верных email и пароле API SHALL отвечать на `POST /api/auth/login` кодом `200 OK`, создавая новую действующую
-Session существующего User и возвращая поля `id`, `email`, `firstName`, `lastName`, `middleName` этого User
+Session существующего User и возвращая поля `id`, `email`, `displayName` этого User
 и новую cookie `wishlist_session`, не отзывая и не изменяя ранее выданные Session этого User.
 
 #### Scenario: Успешный вход
@@ -65,7 +65,7 @@ Session существующего User и возвращая поля `id`, `em
 - **GIVEN** User зарегистрирован через signup, и клиент знает его email и правильный пароль
 - **WHEN** клиент отправляет `POST /api/auth/login` с этим email и паролем
 - **THEN** API отвечает `200 OK`
-- **AND** тело ответа содержит `id`, `email`, `firstName`, `lastName`, `middleName` того же User и полностью совпадает с
+- **AND** тело ответа содержит `id`, `email`, `displayName` того же User и полностью совпадает с
   телом ответа signup
 - **AND** API создаёт новую действующую Session этого User
 - **AND** ответ выставляет новую cookie `wishlist_session`, значение которой отличается от cookie signup
@@ -307,3 +307,16 @@ API SHALL удалять только эту Session, не изменяя ост
 - **THEN** API отвечает `500 Internal Server Error` с типом содержимого `application/problem+json`
 - **AND** тело ответа содержит `code: INTERNAL_ERROR`, `status: 500`, `instance: /api/auth/logout`
 - **AND** ответ не содержит `Set-Cookie` для `wishlist_session`
+
+### Requirement: Обязательный Display Name при signup
+
+API SHALL отклонять `POST /api/auth/signup`, если `displayName` отсутствует, после удаления пробелов по краям пуст или
+длиннее 100 символов, ответом `400 Bad Request` с `code: REQUEST_VALIDATION_FAILED` и без создания User.
+
+#### Scenario: Display Name из одних пробелов
+
+- **GIVEN** User с email "example@email.com" незарегистрирован
+- **WHEN** клиент отправляет `POST /api/auth/signup` с почтой "example@email.com", валидным password, совпадающим с
+  passwordConfirm, и `displayName: "   "`
+- **THEN** API отвечает `400 Bad Request` с `code: REQUEST_VALIDATION_FAILED`
+- **AND** User не создан
