@@ -1,14 +1,17 @@
 import { Data } from 'effect';
 
-import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
+import type { UserEmail } from '#modules/users/schemas/user.schema.js';
 
 export class UserNotFoundError extends Data.TaggedError('UserNotFoundError')<{
-  readonly id: UserId;
+  readonly cause: unknown;
 }> {}
 
 export class UsersUnavailableError extends Data.TaggedError(
   'UsersUnavailableError',
 )<{
+  readonly cause: unknown;
+}> {}
+export class UsersInternalError extends Data.TaggedError('UsersInternalError')<{
   readonly cause: unknown;
 }> {}
 
@@ -17,6 +20,11 @@ export class UserDataIntegrityError extends Data.TaggedError(
 )<{
   readonly cause: unknown;
 }> {}
+
+export type UsersTechnicalError =
+  | UserDataIntegrityError
+  | UsersInternalError
+  | UsersUnavailableError;
 
 export class UserEmailAlreadyExistsError extends Data.TaggedError(
   'UserEmailAlreadyExistsError',
@@ -28,23 +36,28 @@ export class UserEmailAlreadyExistsError extends Data.TaggedError(
 export type UsersServiceCreateError =
   | UserDataIntegrityError
   | UserEmailAlreadyExistsError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UsersServiceGetAllError =
   | UserDataIntegrityError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UsersServiceGetByIdError =
   | UserDataIntegrityError
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UserServiceUpdateError =
   | UserDataIntegrityError
   | UserEmailAlreadyExistsError
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;
 
 export type UserServiceDeleteByIdError =
   | UserNotFoundError
+  | UsersInternalError
   | UsersUnavailableError;

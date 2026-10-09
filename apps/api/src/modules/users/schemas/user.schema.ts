@@ -1,17 +1,22 @@
 import { Schema } from 'effect';
 
-import { makeEmailBrandedSchema } from '#schemas/email.schema.js';
-import { makeNullableStringSchema } from '#schemas/utils.js';
-import { makeIdBrandedSchema } from '#schemas/uuid4.schema.js';
+import { makeEmailBrandedSchema } from '#infra/schemas/email.schema.js';
+import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
 
 export const UserIdSchema = makeIdBrandedSchema('UserId');
 export type UserId = Schema.Schema.Type<typeof UserIdSchema>;
 
 export const UserEmailSchema = makeEmailBrandedSchema('UserEmail');
 export type UserEmail = Schema.Schema.Type<typeof UserEmailSchema>;
-export const UserNameSchema = Schema.String.pipe(
+
+// Предел совпадает с колонкой display_name varchar(100).
+export const UserDisplayNameSchema = Schema.String.pipe(
   Schema.check(Schema.isMinLength(1)),
-  Schema.check(Schema.isMaxLength(255)),
+  Schema.check(Schema.isMaxLength(100)),
 );
 
-export const UserNameInputSchema = makeNullableStringSchema(UserNameSchema);
+// Во входящих запросах пробелы по краям удаляются до проверки длины: "   " отклоняется.
+export const UserDisplayNameInputSchema = Schema.Trim.check(
+  Schema.isMinLength(1),
+  Schema.isMaxLength(100),
+);

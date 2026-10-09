@@ -11,22 +11,22 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "db:down": "docker compose --env-file .env.development -f docker-compose.dev.yml down",
     "db:generate": "kysely-codegen",
     "db:logs": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres",
-    "db:migrate": "tsx --conditions=development --env-file=.env.development src/bin/migrate.ts",
+    "db:migrate": "tsx --conditions=development --env-file=.env.development src/infra/bin/migrate.ts",
     "db:ready": "docker compose --env-file .env.development -f docker-compose.dev.yml exec postgres pg_isready -U postgres -d wishlist",
     "db:up": "docker compose --env-file .env.development -f docker-compose.dev.yml up -d --wait postgres",
     "db:check": "kysely-codegen --verify",
-    "dev": "tsx watch --conditions=development --env-file=.env.development src/bin/server.ts",
-    "lint": "eslint",
-    "start": "node --enable-source-maps dist/bin/server.js",
+    "dev": "tsx watch --conditions=development --env-file=.env.development src/infra/bin/server.ts",
+    "lint": "oxlint .",
+    "start": "node --enable-source-maps dist/infra/bin/server.js",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "prepare": "effect-tsgo patch --typescript --no-oxlint",
-    "repl": "tsx --conditions=development --env-file=.env.development src/bin/repl.ts"
+    "repl": "tsx --conditions=development --env-file=.env.development src/infra/bin/repl.ts"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.108",
@@ -39,11 +39,12 @@
   },
   "devDependencies": {
     "@effect/tsgo": "^0.36.4",
-    "@repo/eslint-config": "workspace:^",
+    "@effect/vitest": "4.0.0-rc.108",
+    "@faker-js/faker": "^10.6.0",
     "@repo/typescript-config": "workspace:^",
+    "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^22.15.3",
     "@types/pg": "^8.21.0",
-    "eslint": "^9.39.1",
     "kysely-codegen": "^0.20.0",
     "tsx": "^4.23.11",
     "typescript": "7.0.2",

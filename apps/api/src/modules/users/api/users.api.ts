@@ -5,7 +5,8 @@ import {
   HttpApiSchema,
 } from 'effect/unstable/httpapi';
 
-import { asProblemJson } from '#errors/http-problem.js';
+import { asProblemJson } from '#infra/errors/http-problem.js';
+import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   userByIdPath,
   usersCollectionPath,
@@ -14,8 +15,6 @@ import {
 import {
   UserEmailAlreadyExistsHttpError,
   UserNotFoundHttpError,
-  UsersInternalHttpError,
-  UsersUnavailableHttpError,
 } from '#modules/users/api/users.api.errors.js';
 import {
   CreateUserBodySchema,
@@ -33,43 +32,31 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
     success: CreateUserResponseSchema,
     error: [
       UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      UsersInternalHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
+      ...technicalHttpErrors,
     ],
   }),
   HttpApiEndpoint.get(UserOperation.getAll, usersCollectionPath, {
     success: Schema.Array(UserResponseSchema),
-    error: [
-      UsersInternalHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
-    ],
+    error: technicalHttpErrors,
   }),
   HttpApiEndpoint.get(UserOperation.getById, userByIdPath, {
     params: { id: UserIdSchema },
     success: UserResponseSchema,
-    error: [
-      UserNotFoundHttpError.pipe(asProblemJson),
-      UsersInternalHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
-    ],
+    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
   }),
   HttpApiEndpoint.put(UserOperation.update, userByIdPath, {
     params: { id: UserIdSchema },
     payload: UpdateUserBodySchema,
     success: UserResponseSchema,
     error: [
+      ...technicalHttpErrors,
       UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
       UserNotFoundHttpError.pipe(asProblemJson),
-      UsersInternalHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
     ],
   }),
   HttpApiEndpoint.delete(UserOperation.delete, userByIdPath, {
     params: { id: UserIdSchema },
     success: HttpApiSchema.NoContent,
-    error: [
-      UserNotFoundHttpError.pipe(asProblemJson),
-      UsersUnavailableHttpError.pipe(asProblemJson),
-    ],
+    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
   }),
 );

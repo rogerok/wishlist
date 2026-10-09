@@ -1,241 +1,139 @@
-import type { Cause } from 'effect';
-
 import { Effect } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
-import type { UserFailureLogAnnotation } from '#modules/users/schemas/user-logs.schema.js';
+import type { UsersTechnicalError } from '#modules/users/service/users.service.errors.js';
 
-import { AppApi } from '#api/api.js';
-import {
-  usersCollectionPath,
-  usersGroupIdentifier,
-} from '#modules/users/api/users.api.constants.js';
+import { AppApi } from '#infra/api/api.js';
+import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
+import { usersGroupIdentifier } from '#modules/users/api/users.api.constants.js';
 import {
   makeByIdInstance,
   UserEmailAlreadyExistsHttpError,
   UserNotFoundHttpError,
-  UsersInternalHttpError,
-  UsersUnavailableHttpError,
 } from '#modules/users/api/users.api.errors.js';
-import {
-  UserFailureReason,
-  UserLogEvent,
-} from '#modules/users/schemas/user-logs.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
 import { UsersService } from '#modules/users/service/users.service.js';
 
-type LogOptions = {
-  cause: unknown;
-} & Omit<UserFailureLogAnnotation, 'event'>;
-
-const logFailure = ({ operation, userId, cause, reason }: LogOptions) =>
-  Effect.logError('User operation failed', cause).pipe(
-    Effect.annotateLogs({
-      event: UserLogEvent['users.operation.failed'],
-      operation,
-      userId,
-      reason,
-    }),
-  );
-
-const logAndFail = <E extends Cause.YieldableError>(
-  options: LogOptions,
-  error: E,
-) =>
-  Effect.gen(function* () {
-    yield* logFailure(options);
-    return yield* error;
+const makeTechnicalErrorHandler =
+  makeTechnicalFailureHandler<UsersTechnicalError>()({
+    module: 'users',
+    operations: UserOperation,
+    reasons: {
+      UserDataIntegrityError: 'dataIntegrity',
+      UsersInternalError: 'internal',
+      UsersUnavailableError: 'unavailable',
+    },
   });
 
 export const UsersHandlersLive = HttpApiBuilder.group(
   AppApi,
   usersGroupIdentifier,
   (handlers) =>
-    handlers
-      .handle(UserOperation.create, ({ payload }) =>
-        Effect.gen(function* () {
-          const service = yield* UsersService;
+    Effect.gen(function* () {
+      const service = yield* UsersService;
 
-          return yield* service.create(payload).pipe(
-            Effect.catchTags({
-              UserEmailAlreadyExistsError: () =>
-                new UserEmailAlreadyExistsHttpError(),
+      return handlers
+        .handle(UserOperation.create, ({ payload }) =>
+          Effect.gen(function* () {
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              operation: UserOperation.create,
+              userId: null,
+            });
 
-              UserDataIntegrityError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.create,
-                    reason: UserFailureReason.dataIntegrity,
-                    cause,
-                    userId: null,
-                  },
-                  new UsersInternalHttpError({
-                    instance: usersCollectionPath,
+            return yield* service.create(payload).pipe(
+              Effect.catchTags({
+                UserEmailAlreadyExistsError: () =>
+                  new UserEmailAlreadyExistsHttpError(),
+                UserDataIntegrityError: handleTechnicalError,
+                UsersInternalError: handleTechnicalError,
+                UsersUnavailableError: handleTechnicalError,
+              }),
+            );
+          }),
+        )
+        .handle(UserOperation.getAll, () =>
+          Effect.gen(function* () {
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              operation: UserOperation.getAll,
+              userId: null,
+            });
+
+            return yield* service.getAll.pipe(
+              Effect.catchTags({
+                UserDataIntegrityError: handleTechnicalError,
+                UsersInternalError: handleTechnicalError,
+                UsersUnavailableError: handleTechnicalError,
+              }),
+            );
+          }),
+        )
+        .handle(UserOperation.getById, ({ params: { id } }) =>
+          Effect.gen(function* () {
+            const instance = makeByIdInstance(id);
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              operation: UserOperation.getById,
+              userId: id,
+            });
+
+            return yield* service.getById(id).pipe(
+              Effect.catchTags({
+                UserNotFoundError: () =>
+                  new UserNotFoundHttpError({
+                    id,
+                    instance,
                   }),
-                ),
+                UserDataIntegrityError: handleTechnicalError,
+                UsersInternalError: handleTechnicalError,
+                UsersUnavailableError: handleTechnicalError,
+              }),
+            );
+          }),
+        )
+        .handle(UserOperation.update, ({ params: { id }, payload }) =>
+          Effect.gen(function* () {
+            const instance = makeByIdInstance(id);
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              operation: UserOperation.update,
+              userId: id,
+            });
 
-              UsersUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.create,
-                    reason: UserFailureReason.unavailable,
-                    cause,
-                    userId: null,
-                  },
-                  new UsersUnavailableHttpError({
-                    instance: usersCollectionPath,
+            return yield* service.update(id, payload).pipe(
+              Effect.catchTags({
+                UserEmailAlreadyExistsError: () =>
+                  new UserEmailAlreadyExistsHttpError(),
+
+                UserNotFoundError: () =>
+                  new UserNotFoundHttpError({
+                    id,
+                    instance,
                   }),
-                ),
-            }),
-          );
-        }),
-      )
-      .handle(UserOperation.getAll, () =>
-        Effect.gen(function* () {
-          const service = yield* UsersService;
+                UserDataIntegrityError: handleTechnicalError,
+                UsersInternalError: handleTechnicalError,
+                UsersUnavailableError: handleTechnicalError,
+              }),
+            );
+          }),
+        )
+        .handle(UserOperation.delete, ({ params: { id } }) =>
+          Effect.gen(function* () {
+            const instance = makeByIdInstance(id);
+            const handleTechnicalError = makeTechnicalErrorHandler({
+              operation: UserOperation.delete,
+              userId: id,
+            });
 
-          return yield* service.getAll.pipe(
-            Effect.catchTags({
-              UserDataIntegrityError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.getAll,
-                    reason: UserFailureReason.dataIntegrity,
-                    userId: null,
-                    cause,
-                  },
-                  new UsersInternalHttpError({
-                    instance: usersCollectionPath,
+            return yield* service.deleteById(id).pipe(
+              Effect.catchTags({
+                UserNotFoundError: () =>
+                  new UserNotFoundHttpError({
+                    id,
+                    instance,
                   }),
-                ),
-
-              UsersUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.getAll,
-                    reason: UserFailureReason.unavailable,
-                    cause,
-                    userId: null,
-                  },
-                  new UsersUnavailableHttpError({
-                    instance: usersCollectionPath,
-                  }),
-                ),
-            }),
-          );
-        }),
-      )
-      .handle(UserOperation.getById, ({ params: { id } }) =>
-        Effect.gen(function* () {
-          const service = yield* UsersService;
-
-          return yield* service.getById(id).pipe(
-            Effect.catchTags({
-              UserNotFoundError: ({ id }) =>
-                new UserNotFoundHttpError({
-                  id,
-                  instance: makeByIdInstance(id),
-                }),
-
-              UserDataIntegrityError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.getById,
-                    reason: UserFailureReason.dataIntegrity,
-                    cause,
-                    userId: id,
-                  },
-                  new UsersInternalHttpError({
-                    instance: makeByIdInstance(id),
-                  }),
-                ),
-
-              UsersUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.getById,
-                    reason: UserFailureReason.unavailable,
-                    cause,
-                    userId: id,
-                  },
-                  new UsersUnavailableHttpError({
-                    instance: makeByIdInstance(id),
-                  }),
-                ),
-            }),
-          );
-        }),
-      )
-      .handle(UserOperation.update, ({ params: { id }, payload }) =>
-        Effect.gen(function* () {
-          const service = yield* UsersService;
-
-          return yield* service.update(id, payload).pipe(
-            Effect.catchTags({
-              UserEmailAlreadyExistsError: () =>
-                new UserEmailAlreadyExistsHttpError(),
-
-              UserNotFoundError: ({ id }) =>
-                new UserNotFoundHttpError({
-                  id,
-                  instance: makeByIdInstance(id),
-                }),
-
-              UserDataIntegrityError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.update,
-                    reason: UserFailureReason.dataIntegrity,
-                    cause,
-                    userId: id,
-                  },
-                  new UsersInternalHttpError({
-                    instance: usersCollectionPath,
-                  }),
-                ),
-
-              UsersUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.update,
-                    reason: UserFailureReason.unavailable,
-                    cause,
-                    userId: id,
-                  },
-                  new UsersUnavailableHttpError({
-                    instance: usersCollectionPath,
-                  }),
-                ),
-            }),
-          );
-        }),
-      )
-      .handle(UserOperation.delete, ({ params: { id } }) =>
-        Effect.gen(function* () {
-          const service = yield* UsersService;
-
-          return yield* service.deleteById(id).pipe(
-            Effect.catchTags({
-              UserNotFoundError: ({ id }) =>
-                new UserNotFoundHttpError({
-                  id,
-                  instance: makeByIdInstance(id),
-                }),
-
-              UsersUnavailableError: (cause) =>
-                logAndFail(
-                  {
-                    operation: UserOperation.delete,
-                    reason: UserFailureReason.dataIntegrity,
-                    cause,
-                    userId: id,
-                  },
-                  new UsersUnavailableHttpError({
-                    instance: makeByIdInstance(id),
-                  }),
-                ),
-            }),
-          );
-        }),
-      ),
+                UsersInternalError: handleTechnicalError,
+                UsersUnavailableError: handleTechnicalError,
+              }),
+            );
+          }),
+        );
+    }),
 );

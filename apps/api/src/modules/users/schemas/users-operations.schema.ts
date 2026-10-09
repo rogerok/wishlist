@@ -1,12 +1,13 @@
 import type { Schema } from 'effect';
 
-import { makeLiteralUnionSchema } from '#schemas/utils.js';
+import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 
 export const UserOperationSchema = makeLiteralUnionSchema([
   'create',
   'delete',
   'getAll',
   'getById',
+  'getByEmail',
   'update',
 ]);
 export const UserOperation = UserOperationSchema.values;

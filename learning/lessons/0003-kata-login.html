@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ката: login с новой Session</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Ката и разбор тестов · login · 5 минут</div>
+    <h1>Проверь пароль и создай новую Session</h1>
+    <p class="lede">Ты пишешь реализацию. Агент подготовил четыре HTTP-теста с настоящей PostgreSQL, repositories, scrypt и генератором token.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/auth/handlers/auth.login.test.ts">Тесты каты</a>
+      <a class="button" href="../../docs/auth/implementation-plan.md">Контракт auth</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Запуск и ожидаемые результаты</h2>
+<pre><code>pnpm --filter @wishlist/api exec vitest run --config vitest.config.ts src/modules/auth/handlers/auth.login.test.ts</code></pre>
+      <table>
+        <thead><tr><th>Сценарий</th><th>Условие прохождения</th></tr></thead>
+        <tbody>
+          <tr><td>Email отсутствует</td><td>401, AUTH_INVALID_CREDENTIALS, без cookie и новых сессий</td></tr>
+          <tr><td>Пароль неверен</td><td>Такой же публичный ответ, как для неизвестного email; сессии не меняются</td></tr>
+          <tr><td>Пароль верен, MODE=production</td><td>200, публичный User, защищённая cookie; её digest находит новую Session этого User со сроком 7 дней</td></tr>
+          <tr><td>Два входа с существующей cookie</td><td>Каждый создаёт новую Session; предыдущие сессии сохраняются</td></tr>
+        </tbody>
+      </table>
+      <p>Это обычный тестовый файл проекта. До реализации login общий запуск тестов намеренно будет красным. Текущие результаты — в <a href="../STATE.md">STATE.md</a>.</p>
+    </section>
+    <section class="card">
+      <h2>Порядок твоей работы</h2>
+      <ol>
+        <li><strong>Поиск по email.</strong> В <a href="../../apps/api/src/modules/users/repository/users.repository.ts">UsersRepository</a> пока есть только <code>getById</code>. Добавь <code>getByEmail</code> по его образцу: точный поиск, Option, декодирование и перевод ошибок. Не загружай всех пользователей. Добавь соответствующую операцию и тип ошибки; в ошибке невалидной строки используй её <code>row.id</code>.</li>
+        <li><strong>Контракт сервиса.</strong> В <a href="../../apps/api/src/modules/auth/service/auth.service.errors.ts">auth.service.errors.ts</a> добавь ошибку неверных credentials и тип ошибок login. В <a href="../../apps/api/src/modules/auth/schemas/login/login.schema.ts">login.schema.ts</a> опиши вход сервиса и результат с User, credential и expiresAt, как у signup.</li>
+        <li><strong>Операция login.</strong> В <a href="../../apps/api/src/modules/auth/service/auth.service.ts">AuthService</a> найди User, загрузи Password Credential и вызови <code>hasher.verify</code>. При неверных credentials не создавай Session. При успехе сгенерируй новый token, сохрани digest и верни результат. Не превращай SQL-сбой или повреждённый hash в ошибку неверного пароля.</li>
+        <li><strong>HTTP.</strong> Подключи существующее описание login в <a href="../../apps/api/src/modules/auth/api/auth.api.ts">auth.api.ts</a>. Добавь обработчик в <a href="../../apps/api/src/modules/auth/handlers/auth.handlers.ts">auth.handlers.ts</a>: вызов сервиса, перевод ошибок, cookie и только User в теле.</li>
+        <li><strong>Зависимые тесты.</strong> После добавления метода в интерфейс компилятор покажет неполные подмены сервисов, например в <code>auth.handlers.test.ts</code>. Обнови их явно; не делай login необязательным ради старых тестов.</li>
+      </ol>
+<pre class="mermaid">
+flowchart TD
+  request[POST /api/auth/login] --> user[Найти User по email]
+  user -->|Нет User| denied[401 без новой Session]
+  user -->|Есть User| credential[Загрузить Password Credential]
+  credential --> verify[Проверить пароль через hasher.verify]
+  verify -->|false| denied
+  verify -->|true| token[Сгенерировать новый token и digest]
+  token --> session[Сохранить новую Session]
+  session --> response[200: User в теле, token в cookie]
+</pre>
+      <p>Это успешный путь и ожидаемые отказы. Технические ошибки проходят отдельный перевод в 500/503 по существующей политике.</p>
+    </section>
+    <section class="card decision" id="d1">
+      <h2>1. Проверяем настоящий обработчик, не готовый ответ</h2>
+      <p><span class="label">Что</span><code>auth.login.test.ts:29–32</code> собирает настоящие зависимости.</p>
+<pre><code>const servicesLayer = Layer.mergeAll(
+  AuthModuleLive,
+  SessionRepositoryLive,
+).pipe(Layer.provideMerge(databaseLayer));</code></pre>
+      <p><span class="label">Почему</span>Подставленный результат login не обнаружит пропущенную проверку пароля или отсутствие записи Session. Здесь HTTP-запрос проходит через настоящий AuthService.</p>
+      <p><span class="label">Цена</span>Нужны Docker, PostgreSQL и реальные вычисления scrypt. Тесты выполняются медленнее проверки с подменами.</p>
+      <details><summary>Если login всегда принимает любой пароль, какой сценарий обнаружит ошибку?</summary><p>Сценарий неверного пароля потребует 401 и неизменность сессий. <a href="#d1">Решение 1</a>.</p></details>
+    </section>
+    <section class="card decision" id="d2">
+      <h2>2. Проверяем связь cookie с сохранённой сессией</h2>
+      <p><span class="label">Что</span><code>auth.login.test.ts:98–109</code> извлекает token и вычисляет digest от исходных bytes.</p>
+<pre><code>digest: createHash('sha256')
+  .update(Buffer.from(credential, 'base64url'))
+  .digest(),</code></pre>
+      <p><span class="label">Почему</span>Случайная cookie сама по себе не доказывает существование Session. Тест ищет Session по digest и сверяет её владельца и срок.</p>
+      <p><span class="label">Цена</span>Проверка знает публичный контракт token: base64url и SHA-256 от декодированных bytes. При смене этого контракта тест тоже изменится.</p>
+      <details><summary>Login выдал новую cookie, но ничего не записал в sessions. Что обнаружит тест?</summary><p>Поиск по digest вернёт None вместо Session. Одного статуса 200 для прохождения недостаточно. <a href="#d2">Решение 2</a>.</p></details>
+    </section>
+    <section class="card decision" id="d3">
+      <h2>3. Освобождаем и приложение, и данные теста</h2>
+      <p><span class="label">Что</span><code>auth.login.test.ts:65–71</code> регистрирует освобождение HTTP-приложения.</p>
+<pre><code>return yield* Effect.acquireRelease(
+  Effect.sync(() => makeApp(auth, mode)),
+  (app) => Effect.promise(() => app.dispose()),
+);</code></pre>
+      <p>Помощник register отдельно удаляет тестового User при завершении scope. Внешние ключи удаляют его credentials и сессии.</p>
+      <p><span class="label">Почему</span>После проваленной проверки следующий тест должен снова зарегистрировать тот же email, а не получить 409 из-за чужих данных.</p>
+      <p><span class="label">Цена</span>Освобождение ресурсов описано явно. Контейнер остаётся общим для группы, но данные каждого зарегистрированного User очищаются.</p>
+      <details><summary>Проверка статуса упала после успешного signup. Удалится ли тестовый User?</summary><p>Да: acquireRelease зарегистрировал удаление в scope теста. Ошибка проверки не пропускает освобождение. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+    <section class="card">
+      <h2>Границы каты</h2>
+      <p>Четыре теста покрывают основные сценарии login. Они не доказывают все технические отказы, устойчивость к перебору, одинаковое время ответа или работу браузера.</p>
+      <p>При подключении login сохрани действующую политику ошибок и безопасных логов. Маршруты me/logout, rate limit и изменения схемы БД в эту задачу не входят.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0002-debrief-session-expiry.html">Предыдущий разбор: срок Session</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

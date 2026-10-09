@@ -10,10 +10,6 @@ export const UserByIdInstanceSchema = Schema.TemplateLiteral([
   '/',
   UserIdSchema,
 ]);
-export const UserInstanceSchema = Schema.Union([
-  Schema.Literal(usersCollectionPath),
-  UserByIdInstanceSchema,
-]);
 
 export const makeByIdInstance = (id: UserId) =>
   `${usersCollectionPath}/${id}` as const;
@@ -32,38 +28,6 @@ export class UserNotFoundHttpError extends Schema.Error<UserNotFoundHttpError>(
   },
   {
     httpApiStatus: 404,
-  },
-) {}
-
-export class UsersUnavailableHttpError extends Schema.Error<UsersUnavailableHttpError>(
-  'UsersUnavailableHttpError',
-)(
-  {
-    code: Schema.tag('USERS_UNAVAILABLE'),
-    detail: Schema.tag('Unable to process the request'),
-    status: Schema.tag(503),
-    title: Schema.tag('Users service is unavailable'),
-    type: Schema.tag('/errors/users-unavailable'),
-    instance: UserInstanceSchema,
-  },
-  {
-    httpApiStatus: 503,
-  },
-) {}
-
-export class UsersInternalHttpError extends Schema.Error<UsersInternalHttpError>(
-  'UsersInternalHttpError',
-)(
-  {
-    code: Schema.tag('USERS_INTERNAL_ERROR'),
-    detail: Schema.tag('Unable to process the request'),
-    status: Schema.tag(500),
-    title: Schema.tag('Internal users service error'),
-    type: Schema.tag('/errors/users-internal-error'),
-    instance: UserInstanceSchema,
-  },
-  {
-    httpApiStatus: 500,
   },
 ) {}
 

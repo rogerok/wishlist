@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор: тесты logout и smoke с обрывом PostgreSQL</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Разбор · logout и отказ БД · 5 минут</div>
+    <h1>Подмена отказа проверяет наш перевод ошибок, а не то, что на самом деле выдаёт драйвер</h1>
+    <p class="lede">Logout написал ты. Агент написал заготовку, 11 тестов и временный smoke. Разберём три решения в этих тестах.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/auth/handlers/auth.logout.test.ts">auth.logout.test.ts</a>
+      <a class="button" href="../../apps/api/src/infra/db/sql-failure.ts">sql-failure.ts</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card decision" id="d1">
+      <h2>1. При 503 и 500 тест требует пустой Set-Cookie</h2>
+      <p><span class="label">Что</span><code>auth.logout.test.ts:254</code>, общий помощник для всех отказов:</p>
+<pre><code>expect(response.status).toBe(expected.status);
+expect(response.headers.get('content-type')).toContain('application/problem+json');
+expect(response.headers.getSetCookie()).toEqual([]);</code></pre>
+      <p><span class="label">Почему</span><code>securitySetCookie</code> не ставит cookie сразу. Он регистрирует обработчик, который сработает на <strong>любом</strong> итоговом ответе (<code>HttpApiBuilder.ts:546</code>, <code>appendPreResponseHandler</code>).</p>
+      <p>Если в handler перенести вызов выше <code>service.logout</code> (<code>auth.handlers.ts:130</code> и <code>:138</code>), ответ 503 придёт с <code>wishlist_session=; Max-Age=0</code>. Браузер сотрёт cookie, а Session ещё до 7 дней останется действующей в БД. Повторить logout пользователю будет нечем.</p>
+      <p><span class="label">Цена</span>Тест проверяет порядок строк в handler. Если перенести вызов, тесты 503 и 500 покраснеют, хотя статусы в ответах останутся верными.</p>
+      <details><summary><code>securitySetCookie</code> перенесли выше <code>service.logout</code>, PostgreSQL недоступна. Что получит клиент и какой тест упадёт?</summary><p>503 и заголовок, истекающий cookie: браузер её сотрёт, а Session в БД жива. Упадут «returns 503 and keeps the cookie…» и оба теста 500 на <code>getSetCookie()</code>. <a href="#d1">Решение 1</a>.</p></details>
+    </section>
+    <section class="card decision" id="d2">
+      <h2>2. Отказ подменяется настоящим AuthService через Layer.fresh</h2>
+      <p><span class="label">Что</span><code>auth.logout.test.ts:117–140</code>: настоящий репозиторий, у которого падает только удаление.</p>
+<pre><code>const failingDeleteRepo = (failure) =>
+  Layer.effect(SessionRepository, Effect.gen(function* () {
+    const repo = yield* SessionRepository;
+    return { ...repo, deleteByTokenDigest: () => Effect.fail(failure) };
+  })).pipe(Layer.provide(SessionRepositoryLive));
+
+Layer.fresh(AuthServiceLive).pipe(Layer.provide([failingDeleteRepo(failure), …]))</code></pre>
+      <p><span class="label">Почему</span>Подделывать весь <code>AuthService</code> нельзя: тогда тест не дойдёт до <code>mapTechnicalError</code>, а проверять нужно именно его. Без <code>Layer.fresh</code> группа <code>layer(servicesLayer)</code> найдёт уже собранный <code>AuthServiceLive</code> в таблице собранных слоёв и отдаст сервис с настоящим репозиторием. Это вопрос 12 из очереди.</p>
+      <p><span class="label">Цена</span>При каждой сборке <code>AuthServiceLive</code> заново считает фиктивный хеш пароля через scrypt — около 300 мс на тест.</p>
+      <details><summary>Из теста 503 убрали <code>Layer.fresh</code>. Какой AuthService получит приложение и что покажет тест?</summary><p>Уже собранный сервис группы с настоящим репозиторием: удаление пройдёт, ответ 204, и тест покраснеет на ожидании 503. <a href="#d2">Решение 2</a>.</p></details>
+    </section>
+    <section class="card decision" id="d3">
+      <h2>3. Smoke рвёт соединение через прокси, а строки проверяет напрямую</h2>
+      <p><span class="label">Что</span>Временный <code>apps/api/logout.smoke.ts</code>, теперь удалён:</p>
+<pre class="mermaid">
+flowchart LR
+  S["node dist/infra/bin/server.js"] -- "POSTGRES_URL" --> P["TCP-прокси в smoke"]
+  P -- "рвёт соединения, если отключён" --> DB[("PostgreSQL в контейнере")]
+  C["контрольное подключение"] -- "напрямую" --> DB
+</pre>
+      <p><span class="label">Почему</span>Тест 2.1 подставлял готовый <code>ConnectionError</code> и был зелёным. На собранном сервере настоящий обрыв дал <strong>500</strong> на logout, <code>/me</code> и login. Цепочка была <code>SqlError → UnknownError(operation: 'acquireConnection')</code>: <code>@effect/sql-pg</code> определяет тип ошибки по SQLSTATE, а у сетевого обрыва этого кода нет.</p>
+      <p>Остановить контейнер было бы хуже: после перезапуска у PostgreSQL может смениться порт, и строки уже не сравнить. Пауза контейнера заставила бы запросы висеть без ответа. Прокси рвёт соединения только сервера, а контрольное подключение видит БД.</p>
+      <p><span class="label">Цена</span>Прокси воспроизводит обрыв соединения (<code>ECONNRESET</code>). Остановленный сервер БД (<code>ECONNREFUSED</code>) отдельно не проверялся.</p>
+      <details><summary>Тест 503 с подменой <code>ConnectionError</code> зелёный. Почему настоящий обрыв PostgreSQL всё равно давал 500?</summary><p>Подмена закладывала догадку о драйвере. Настоящий драйвер выдаёт <code>UnknownError</code> на этапе <code>acquireConnection</code>, у которого <code>isRetryable === false</code>. Ошибку нашёл только запуск на настоящем сервере. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+    <section class="card">
+      <h2>Источники и границы проверки</h2>
+      <p><a href="https://www.rfc-editor.org/rfc/rfc6265#section-5.3">RFC 6265, §5.2.2 и §5.3</a>: cookie с <code>Max-Age=0</code> удаляется из хранилища браузера.</p>
+      <p>Решения и отклонённые варианты — в архиве OpenSpec: <a href="../../openspec/changes/archive/2026-10-08-add-session-logout/design.md">add-session-logout</a> и <a href="../../openspec/changes/archive/2026-10-08-classify-connection-failures-as-unavailable/design.md">classify-connection-failures-as-unavailable</a>.</p>
+      <p>Что проверено и что нет — в <a href="../STATE.md">STATE.md</a>.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0004-security-middleware.html">Предыдущий урок: middleware</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

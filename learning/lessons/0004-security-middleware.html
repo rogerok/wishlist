@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security middleware: сессия в Context</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Урок · security middleware и /me · 10 минут</div>
+    <h1>Middleware проверяет cookie один раз и кладёт сессию в Context, handler её только читает</h1>
+    <p class="lede">Цель: заполнить три пропуска в <code>auth.handlers.ts</code>, чтобы <code>GET /api/auth/me</code> отвечал 200 с User или 401.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/auth/handlers/auth.me.test.ts">Тесты /me</a>
+      <a class="button" href="../../apps/api/src/modules/auth/api/session-authentication.ts">Контракт middleware</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Путь запроса</h2>
+<pre class="mermaid">
+sequenceDiagram
+  participant C as Клиент
+  participant M as SessionAuthentication
+  participant S as AuthService.authenticate
+  participant H as handler me
+  C->>M: GET /api/auth/me, Cookie wishlist_session
+  Note over M: credential = Redacted, пустая строка если cookie нет
+  M->>S: authenticate(credential)
+  alt формат неверен, сессии нет, срок вышел
+    S-->>M: AuthUnauthenticatedError
+    M-->>C: 401 AUTH_INVALID_SESSION
+  else БД недоступна
+    S-->>M: AuthUnavailableError
+    M-->>C: 503
+  else сессия действует
+    S-->>M: AuthenticatedSession
+    M->>H: httpEffect + CurrentSession в Context
+    H-->>C: 200 User
+  end
+</pre>
+      <p class="diagram-caption">Handler не знает про cookie. Если запрос дошёл до него, сессия уже проверена.</p>
+    </section>
+
+    <section class="card">
+      <h2>Рабочий пример: ключ в заголовке вместо cookie</h2>
+      <p>Тот же механизм на соседней задаче. Клиент присылает <code>x-api-key</code>, middleware находит клиента и кладёт его в Context, endpoint <code>/whoami</code> его возвращает. Пример запускался на rc.108, <code>tsc</code> без ошибок.</p>
+<pre><code>// 1. Что middleware кладёт в Context
+class CurrentClient extends Context.Service&lt;
+  CurrentClient,
+  { readonly name: string }
+&gt;()(&#x27;example/CurrentClient&#x27;) {}
+
+class UnauthorizedError extends Schema.Error&lt;UnauthorizedError&gt;(
+  &#x27;UnauthorizedError&#x27;,
+)({ message: Schema.String }, { httpApiStatus: 401 }) {}
+
+// 2. Объявить middleware: откуда credential, что даёт, чем падает
+class ApiKeyAuth extends HttpApiMiddleware.Service&lt;
+  ApiKeyAuth,
+  { provides: CurrentClient }
+&gt;()(&#x27;example/ApiKeyAuth&#x27;, {
+  security: { apiKey: HttpApiSecurity.apiKey({ key: &#x27;x-api-key&#x27;, in: &#x27;header&#x27; }) },
+  error: UnauthorizedError,
+}) {}
+
+// 3. Подключить middleware к endpoint
+const api = HttpApi.make(&#x27;example&#x27;).add(
+  HttpApiGroup.make(&#x27;clients&#x27;).add(
+    HttpApiEndpoint.get(&#x27;whoami&#x27;, &#x27;/whoami&#x27;, {
+      success: Schema.Struct({ name: Schema.String }),
+    }).middleware(ApiKeyAuth),
+  ),
+);
+
+// 4. Реализовать middleware: проверить credential и положить клиента в Context
+const knownKeys = new Map([[&#x27;secret-123&#x27;, &#x27;mobile-app&#x27;]]);
+const ApiKeyAuthLive = Layer.succeed(ApiKeyAuth, {
+  apiKey: (httpEffect, { credential }) =&gt;
+    Effect.gen(function* () {
+      const name = knownKeys.get(Redacted.value(credential));
+      if (name === undefined) {
+        return yield* new UnauthorizedError({ message: &#x27;Unknown API key&#x27; });
+      }
+      return yield* httpEffect.pipe(Effect.provideService(CurrentClient, { name }));
+    }),
+});
+
+// 5. Handler берёт клиента из Context, а не читает заголовок сам
+const ClientsLive = HttpApiBuilder.group(api, &#x27;clients&#x27;, (handlers) =&gt;
+  handlers.handle(&#x27;whoami&#x27;, () =&gt;
+    Effect.gen(function* () {
+      const client = yield* CurrentClient;
+      return { name: client.name };
+    }),
+  ),
+);
+
+// Три запроса: без ключа, с чужим ключом, с верным
+for (const key of [undefined, &#x27;wrong&#x27;, &#x27;secret-123&#x27;]) { … }</code></pre>
+      <p>Вывод запуска:</p>
+<pre><code>x-api-key=(нет)    → 401 {&quot;message&quot;:&quot;Unknown API key&quot;}
+x-api-key=wrong    → 401 {&quot;message&quot;:&quot;Unknown API key&quot;}
+x-api-key=secret-123 → 200 {&quot;name&quot;:&quot;mobile-app&quot;}</code></pre>
+      <ol class="checklist">
+        <li><span class="subgoal">Что middleware кладёт в Context.</span> <code>CurrentClient</code> — обычный <code>Context.Service</code>. В проекте это <code>CurrentSession</code> со значением <code>AuthenticatedSession</code>.</li>
+        <li><span class="subgoal">Объявить middleware.</span> <code>security</code> говорит, откуда взять credential; <code>provides</code> — какой сервис получит endpoint; <code>error</code> — какими HTTP-ошибками middleware может ответить.</li>
+        <li><span class="subgoal">Подключить к endpoint.</span> <code>.middleware(ApiKeyAuth)</code> на endpoint. Без него handler попросит <code>CurrentClient</code>, а дать его некому.</li>
+        <li><span class="subgoal">Реализовать middleware.</span> Функция получает <code>httpEffect</code> — ещё не запущенный handler — и <code>credential</code>. Отказ: вернуть ошибку, handler не запустится. Успех: <code>httpEffect.pipe(Effect.provideService(…))</code>.</li>
+        <li><span class="subgoal">Handler читает Context.</span> <code>yield* CurrentClient</code>. Заголовок он не разбирает.</li>
+      </ol>
+      <details class="quiz"><summary><strong>Убрали <code>.middleware(ApiKeyAuth)</code> с endpoint. Что будет при компиляции и при запросе с верным ключом?</strong></summary>
+        <p><code>tsc</code> падает, но сообщение неочевидное: <code>HttpRouter.toWebHandler</code> «Expected 2 arguments, but got 1». Требование <code>CurrentClient</code> не закрыто, и обработчику нужен дополнительный Context. Если запустить без проверки типов, любой запрос даст 500: <code>Service not found: example/CurrentClient</code>. Middleware не вызывался, ключ не проверялся.</p></details>
+    </section>
+
+    <section class="card">
+      <h2>Пример → проект</h2>
+      <table>
+        <thead><tr><th>Пример</th><th>Проект</th><th>Где</th></tr></thead>
+        <tbody>
+          <tr><td><code>CurrentClient</code></td><td><code>CurrentSession</code></td><td><code>api/session-authentication.ts</code></td></tr>
+          <tr><td><code>ApiKeyAuth</code>, header <code>x-api-key</code></td><td><code>SessionAuthentication</code>, cookie <code>wishlist_session</code></td><td>там же</td></tr>
+          <tr><td><code>knownKeys.get(…)</code></td><td><code>service.authenticate(credential)</code></td><td>твоя ката 1.6a</td></tr>
+          <tr><td>одна ошибка 401</td><td>401 / 500 / 503 через <code>catchTags</code></td><td><code>auth.handlers.ts</code>, как в login</td></tr>
+          <tr><td><code>Layer.succeed</code></td><td><code>Layer.effect</code>: берёт <code>AuthService</code> при сборке слоя</td><td><code>SessionAuthenticationLive</code></td></tr>
+        </tbody>
+      </table>
+      <p class="callout">Почему <code>Layer.effect</code>, а не <code>requires: AuthService</code>: в rc.108 <code>requires</code> у middleware становится требованием всего слоя маршрутов. Тесты дают <code>AuthService</code> через <code>HttpRouter.provideRequest</code>, и типы не сходятся. Проверено компиляцией, 2026-10-04.</p>
+    </section>
+
+    <section class="card">
+      <h2>Твои три пропуска</h2>
+      <p>Всё вокруг готово и компилируется: контракт, endpoint, сборка в <code>api-live.ts</code>, тесты. Пропуски в <a href="../../apps/api/src/modules/auth/handlers/auth.handlers.ts">auth.handlers.ts</a>, строки 234–261.</p>
+<pre><code>// auth.handlers.ts — middleware
+cookie: (httpEffect, { credential }) =&gt;
+  Effect.gen(function* () {
+    // Проверить cookie и перевести ошибки сервиса в HTTP-ошибки
+    const session = yield* Effect.die(&#x27;TODO(you) 1: authenticate&#x27;);
+
+    // Пустить запрос дальше с сессией в Context
+    return yield* Effect.die(&#x27;TODO(you) 2: provide CurrentSession&#x27;);
+  }),
+
+// auth.handlers.ts — handler
+.handle(AuthOperation.me, () =&gt;
+  Effect.gen(function* () {
+    // Взять User из Context, который заполнил middleware
+    return yield* Effect.die(&#x27;TODO(you) 3: /me handler&#x27;);
+  }),
+)</code></pre>
+      <ol class="checklist">
+        <li><strong>TODO 1.</strong> Вызвать <code>service.authenticate(credential)</code>. <code>AuthUnauthenticatedError</code> → <code>new AuthUnauthenticatedHttpError()</code>; <code>AuthInternalError</code> и <code>AuthUnavailableError</code> → <code>handleTechnicalError</code>. Образец — login в том же файле.</li>
+        <li><strong>TODO 2.</strong> Запустить <code>httpEffect</code> с <code>CurrentSession</code>. Образец — шаг 4 примера.</li>
+        <li><strong>TODO 3.</strong> Прочитать <code>CurrentSession</code> и вернуть только <code>user</code>: ни <code>sessionId</code>, ни <code>expiresAt</code> в ответ не идут.</li>
+      </ol>
+<pre><code>pnpm --filter @wishlist/api exec vitest run --config vitest.config.ts src/modules/auth/handlers/auth.me.test.ts</code></pre>
+      <table>
+        <thead><tr><th>Тест</th><th>Ожидается</th><th>Сейчас</th></tr></thead>
+        <tbody>
+          <tr><td>без cookie</td><td>401 AUTH_INVALID_SESSION</td><td>500</td></tr>
+          <tr><td><code>wishlist_session=abc</code></td><td>401</td><td>500</td></tr>
+          <tr><td>43 символа <code>A</code>, сессии нет</td><td>401</td><td>500</td></tr>
+          <tr><td>cookie из signup</td><td>200 и тот же User</td><td>500</td></tr>
+          <tr><td><code>authenticate</code> → <code>AuthUnavailableError</code></td><td>503</td><td>500</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Первоисточник</h2>
+      <p><a href="https://unpkg.com/effect@4.0.0-rc.108/src/unstable/httpapi/HttpApiMiddleware.ts">HttpApiMiddleware.ts rc.108</a> — тип <code>HttpApiMiddlewareSecurity</code>: функция на каждую схему security получает <code>httpEffect</code> и <code>credential</code>.</p>
+      <h2>Не проверено</h2>
+      <ul>
+        <li>Истёкшая сессия через HTTP — покрыта только тестом сервиса (ката 1.6a).</li>
+        <li>Настоящий сервер и cookie jar для /me — шаг 1.10.</li>
+      </ul>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0003-kata-login.html">Предыдущий: ката login</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

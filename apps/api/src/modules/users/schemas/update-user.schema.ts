@@ -1,15 +1,13 @@
 import { Schema } from 'effect';
 
+import { withRequestParseOptions } from '#infra/schemas/utils.js';
 import {
+  UserDisplayNameInputSchema,
   UserEmailSchema,
-  UserNameInputSchema,
 } from '#modules/users/schemas/user.schema.js';
-import { withRequestParseOptions } from '#schemas/utils.js';
 
 export const UpdateUserBodySchema = Schema.Struct({
-  middleName: UserNameInputSchema,
-  firstName: UserNameInputSchema,
-  lastName: UserNameInputSchema,
+  displayName: UserDisplayNameInputSchema,
   email: UserEmailSchema,
 }).pipe(withRequestParseOptions);
 

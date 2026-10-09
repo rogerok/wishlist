@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Wishlist Backend — финальный план развития</title>
+  <style>
+    :root {
+      --ink: #12233f;
+      --muted: #5d6b82;
+      --paper: #ffffff;
+      --surface: #f4f7fb;
+      --surface-strong: #eaf0f8;
+      --line: #d8e1ed;
+      --navy: #102441;
+      --navy-2: #17365f;
+      --accent: #087c81;
+      --accent-soft: #dcf4f1;
+      --blue: #2667c9;
+      --blue-soft: #e6efff;
+      --amber: #b4660a;
+      --amber-soft: #fff1d7;
+      --red: #a63f4a;
+      --red-soft: #fde9eb;
+      --green: #23734e;
+      --green-soft: #e2f3e9;
+      --shadow: 0 16px 46px rgba(20, 45, 80, 0.10);
+      --radius: 18px;
+      --content: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--surface);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      text-rendering: optimizeLegibility;
+    }
+
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: var(--accent); }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    code {
+      padding: 0.12rem 0.36rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      font: 0.92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .skip-link {
+      position: fixed;
+      left: 1rem;
+      top: -5rem;
+      z-index: 100;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      background: var(--paper);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .skip-link:focus { top: 1rem; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      background: rgba(16, 36, 65, 0.96);
+      backdrop-filter: blur(14px);
+    }
+    .topbar-inner {
+      width: min(calc(100% - 2rem), var(--content));
+      min-height: 62px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .brand {
+      flex: 0 0 auto;
+      color: white;
+      font-size: 0.96rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-left: auto;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-links::-webkit-scrollbar { display: none; }
+    .nav-links a {
+      flex: 0 0 auto;
+      color: #dbe7f8;
+      font-size: 0.86rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .nav-links a:hover { color: white; }
+    .print-button {
+      flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,0.34);
+      border-radius: 9px;
+      padding: 0.46rem 0.78rem;
+      color: white;
+      background: transparent;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .print-button:hover { background: rgba(255,255,255,0.10); }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      color: white;
+      background:
+        radial-gradient(circle at 85% 14%, rgba(26, 197, 183, 0.20), transparent 28rem),
+        linear-gradient(135deg, var(--navy) 0%, #16365d 70%, #0f4f5b 120%);
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -8rem;
+      bottom: -16rem;
+      width: 34rem;
+      height: 34rem;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 50%;
+      box-shadow: 0 0 0 5rem rgba(255,255,255,0.025), 0 0 0 10rem rgba(255,255,255,0.018);
+    }
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      width: min(calc(100% - 2rem), var(--content));
+      margin: 0 auto;
+      padding: 5.4rem 0 4.8rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
+      gap: 4rem;
+      align-items: end;
+    }
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 1.1rem;
+      color: #8ce7de;
+      font-size: 0.78rem;
+      font-weight: 850;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 1.8rem;
+      height: 2px;
+      background: currentColor;
+    }
+    h1, h2, h3, h4 { margin: 0; line-height: 1.15; text-wrap: balance; }
+    h1 { max-width: 850px; font-size: clamp(2.45rem, 5.7vw, 5rem); letter-spacing: -0.045em; }
+    .hero-lead {
+      max-width: 790px;
+      margin: 1.5rem 0 0;
+      color: #d8e6f5;
+      font-size: clamp(1.03rem, 1.7vw, 1.28rem);
+      line-height: 1.65;
+    }
+    .hero-note {
+      padding: 1.4rem;
+      border: 1px solid rgba(255,255,255,0.17);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.075);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.12);
+    }
+    .hero-note strong { display: block; margin-bottom: 0.35rem; color: #96f0e5; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .hero-note p { margin: 0; color: #edf5ff; }
+
+    main { display: block; }
+    .section {
+      width: min(calc(100% - 2rem), var(--content));
+      margin: 0 auto;
+      padding: 5.2rem 0;
+      scroll-margin-top: 66px;
+    }
+    .section + .section { border-top: 1px solid var(--line); }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+      gap: 2.5rem;
+      align-items: start;
+      margin-bottom: 2.3rem;
+    }
+    .section-kicker { color: var(--accent); font-size: 0.77rem; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }
+    h2 { margin-top: 0.45rem; font-size: clamp(2rem, 4vw, 3.35rem); letter-spacing: -0.035em; }
+    .section-intro { margin: 0.25rem 0 0; color: var(--muted); font-size: 1.05rem; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: -2.1rem;
+      position: relative;
+      z-index: 4;
+    }
+    .stat {
+      padding: 1.35rem 1.45rem;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .stat-value { display: block; color: var(--navy); font-size: 2rem; font-weight: 850; line-height: 1; }
+    .stat-label { display: block; margin-top: 0.55rem; color: var(--muted); font-size: 0.84rem; font-weight: 650; }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-top: 2rem;
+    }
+    .panel {
+      padding: 1.65rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .panel.current { border-top: 5px solid var(--amber); }
+    .panel.target { border-top: 5px solid var(--accent); }
+    .panel h3 { margin-bottom: 1rem; font-size: 1.2rem; }
+    .clean-list { margin: 0; padding: 0; list-style: none; }
+    .clean-list li {
+      position: relative;
+      margin: 0.72rem 0;
+      padding-left: 1.3rem;
+      color: var(--muted);
+    }
+    .clean-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.67em;
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .current .clean-list li::before { background: var(--amber); }
+
+    .journey {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin-top: 2rem;
+    }
+    .journey-step {
+      position: relative;
+      min-height: 150px;
+      padding: 1.2rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--paper);
+    }
+    .journey-step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -0.83rem;
+      top: 50%;
+      z-index: 2;
+      width: 0.83rem;
+      height: 2px;
+      background: var(--blue);
+    }
+    .step-number {
+      display: inline-grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--blue);
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+    .journey-step strong { display: block; margin-top: 0.8rem; font-size: 0.95rem; }
+    .journey-step span { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.81rem; line-height: 1.45; }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 1.2rem;
+    }
+    .arch-main, .arch-side {
+      padding: 1.6rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .arch-main h3, .arch-side h3 { margin-bottom: 1.1rem; font-size: 1.1rem; }
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.55rem;
+      align-items: stretch;
+    }
+    .flow-box {
+      position: relative;
+      display: grid;
+      min-height: 94px;
+      place-items: center;
+      padding: 0.75rem;
+      border: 1px solid #bfd0e6;
+      border-radius: 11px;
+      background: var(--blue-soft);
+      color: var(--navy);
+      text-align: center;
+      font-size: 0.79rem;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .flow-box:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: -0.56rem;
+      width: 0.56rem;
+      height: 2px;
+      background: #8fa9c9;
+    }
+    .worker-flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 0.55rem;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px dashed var(--line);
+    }
+    .worker-box {
+      padding: 0.85rem 0.6rem;
+      border-radius: 10px;
+      background: var(--accent-soft);
+      color: #15585a;
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+    .connector { color: var(--accent); font-weight: 900; }
+    .decision-note {
+      margin-top: 1rem;
+      padding: 1rem 1.05rem;
+      border-left: 4px solid var(--amber);
+      border-radius: 0 10px 10px 0;
+      background: var(--amber-soft);
+      color: #66400f;
+      font-size: 0.9rem;
+    }
+
+    .domain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    .domain-card {
+      min-height: 225px;
+      padding: 1.4rem;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: var(--paper);
+    }
+    .domain-card h3 { font-size: 1.05rem; }
+    .domain-card p { margin: 0.65rem 0 0; color: var(--muted); font-size: 0.9rem; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-bottom: 0.85rem;
+      padding: 0.28rem 0.58rem;
+      border-radius: 999px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-size: 0.7rem;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .badge.green { color: var(--green); background: var(--green-soft); }
+    .badge.amber { color: var(--amber); background: var(--amber-soft); }
+    .badge.red { color: var(--red); background: var(--red-soft); }
+    .invariant {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.2rem;
+      align-items: center;
+      padding: 1.45rem;
+      border: 1px solid #9fd0cb;
+      border-radius: 15px;
+      background: var(--accent-soft);
+    }
+    .invariant-mark {
+      display: grid;
+      width: 3.4rem;
+      height: 3.4rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--accent);
+      font-size: 1.3rem;
+      font-weight: 900;
+    }
+    .invariant h3 { font-size: 1rem; }
+    .invariant p { margin: 0.3rem 0 0; color: #315d5d; }
+
+    .roadmap {
+      position: relative;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .roadmap::before {
+      content: "";
+      position: absolute;
+      left: 2rem;
+      top: 2rem;
+      bottom: 2rem;
+      width: 2px;
+      background: linear-gradient(var(--blue), var(--accent));
+    }
+    .milestone {
+      position: relative;
+      display: grid;
+      grid-template-columns: 4rem minmax(0, 1fr) minmax(220px, 0.35fr);
+      gap: 1.25rem;
+      align-items: start;
+      margin: 0 0 1rem;
+      padding: 1.35rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .milestone-number {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      width: 2.7rem;
+      height: 2.7rem;
+      margin: 0 auto;
+      place-items: center;
+      border: 4px solid var(--paper);
+      border-radius: 50%;
+      color: white;
+      background: var(--blue);
+      box-shadow: 0 0 0 1px var(--line);
+      font-weight: 900;
+    }
+    .milestone:nth-child(n+6) .milestone-number { background: var(--accent); }
+    .milestone.core-complete { border-color: #8bcac4; box-shadow: inset 4px 0 0 var(--accent); }
+    .milestone h3 { font-size: 1.12rem; }
+    .milestone p { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.9rem; }
+    .deliverable {
+      padding: 0.85rem 0.95rem;
+      border-radius: 11px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.79rem;
+      line-height: 1.45;
+    }
+    .deliverable strong { display: block; margin-bottom: 0.25rem; color: var(--ink); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+
+    .import-layout {
+      display: grid;
+      grid-template-columns: 0.78fr 1.22fr;
+      gap: 1.2rem;
+      align-items: stretch;
+    }
+    .fact-box {
+      padding: 1.55rem;
+      border: 1px solid #edcf9f;
+      border-radius: var(--radius);
+      background: var(--amber-soft);
+    }
+    .fact-box h3 { color: #69420f; font-size: 1.12rem; }
+    .fact-box p { margin: 0.75rem 0 0; color: #76501f; }
+    .import-pipeline {
+      padding: 1.55rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .pipeline-list { margin: 1rem 0 0; padding: 0; list-style: none; counter-reset: import; }
+    .pipeline-list li {
+      position: relative;
+      margin: 0.75rem 0;
+      padding: 0.9rem 1rem 0.9rem 3.4rem;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--surface);
+      color: var(--muted);
+      counter-increment: import;
+    }
+    .pipeline-list li::before {
+      content: counter(import);
+      position: absolute;
+      left: 0.9rem;
+      top: 0.82rem;
+      display: grid;
+      width: 1.8rem;
+      height: 1.8rem;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      background: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 850;
+    }
+    .pipeline-list strong { color: var(--ink); }
+
+    .scale-ladder {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.7rem;
+      align-items: stretch;
+    }
+    .scale-step {
+      padding: 1.1rem 0.95rem;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--paper);
+    }
+    .scale-step small { display: block; color: var(--accent); font-weight: 850; letter-spacing: 0.07em; text-transform: uppercase; }
+    .scale-step strong { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+    .scale-step p { margin: 0.45rem 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.45; }
+    .gate {
+      margin-top: 1.2rem;
+      padding: 1.2rem 1.3rem;
+      border: 1px solid #b8cbe6;
+      border-radius: 13px;
+      background: var(--blue-soft);
+      color: #24466f;
+    }
+    .gate strong { color: var(--navy); }
+
+    .scope-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+    }
+    .scope-card {
+      padding: 1.55rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+    }
+    .scope-card.removed { border-top: 5px solid var(--red); }
+    .scope-card.deferred { border-top: 5px solid var(--amber); }
+    .scope-card h3 { margin-bottom: 0.85rem; font-size: 1.1rem; }
+
+    .verification-grid {
+      display: grid;
+      grid-template-columns: 0.85fr 1.15fr;
+      gap: 1.2rem;
+    }
+    pre {
+      margin: 0;
+      padding: 1.35rem;
+      overflow-x: auto;
+      border-radius: 14px;
+      color: #dcecff;
+      background: var(--navy);
+      font: 0.82rem/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+    }
+    .review-questions {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: review;
+    }
+    .review-questions li {
+      position: relative;
+      margin: 0 0 0.75rem;
+      padding: 0.9rem 1rem 0.9rem 3.2rem;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--paper);
+      counter-increment: review;
+    }
+    .review-questions li::before {
+      content: "Q" counter(review);
+      position: absolute;
+      left: 0.9rem;
+      top: 0.9rem;
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+
+    .sources {
+      padding: 2rem;
+      border-radius: var(--radius);
+      color: #dce8f8;
+      background: var(--navy);
+    }
+    .sources h2 { color: white; font-size: 1.8rem; }
+    .source-links {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.7rem;
+      margin-top: 1.25rem;
+    }
+    .source-links a {
+      display: block;
+      padding: 0.85rem 0.95rem;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 10px;
+      color: #dce8f8;
+      text-decoration: none;
+    }
+    .source-links a:hover { border-color: #8ce7de; color: white; }
+    footer {
+      width: min(calc(100% - 2rem), var(--content));
+      margin: 0 auto;
+      padding: 1.6rem 0 2.4rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-align: center;
+    }
+
+    @media (max-width: 1020px) {
+      .hero-inner { grid-template-columns: 1fr; gap: 2rem; }
+      .hero-note { max-width: 620px; }
+      .journey { grid-template-columns: repeat(3, 1fr); }
+      .journey-step:nth-child(3)::after { display: none; }
+      .architecture, .import-layout, .verification-grid { grid-template-columns: 1fr; }
+      .domain-grid { grid-template-columns: repeat(2, 1fr); }
+      .scale-ladder { grid-template-columns: repeat(3, 1fr); }
+      .milestone { grid-template-columns: 4rem minmax(0, 1fr); }
+      .deliverable { grid-column: 2; }
+      .source-links { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 740px) {
+      body { font-size: 15px; }
+      .topbar-inner { width: min(calc(100% - 1.25rem), var(--content)); }
+      .brand { display: none; }
+      .nav-links { margin-left: 0; }
+      .nav-links a:nth-child(n+5) { display: none; }
+      .hero-inner { width: min(calc(100% - 1.5rem), var(--content)); padding: 4rem 0 3.8rem; }
+      .section { width: min(calc(100% - 1.5rem), var(--content)); padding: 3.8rem 0; }
+      .section-head { grid-template-columns: 1fr; gap: 1rem; }
+      .stats { grid-template-columns: repeat(2, 1fr); margin-top: -1.5rem; }
+      .comparison, .scope-grid { grid-template-columns: 1fr; }
+      .journey { grid-template-columns: 1fr; }
+      .journey-step { min-height: auto; }
+      .journey-step::after { display: none !important; }
+      .flow-row { grid-template-columns: 1fr; }
+      .flow-box:not(:last-child)::after { display: none; }
+      .worker-flow { grid-template-columns: 1fr; }
+      .connector { text-align: center; transform: rotate(90deg); }
+      .domain-grid { grid-template-columns: 1fr; }
+      .invariant { grid-column: auto; grid-template-columns: 1fr; }
+      .roadmap::before { left: 1.5rem; }
+      .milestone { grid-template-columns: 3rem minmax(0, 1fr); gap: 0.8rem; padding: 1rem; }
+      .milestone-number { width: 2.35rem; height: 2.35rem; }
+      .deliverable { grid-column: 2; }
+      .scale-ladder { grid-template-columns: 1fr 1fr; }
+      .source-links { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      :root { --surface: #fff; --shadow: none; }
+      html { scroll-behavior: auto; }
+      body { background: white; font-size: 10.5pt; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .topbar, .print-button, .skip-link { display: none !important; }
+      .hero { break-after: page; }
+      .hero-inner { min-height: 92vh; padding: 2.2cm 0; }
+      .section { width: 100%; padding: 1cm 0; scroll-margin-top: 0; }
+      .section-head { margin-bottom: 0.8cm; }
+      .stats { margin-top: 0; box-shadow: none; }
+      .panel, .domain-card, .milestone, .fact-box, .import-pipeline, .scale-step, .scope-card, .sources { break-inside: avoid; box-shadow: none; }
+      .milestone { grid-template-columns: 3.2rem minmax(0, 1fr) minmax(170px, 0.35fr); }
+      .deliverable { grid-column: auto; }
+      .journey-step { min-height: 120px; }
+      .journey, .scale-ladder { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .journey-step::after, .flow-box::after { display: none !important; }
+      a { color: inherit; text-decoration: none; }
+      .sources { break-before: page; }
+      footer { width: 100%; }
+      @page { size: A4; margin: 1.2cm; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к плану</a>
+
+  <header class="topbar" aria-label="Навигация по документу">
+    <div class="topbar-inner">
+      <a class="brand" href="#top">Wishlist Backend</a>
+      <nav class="nav-links" aria-label="Разделы">
+        <a href="#context">Контекст</a>
+        <a href="#model">Модель</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#import">URL import</a>
+        <a href="#scale">Scale lab</a>
+        <a href="#scope">Scope</a>
+        <a href="#review">Ревью</a>
+      </nav>
+      <button class="print-button" type="button" onclick="window.print()">Печать / PDF</button>
+    </div>
+  </header>
+
+  <div class="hero" id="top">
+    <div class="hero-inner">
+      <div>
+        <div class="eyebrow">Финальный backend-план</div>
+        <h1>Wishlist как production-grade modular monolith</h1>
+        <p class="hero-lead">Сначала один законченный пользовательский путь. Затем безопасность, изображения, best-effort импорт карточек и инфраструктурные итерации — только вокруг уже работающего продукта.</p>
+      </div>
+      <aside class="hero-note" aria-label="Главный принцип">
+        <strong>Главный принцип</strong>
+        <p>Сложность появляется по доказанной причине: invariant, failure boundary, измеренная нагрузка или новая продуктовая возможность.</p>
+      </aside>
+    </div>
+  </div>
+
+  <main id="main">
+    <section class="section" id="context">
+      <div class="stats" aria-label="Краткие показатели плана">
+        <div class="stat"><span class="stat-value">9</span><span class="stat-label">последовательных milestones</span></div>
+        <div class="stat"><span class="stat-value">6</span><span class="stat-label">milestone завершает core flow</span></div>
+        <div class="stat"><span class="stat-value">3</span><span class="stat-label">новых архитектурных решения</span></div>
+        <div class="stat"><span class="stat-value">1</span><span class="stat-label">Active Reservation на Item</span></div>
+      </div>
+
+      <div class="section-head" style="margin-top: 4.6rem;">
+        <div>
+          <div class="section-kicker">01 — Контекст</div>
+          <h2>От текущего API к продукту</h2>
+        </div>
+        <p class="section-intro">Backend уже имеет выбранный стек и часть auth foundation. План не начинает проект заново и не подменяет предметную работу инфраструктурной лабораторией.</p>
+      </div>
+
+      <div class="comparison">
+        <article class="panel current">
+          <h3>Сейчас в репозитории</h3>
+          <ul class="clean-list">
+            <li>Effect Platform, Effect Schema, PostgreSQL, Kysely и Effect SQL.</li>
+            <li>Live API содержит health и незащищённый Users CRUD.</li>
+            <li>Auth contracts, таблицы, schema tests и hash-format уже частично готовы.</li>
+            <li>Production AuthService, handlers, repositories и cookie flow ещё не подключены.</li>
+            <li>Wishlist, Item, Sharing Link, Reservation, outbox и URL import отсутствуют.</li>
+          </ul>
+        </article>
+        <article class="panel target">
+          <h3>Целевой первый продукт</h3>
+          <ul class="clean-list">
+            <li>User безопасно регистрируется и создаёт несколько Wishlists.</li>
+            <li>Private, Unlisted и Public имеют разные проверяемые правила доступа.</li>
+            <li>User или email-verified Guest резервирует Item без раскрытия личности.</li>
+            <li>PostgreSQL защищает от двойного резерва при нескольких API replicas.</li>
+            <li>Outbox и worker не теряют magic links и обязательные уведомления.</li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="journey" aria-label="Первый пользовательский путь">
+        <div class="journey-step"><span class="step-number">1</span><strong>Signup</strong><span>Opaque Session в HttpOnly cookie.</span></div>
+        <div class="journey-step"><span class="step-number">2</span><strong>Wishlist</strong><span>Название, visibility, currency, occasion.</span></div>
+        <div class="journey-step"><span class="step-number">3</span><strong>Wishlist Item</strong><span>Ручная карточка без внешней зависимости.</span></div>
+        <div class="journey-step"><span class="step-number">4</span><strong>Sharing</strong><span>Public Profile или текущая Sharing Link.</span></div>
+        <div class="journey-step"><span class="step-number">5</span><strong>Reservation</strong><span>User Session или Guest magic link.</span></div>
+        <div class="journey-step"><span class="step-number">6</span><strong>Lifecycle</strong><span>Cancel, force-release, delete и durable email.</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">02 — Архитектура</div>
+          <h2>Один сервис, глубокие модули</h2>
+        </div>
+        <p class="section-intro">Существующая Effect-архитектура сохраняется. HTTP, use cases, persistence и side effects разделяются явными сервисами и Layer composition, но не превращаются в отдельные микросервисы без собственной причины для отказа.</p>
+      </div>
+
+      <div class="architecture">
+        <article class="arch-main">
+          <h3>Синхронный application path</h3>
+          <div class="flow-row" aria-label="Слои приложения">
+            <div class="flow-box">Effect HttpApi<br>+ Schema</div>
+            <div class="flow-box">Handlers<br>Problem Details</div>
+            <div class="flow-box">Use-case<br>services</div>
+            <div class="flow-box">Repositories<br>Kysely</div>
+            <div class="flow-box">PostgreSQL<br>constraints</div>
+          </div>
+          <div class="worker-flow" aria-label="Фоновая обработка">
+            <div class="worker-box">Domain transaction</div><span class="connector">→</span>
+            <div class="worker-box">Outbox / jobs</div><span class="connector">→</span>
+            <div class="worker-box">Email / Import worker</div>
+          </div>
+        </article>
+        <aside class="arch-side">
+          <h3>Зафиксированные решения</h3>
+          <ul class="clean-list">
+            <li>Opaque server-side Sessions вместо JWT/refresh.</li>
+            <li>UUID для internal identity; отдельный random key для Sharing Link.</li>
+            <li>PostgreSQL outbox до отдельного broker.</li>
+            <li>At-least-once delivery и idempotent workers.</li>
+            <li>Containers в одном регионе; несколько API и worker replicas.</li>
+          </ul>
+          <div class="decision-note"><strong>Не используем:</strong> Fastify, Zod, JWT, nanoid, browser automation и private marketplace APIs как обязательную основу.</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="model">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">03 — Domain model</div>
+          <h2>Термины и invariants</h2>
+        </div>
+        <p class="section-intro">Модель различает владельца списка, зарегистрированного дарителя и Guest. Reservation — самостоятельный lifecycle, а не boolean-флаг на Item.</p>
+      </div>
+
+      <div class="domain-grid">
+        <article class="domain-card">
+          <span class="badge">Identity</span>
+          <h3>User и Public Profile</h3>
+          <p>Один обязательный Display Name. Login email всегда приватен. Public Profile показывает Display Name и только Public Wishlists.</p>
+        </article>
+        <article class="domain-card">
+          <span class="badge green">Aggregate</span>
+          <h3>Wishlist</h3>
+          <p>Принадлежит одному User. Содержит title, optional description, non-recurring Occasion Date, visibility и единую ISO currency.</p>
+        </article>
+        <article class="domain-card">
+          <span class="badge amber">Visibility</span>
+          <h3>Private / Unlisted / Public</h3>
+          <p>Private видит owner. Unlisted доступен по текущей ссылке. Public дополнительно discoverable через Public Profile. Снижение visibility ротирует ссылку.</p>
+        </article>
+        <article class="domain-card">
+          <span class="badge">Snapshot</span>
+          <h3>Wishlist Item</h3>
+          <p>Title обязателен; URL, exact price, comment и image опциональны. Imported metadata только предлагает значения — User остаётся source of truth.</p>
+        </article>
+        <article class="domain-card">
+          <span class="badge green">Access</span>
+          <h3>Guest Session</h3>
+          <p>Magic link подтверждает email только для одного Wishlist. Даже email существующего User остаётся Guest path, если User не вошёл.</p>
+        </article>
+        <article class="domain-card">
+          <span class="badge red">Private holder</span>
+          <h3>Reservation</h3>
+          <p>Holder — ровно один User или Guest. Owner и другие посетители видят только free, reserved или reservedByMe, но не личность.</p>
+        </article>
+        <div class="invariant">
+          <div class="invariant-mark">1</div>
+          <div>
+            <h3>Главный concurrency invariant</h3>
+            <p>В каждый момент на Wishlist Item существует не более одной Active Reservation. Это гарантирует PostgreSQL constraint/index, поэтому два API-инстанса не могут оба победить в гонке.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">04 — Roadmap</div>
+          <h2>Девять вертикальных milestones</h2>
+        </div>
+        <p class="section-intro">Каждый milestone оставляет наблюдаемое работающее поведение и закрытые invariants. Следующий этап не начинается поверх известных ошибок предыдущего.</p>
+      </div>
+
+      <ol class="roadmap">
+        <li class="milestone">
+          <div class="milestone-number">1</div>
+          <div><h3>Thin Session authentication</h3><p>Display Name clean cutover, password hashing, AuthService, signup/login/me/logout, cookie transport и закрытие публичного cross-User CRUD.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Authenticated principal и защищённая ownership boundary.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">2</div>
+          <div><h3>Owner-only Wishlists</h3><p>Persistence, runtime schemas и CRUD для title, description, Occasion Date, visibility и Wishlist Currency. Каждая mutation scoped по owner ID.</p></div>
+          <div class="deliverable"><strong>Результат</strong>User управляет несколькими приватными списками.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">3</div>
+          <div><h3>Sharing и Public Profiles</h3><p>Public projection без email, high-entropy Sharing Link, единая visibility policy, rotation при снижении видимости.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Private, Unlisted и Public доказуемо различаются.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">4</div>
+          <div><h3>Wishlist Items без enrichment</h3><p>Manual CRUD, optional HTTPS URL, exact price в currency списка, priority sorting. Ни один read не делает outbound fetch.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Полезный список работает без маркетплейсов и storage.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">5</div>
+          <div><h3>Reservation state machine для Users</h3><p>Active/terminal lifecycle, holder authorization, atomic reserve, cancel, force-release и deletion transitions.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Двойной резерв невозможен при конкурентных запросах.</div>
+        </li>
+        <li class="milestone core-complete">
+          <div class="milestone-number">6</div>
+          <div><h3>Guest access и transactional email</h3><p>Single-use challenges, Wishlist-scoped Guest Session, PostgreSQL outbox, отдельный worker, magic links и обязательные lifecycle emails.</p></div>
+          <div class="deliverable"><strong>Core готов</strong>Создать → поделиться → зарезервировать → отменить без регистрации.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">7</div>
+          <div><h3>External-user security gate</h3><p>CSRF/origin, rate limits, enumeration resistance, password reset/change, verified email change, Session cleanup, User deletion и backup/restore.</p></div>
+          <div class="deliverable"><strong>Gate</strong>После него продукт можно показывать внешним пользователям.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">8</div>
+          <div><h3>Service-owned images</h3><p>S3-compatible storage, manual upload, MIME/magic-byte/size limits, immutable assets и controlled delivery.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Одна безопасная image boundary для upload и import.</div>
+        </li>
+        <li class="milestone">
+          <div class="milestone-number">9</div>
+          <div><h3>Async URL Import Preview</h3><p>Curated allowlist, restricted worker, OG/JSON-LD suggestions, manual fallback, copy-on-apply image и explicit refresh diff.</p></div>
+          <div class="deliverable"><strong>Результат</strong>Удобное enrichment без зависимости Item от marketplace availability.</div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section" id="import">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">05 — Marketplace import</div>
+          <h2>Best-effort, а не обещание парсера</h2>
+        </div>
+        <p class="section-intro">Исследование официальных источников меняет формулировку фичи: произвольная ссылка не равна официальному product API.</p>
+      </div>
+
+      <div class="import-layout">
+        <article class="fact-box">
+          <h3>Что выяснено</h3>
+          <p>Avito, Ozon и Wildberries документируют seller/account-scoped API. API для чтения произвольной публичной карточки по retail URL не найден. HTML metadata не гарантируется и может возвращать anti-bot response или timeout.</p>
+          <p><strong>Следствие:</strong> manual fields — штатный terminal fallback, а не ошибка сервиса.</p>
+          <p><a href="./research/marketplace-url-import.md">Открыть исследование и источники</a></p>
+        </article>
+        <article class="import-pipeline">
+          <h3>Безопасный import pipeline</h3>
+          <ol class="pipeline-list">
+            <li><strong>Normalize.</strong> Только HTTPS, exact domain allowlist и разрешённый product path.</li>
+            <li><strong>Queue.</strong> API создаёт short-lived Import Preview job и возвращает <code>202</code>.</li>
+            <li><strong>Fetch safely.</strong> Worker проверяет DNS/IP, redirects, timeouts, content type, bytes и decompression.</li>
+            <li><strong>Parse as untrusted.</strong> OG/JSON-LD — только предложения title, image, description и price.</li>
+            <li><strong>User applies.</strong> Выбранные поля копируются в Item snapshot; ошибки оставляют manual flow.</li>
+            <li><strong>Refresh by diff.</strong> Новый preview никогда не перезаписывает User edits молча.</li>
+          </ol>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="scale">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">06 — Scale lab</div>
+          <h2>От простого к сложному</h2>
+        </div>
+        <p class="section-intro">Все выбранные инфраструктурные темы остаются в плане, но получают порядок и входной критерий. Это учебная лестница, а не список технологий первого релиза.</p>
+      </div>
+
+      <div class="scale-ladder">
+        <article class="scale-step"><small>Шаг A</small><strong>DB correctness</strong><p>Constraints, transactions, idempotency, две API replicas.</p></article>
+        <article class="scale-step"><small>Шаг B</small><strong>Outbox workers</strong><p>Durable side effects, retries, claims и lag.</p></article>
+        <article class="scale-step"><small>Шаг C</small><strong>Observability</strong><p>Latency, pool saturation, conflicts, delivery outcomes.</p></article>
+        <article class="scale-step"><small>Шаг D</small><strong>Load tests</strong><p>Сначала workload и baseline, потом оптимизация.</p></article>
+        <article class="scale-step"><small>Шаг E</small><strong>Cache / search</strong><p>Только measured hotspot или public catalog query.</p></article>
+        <article class="scale-step"><small>Шаг F</small><strong>Broker / stream</strong><p>После fan-out, throughput или independent consumers.</p></article>
+      </div>
+      <div class="gate"><strong>Broker gate:</strong> PostgreSQL outbox contention, устойчивый throughput, replay, fan-out или изоляция независимых consumers. До появления этого сигнала RabbitMQ/Kafka добавляют вторую durability system, но не улучшают текущий invariant.</div>
+    </section>
+
+    <section class="section" id="scope">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">07 — Scope control</div>
+          <h2>Что убрано и отложено</h2>
+        </div>
+        <p class="section-intro">План сокращает не качество, а количество одновременно открытых границ. Отложенная фича возвращается только с собственным поведением и acceptance criteria.</p>
+      </div>
+
+      <div class="scope-grid">
+        <article class="scope-card removed">
+          <h3>Удалено из актуального замысла</h3>
+          <ul class="clean-list">
+            <li>Fastify, Zod, JWT/refresh и nanoid как обязательный стек.</li>
+            <li>Публичный login email и birthday у User.</li>
+            <li>Публичное или owner-visible имя holder.</li>
+            <li>Quantity и несколько Active Reservations на Item.</li>
+            <li>Automatic Reservation expiry.</li>
+            <li>Browser automation и undocumented marketplace APIs.</li>
+            <li>Automatic overwrite metadata и permanent hotlinks.</li>
+          </ul>
+        </article>
+        <article class="scope-card deferred">
+          <h3>После первого product path</h3>
+          <ul class="clean-list">
+            <li>Images, manual upload и URL Import Preview.</li>
+            <li>Owner notifications, notification center и reminders.</li>
+            <li>Wishlist archive, rich filters и price alerts.</li>
+            <li>Public catalog, moderation и отдельный search engine.</li>
+            <li>Friends/followers и social feed.</li>
+            <li>Redis, broker, Kubernetes и microservices.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="review">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">08 — Verification</div>
+          <h2>Как проверять и что обсудить</h2>
+        </div>
+        <p class="section-intro">In-memory тесты подтверждают contracts, но не cookie transport, worker recovery, object storage и multi-instance race. Для этих границ нужен реальный process-level smoke.</p>
+      </div>
+
+      <div class="verification-grid">
+        <div>
+          <pre aria-label="Команды проверки">pnpm --filter @wishlist/api check-types
+pnpm --filter @wishlist/api lint
+pnpm --filter @wishlist/api test
+pnpm --filter @wishlist/api build
+pnpm --filter @wishlist/api db:check</pre>
+          <div class="decision-note">Команды не запускаются механически все сразу. Каждый milestone начинает с самого узкого теста изменённого observable contract.</div>
+        </div>
+        <div>
+          <ol class="review-questions">
+            <li>Достаточно ли узкая boundary у Wishlist-scoped Guest Session, или Guest identity должна жить иначе?</li>
+            <li>Корректно ли разделены User Session и Guest Session при совпадающем email?</li>
+            <li>Хватает ли PostgreSQL outbox до появления измеренного broker gate?</li>
+            <li>Нужен ли Public Wishlist уже в core или достаточно Private + Unlisted?</li>
+            <li>Не слишком ли велик Milestone 6, и где провести дополнительную вертикальную границу?</li>
+            <li>Какие метрики должны доказать необходимость cache, search engine или broker?</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="sources">
+        <div class="section-kicker" style="color:#8ce7de;">Source of truth</div>
+        <h2>Документы проекта</h2>
+        <div class="source-links">
+          <a href="./implementation-plan.md">Полный backend roadmap</a>
+          <a href="../../CONTEXT.md">Domain glossary</a>
+          <a href="../adr/0001-postgresql-backed-sessions.md">ADR-0001 — Sessions</a>
+          <a href="../adr/0002-user-and-guest-reservation-access.md">ADR-0002 — Reservation access</a>
+          <a href="../adr/0003-postgresql-outbox-before-message-broker.md">ADR-0003 — Outbox</a>
+          <a href="../adr/0004-asynchronous-best-effort-url-import.md">ADR-0004 — URL import</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Wishlist Backend Plan · автономная HTML-презентация · исходный roadmap остаётся нормативным документом</footer>
+</body>
+</html>
