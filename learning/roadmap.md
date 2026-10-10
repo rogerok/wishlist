@@ -89,12 +89,14 @@ Production memory budget не определён; локальные лимит�
    миграции?
 2. **2.2 — Data migration.** Задача: мигрировать PostgreSQL schema/data и regenerated Kysely types. Проверка: migration
    from existing schema и `db:check`. Вопрос: где находится необратимый риск?
-3. **2.3 — Authenticated private profile.** Задача: заменить arbitrary `:id` на current principal для read/update.
-   Проверка: User A не может выбрать User B. Вопрос: почему проверка только в handler недостаточна?
+3. **2.3 — Account: свой Display Name.** Задача: модуль `account` без `:id`, User берётся из `CurrentSession`
+   ([ADR-0006](../docs/adr/0006-account-module-for-self-service.md)). Проверка: User A не может выбрать User B.
+   Вопрос: почему проверка только в handler недостаточна?
 4. **2.4 — Public Profile projection.** Задача: создать отдельный response без email. Проверка: schema и HTTP response
    не содержат private fields. Вопрос: почему `Omit` TypeScript не является runtime boundary?
-5. **2.5 — Remove public CRUD.** Задача: удалить неразрешённые list/get/update/delete routes и callers. Проверка: route
-   inventory и HTTP 404/contract absence. Вопрос: чем clean cutover безопаснее deprecated alias?
+5. **2.5 — Remove public CRUD.** Задача: удалить публичный `POST /api/users`; list/get/update/delete по `:id` остаются
+   для админов и закрываются ролями в 2.6 (решение владельца 2026-10-09, ADR-0006). Проверка: route inventory и HTTP
+   404/contract absence. Вопрос: чем clean cutover безопаснее deprecated alias?
 6. **2.6 — Authorization matrix.** Задача: записать и проверить owner/other/anonymous cases. Проверка: конечная
    table-driven matrix. Вопрос: когда `404` безопаснее `403`?
 

@@ -5,7 +5,7 @@ Wishlist manages User-owned Wishlists and private gift coordination through User
 ## Language
 
 **User**:
-A person registered in Wishlist and represented by a public profile. _Avoid_: Account, identity record
+A person registered in Wishlist and represented by a public profile. _Avoid_: identity record
 
 **Password Credential**:
 A secret proof associated with exactly one User that can establish the User's identity. It is distinct from the User's
@@ -15,6 +15,10 @@ public profile. _Avoid_: Password record, auth data
 A time-limited authenticated relationship between a client and exactly one User. A Session may be created after a
 Password Credential proves identity, but it is not linked to that Credential; a User may have multiple concurrent
 Sessions. _Avoid_: Token, login
+
+**Account**:
+The private self-service area in which the current User, identified only by their Session, manages their own Display
+Name, Password Credential, and Sessions. It is never addressed by a User id. _Avoid_: Profile, cabinet, User
 
 **Public Profile**:
 The externally visible representation of exactly one User and the discovery surface for that User's Public Wishlists.
