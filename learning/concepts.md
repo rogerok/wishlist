@@ -124,7 +124,7 @@
 
 ## Concept: Aggregate boundary и domain invariant
 
-- **Why it matters:** Wishlist владеет visibility/currency/Items rules; граница определяет transaction и authorization scope.
+- **Why it matters:** Wishlist владеет visibility и Items rules; граница определяет transaction и authorization scope.
 - **Where it appears in this project:** future Wishlist and Wishlist Items.
 - **Prerequisites:** domain vocabulary из `CONTEXT.md`, transactions.
 - **Expected mastery:** 4 после Items.
@@ -133,7 +133,7 @@
 ## Concept: Stable pagination, ordering, date и money
 
 - **Why it matters:** backend должен выдавать повторяемые pages и точные domain values, а не случайный SQL order/floating-point price.
-- **Where it appears in this project:** Wishlist lists, Item priority/price sorting, Occasion Date, Wishlist Currency.
+- **Where it appears in this project:** Wishlist lists, Item priority/price sorting, Occasion Date, Item Price.
 - **Prerequisites:** SQL order/indexes и runtime Schema.
 - **Expected mastery:** 4 после Items.
 - **How mastery will be verified:** tie/null/boundary cases и объяснение выбранного money/date representation.

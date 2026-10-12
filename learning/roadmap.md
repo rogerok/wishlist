@@ -109,7 +109,7 @@ Production memory budget не определён; локальные лимит�
 ## 3. Owner-only Wishlists
 
 1. **→ 3.1 — Минимальный aggregate contract.** Определить title, description, Occasion Date, visibility
-   `private | public`, Wishlist Currency. Проверка: boundary matrix Schema. Вопрос: какие поля нужны текущему product path?
+   `private | public`. Проверка: boundary matrix Schema. Вопрос: какие поля нужны текущему product path?
 2. **3.2 — Persistence invariant.** Добавить migration/FK/indexes и generated types; `date` читается строкой через
    `types` пула. Проверка: migration test. Вопрос:
    что гарантирует FK при удалении owner?
@@ -143,13 +143,15 @@ Production memory budget не определён; локальные лимит�
 
 1. **5.1 — Item contract.** Title-only success; optional URL/price/priority/comment. Проверка: Schema boundaries.
    Вопрос: почему remote metadata не является обязательной частью Item?
-2. **5.2 — Exact money.** Выбрать minor units или exact decimal и написать invariant. Проверка: значения, которые ломают
+2. **5.2 — Exact money.** Item Price = сумма + своя валюта `RUB | EUR | USD`; у Wishlist валюты нет; сумма не больше 1 000 000. Выбрать minor
+   units или exact decimal и написать invariant. Проверка: значения, которые ломают
    float. Вопрос: какой trade-off у выбранного представления?
 3. **5.3 — Parent-scoped persistence.** Migration и queries через parent Wishlist ownership. Проверка: cross-owner
    matrix. Вопрос: почему Item authorization начинается с Wishlist?
 4. **5.4 — Owner CRUD.** По одной операции с узкой integration проверкой. Проверка: create/update/delete. Вопрос: какие
    failures domain, а какие persistence?
-5. **5.5 — Sorting.** Priority-first default и price asc/desc с missing last. Проверка: ties/nulls. Вопрос: какой
+5. **5.5 — Sorting.** Priority-first default и price asc/desc с missing last; выбрать правило для цен в разных
+   валютах без курсов. Проверка: ties/nulls. Вопрос: какой
    последний tie-breaker делает порядок стабильным?
 6. **5.6 — Visitor projection.** Public read без outbound fetch. Проверка: controlled network spy и response shape.
    Вопрос: почему read availability не должна зависеть от marketplace?

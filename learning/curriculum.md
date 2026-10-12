@@ -231,7 +231,7 @@ Wishlist — учебный транспорт для освоения backend-�
 
 - Добавить item persistence, owner CRUD и projections.
 - Реализовать HTTPS source URL только как данные.
-- Реализовать priority/price ordering и currency invariant.
+- Реализовать priority/price ordering и цену с собственной валютой у каждого Item.
 
 **Reasoning**
 
@@ -240,12 +240,12 @@ Wishlist — учебный транспорт для освоения backend-�
 
 **Debugging**
 
-- Проверять округление, currency changes и ties в сортировке.
+- Проверять округление, разные валюты и ties в сортировке.
 - Доказывать отсутствие outbound request на visitor read.
 
 **Практические задачи:** шаги `5.1–5.6`.
 
-**Mastery:** title-only Item работает, цены точны, сортировка стабильна, а смена currency при priced Items имеет явный контракт.
+**Mastery:** title-only Item работает, цены точны, сортировка стабильна, а у сортировки цен в разных валютах есть явное правило.
 
 **Открывает:** Reservation state machine.
 

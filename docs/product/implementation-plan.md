@@ -47,7 +47,6 @@ A Wishlist belongs to exactly one User and contains:
 - optional description;
 - optional Occasion Date;
 - visibility: `private`, `unlisted`, or `public`;
-- one ISO currency shared by all optional Item prices;
 - timestamps and a current Sharing Link key when direct sharing is enabled.
 
 Visibility semantics:
@@ -66,13 +65,13 @@ A Wishlist Item is a user-owned snapshot with:
 
 - required title;
 - optional source URL;
-- optional price in the Wishlist Currency, stored without floating-point arithmetic;
+- optional Item Price: an exact amount with its own currency, stored without floating-point arithmetic;
 - priority `low | medium | high`, defaulting to `medium`;
 - optional comment;
 - optional service-owned image after the image milestone;
 - timestamps.
 
-Default order is priority descending, then stable creation order. Explicit price sorting supports ascending and descending order with missing prices last. No quantity, subtype hierarchy, manual rank, live marketplace dependency, or image is required in the core release.
+Default order is priority descending, then stable creation order. Explicit price sorting supports ascending and descending order with missing prices last; how prices in different currencies compare is decided in step 5.5, without exchange rates in the core release. No quantity, subtype hierarchy, manual rank, live marketplace dependency, or image is required in the core release.
 
 ### Reservation
 
@@ -168,7 +167,7 @@ Purpose: establish the aggregate and authorization boundary before sharing.
 
 Work:
 
-- add Wishlist persistence and runtime schemas for title, description, Occasion Date, visibility `private | public`, and Wishlist Currency (`unlisted` — в Milestone 3);
+- add Wishlist persistence and runtime schemas for title, description, Occasion Date, and visibility `private | public` (`unlisted` — в Milestone 3);
 - read and write PostgreSQL `date` as a `YYYY-MM-DD` string: the pool option `types` returns OID 1082 unchanged in
   every `PgClient.layer`, and kysely-codegen uses `"dateParser": "string"` (решение владельца 2026-10-12: правило
   задаётся один раз; глобальный `pg.types.setTypeParser` не используется);
@@ -185,8 +184,17 @@ Work:
 | `title`        | `varchar(255) NOT NULL`, `CHECK (btrim(title) <> '')`                           | да                          | trim, 1–255 символов                            |
 | `description`  | `varchar(1000) NULL`, `CHECK (description IS NULL OR btrim(description) <> '')` | нет                         | trim; `""` и пробелы → `null`; до 1000 символов |
 | `occasionDate` | `date NULL`                                                                     | нет                         | строка `YYYY-MM-DD`, существующая дата          |
-| `currency`     | ENUM `RUB \| EUR \| USD`, `NOT NULL DEFAULT 'RUB'`                              | нет, по умолчанию `RUB`     | `Schema.Literals`                               |
 | `visibility`   | ENUM `private \| public`, `NOT NULL DEFAULT 'private'`                          | нет, по умолчанию `private` | `Schema.Literals`; `unlisted` — Milestone 3     |
+
+Валюты у Wishlist нет: она входит в Item Price (Milestone 4, решение владельца 2026-10-12).
+
+Окно Occasion Date (решение владельца 2026-10-12): от «сегодня по UTC − 1 день» до «сегодня по UTC + 5 лет»
+включительно; запас в 1 день нужен для часовых поясов западнее UTC. Формат и окно проверяет входная Schema: окно —
+через `SchemaGetter.checkEffect` и `Clock`, тесты — `TestClock`; ответ — 400 `REQUEST_VALIDATION_FAILED`, как у
+остальных полей. Прямой вызов service окно не проверяет: сейчас у create один вход — HTTP; при втором входе (импорт)
+правило переносится в service. Если `checkEffect` не работает при декодировании payload в HttpApi, проверка
+переходит в service через `Clock` с собственным кодом 400. Окно проверяется только на входе create и при изменении
+самой даты; Schema сохранённой строки и чтение его не проверяют, `CHECK` с `now()` в БД нет.
 
 Acceptance:
 
@@ -224,7 +232,9 @@ Work:
 
 - add Wishlist Item persistence and owner CRUD;
 - validate optional HTTPS source URL independently of import support;
-- model optional price in minor units or an equivalent exact decimal representation under the Wishlist Currency;
+- model optional Item Price as an exact amount (minor units or exact decimal) plus its own currency `RUB | EUR | USD`
+  (решение владельца 2026-10-12: подарки бывают в разных валютах, у Wishlist валюты нет); amount is at most
+  1 000 000 in any currency (решение владельца 2026-10-12), enforced by Schema and a PostgreSQL `CHECK`;
 - implement priority-first default order and explicit priority/price sorting;
 - expose owner and visitor projections without image or remote metadata dependencies.
 
@@ -232,8 +242,8 @@ Acceptance:
 
 - a manual Item can be created with title only;
 - owner authorization is enforced through the parent Wishlist;
-- changing Wishlist Currency with priced Items is rejected until the User explicitly removes or converts those prices;
-- price sorting is deterministic in both directions and places missing prices last;
+- Items of one Wishlist may have prices in different currencies; no exchange rates are fetched;
+- price sorting is deterministic in both directions, places missing prices last, and has an explicit rule for mixed currencies;
 - visitor reads never trigger outbound network requests.
 
 ### Milestone 5 — Reservation state machine for Users
@@ -381,6 +391,7 @@ Friends/followers are a later product, not a prerequisite for catalog search. Be
 
 ### Removed from the plan
 
+- Wishlist Currency: each Item Price carries its own currency (решение владельца 2026-10-12);
 - Fastify, Zod, JWT access/refresh tokens, and nanoid as required technologies;
 - public login email;
 - User birthday;
