@@ -4,6 +4,8 @@
 
 Определяет контракт Wishlist, его сохранение и создание для текущего User. Задаёт чтение по id с Session: Private Wishlist доступен владельцу, Public Wishlist — любому аутентифицированному User.
 
+Тело create содержит каждый ключ контракта, необязательное значение — `null` ([ADR-0007](../../../../../docs/adr/0007-request-body-contains-every-field.md)). Минимальное тело — `{ "title": "Books", "description": null, "occasionDate": null, "visibility": "private" }`.
+
 ## ADDED Requirements
 
 ### Requirement: Нормализация title
@@ -17,11 +19,11 @@
 
 ### Requirement: Нормализация description
 
-Входной контракт Wishlist SHALL преобразовывать отсутствие, `null` и пустую после trim `description` в `null`, а непустую строку — в строку без крайних пробелов длиной до 1000 символов.
+Входной контракт Wishlist SHALL преобразовывать `null` и пустую после trim `description` в `null`, а непустую строку — в строку без крайних пробелов длиной до 1000 символов.
 
 #### Scenario: Пустое description
 
-- **WHEN** входной контракт декодирует отсутствие `description`, `null`, `""` либо `"   "`
+- **WHEN** входной контракт декодирует `description`: `null`, `""` либо `"   "`
 - **THEN** результат содержит `description: null`
 
 #### Scenario: Непустое description
@@ -31,7 +33,7 @@
 
 ### Requirement: Календарный контракт Occasion Date
 
-Входной контракт Wishlist SHALL принимать `occasionDate` только как существующую календарную дату `YYYY-MM-DD` с годом 0001–9999 либо `null`, преобразуя отсутствие поля в `null`.
+Входной контракт Wishlist SHALL принимать `occasionDate` только как существующую календарную дату `YYYY-MM-DD` либо `null`.
 
 #### Scenario: Високосная дата
 
@@ -39,9 +41,9 @@
 - **WHEN** входной контракт декодирует `occasionDate: "2028-02-29"`
 - **THEN** результат содержит `occasionDate: "2028-02-29"`
 
-#### Scenario: Отсутствующая дата
+#### Scenario: Дата не указана
 
-- **WHEN** входной контракт декодирует отсутствие `occasionDate` либо `null`
+- **WHEN** входной контракт декодирует `occasionDate: null`
 - **THEN** результат содержит `occasionDate: null`
 
 ### Requirement: Окно Occasion Date при create
@@ -80,21 +82,21 @@ API create Wishlist SHALL принимать ненулевую Occasion Date т
 
 ### Requirement: Значения visibility
 
-Входной контракт Wishlist SHALL принимать `visibility` только из `private`, `public`, подставляя `private` при отсутствии поля.
+Входной контракт Wishlist SHALL принимать `visibility` только из `private`, `public`; значения по умолчанию на входе нет.
 
 #### Scenario: Явная visibility
 
 - **WHEN** входной контракт декодирует `visibility: "public"`
 - **THEN** результат содержит `visibility: "public"`
 
-#### Scenario: Visibility по умолчанию
+#### Scenario: Visibility private
 
-- **WHEN** входной контракт декодирует тело без `visibility`
+- **WHEN** входной контракт декодирует `visibility: "private"`
 - **THEN** результат содержит `visibility: "private"`
 
 ### Requirement: Отклонение невалидного create
 
-При действующей Session API SHALL отклонять `POST /api/wishlists` с невалидными полями или лишними свойствами ответом 400 problem+json с `code: REQUEST_VALIDATION_FAILED`, `instance: /api/wishlists`, без создания Wishlist.
+При действующей Session API SHALL отклонять `POST /api/wishlists` с невалидными или отсутствующими полями либо лишними свойствами ответом 400 problem+json с `code: REQUEST_VALIDATION_FAILED`, `instance: /api/wishlists`, без создания Wishlist.
 
 #### Scenario: Невалидное поле
 
@@ -103,19 +105,19 @@ API create Wishlist SHALL принимать ненулевую Occasion Date т
 - **THEN** ответ имеет статус 400, тип `application/problem+json`, `code: REQUEST_VALIDATION_FAILED`, `instance: /api/wishlists`
 - **AND** в БД остаётся ровно 0 Wishlist
 
-Для каждой строки меняется только указанное поле; остальные поля соответствуют `{ "title": "Books" }`.
+Для каждой строки меняется только указанное поле; остальные поля соответствуют минимальному телу.
 
-| Поле           | Невалидные значения                                                                                                                        |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `title`        | отсутствие, `null`, 42, `""`, `"   "`, 256 символов `a` после trim                                                                         |
-| `description`  | 42, 1001 символ `a` после trim                                                                                                             |
-| `occasionDate` | 42, `"2027-02-29"`, `"2028-02-30"`, `"2028-13-01"`, `"2028-00-01"`, `"2028-01-00"`, `"2028-2-9"`, `"0000-01-01"`, `"2028-02-29T00:00:00Z"` |
-| `visibility`   | `null`, 42, `"unlisted"`, `"PUBLIC"`                                                                                                       |
+| Поле           | Невалидные значения                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`        | отсутствие, `null`, 42, `""`, `"   "`, 256 символов `a` после trim                                                                                     |
+| `description`  | отсутствие, 42, 1001 символ `a` после trim                                                                                                             |
+| `occasionDate` | отсутствие, 42, `"2027-02-29"`, `"2028-02-30"`, `"2028-13-01"`, `"2028-00-01"`, `"2028-01-00"`, `"2028-2-9"`, `"0000-01-01"`, `"2028-02-29T00:00:00Z"` |
+| `visibility`   | отсутствие, `null`, 42, `"unlisted"`, `"PUBLIC"`                                                                                                       |
 
 #### Scenario: Клиент передаёт серверные поля
 
 - **GIVEN** у User A действует Session; существует другой User B; PostgreSQL доступен; в БД ровно 0 Wishlist
-- **WHEN** A отправляет `POST /api/wishlists` с `title: "Books"` и лишним `ownerId` B, `id`, `createdAt`, `updatedAt` либо произвольным полем
+- **WHEN** A отправляет `POST /api/wishlists` с минимальным телом и лишним `ownerId` B, `id`, `createdAt`, `updatedAt` либо произвольным полем
 - **THEN** ответ имеет статус 400, тип `application/problem+json`, `code: REQUEST_VALIDATION_FAILED`, `instance: /api/wishlists`
 - **AND** в БД остаётся ровно 0 Wishlist
 
@@ -126,7 +128,7 @@ API create Wishlist SHALL принимать ненулевую Occasion Date т
 #### Scenario: Создание минимального Wishlist
 
 - **GIVEN** у User A действует Session; PostgreSQL доступен; в БД ровно 0 Wishlist
-- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "  Books  " }`
+- **WHEN** A отправляет `POST /api/wishlists` с минимальным телом, где `title: "  Books  "`
 - **THEN** в БД ровно 1 Wishlist с владельцем A и новым UUID
 - **AND** его поля равны `title: "Books"`, `description: null`, `occasionDate: null`, `visibility: "private"`
 - **AND** его `createdAt` и `updatedAt` заданы сервером
@@ -134,14 +136,14 @@ API create Wishlist SHALL принимать ненулевую Occasion Date т
 #### Scenario: Несколько Wishlist одного User
 
 - **GIVEN** у A действует Session; PostgreSQL доступен; A владеет ровно 1 Wishlist W с известными полями; других Wishlist нет
-- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books" }`
+- **WHEN** A отправляет `POST /api/wishlists` с минимальным телом
 - **THEN** A владеет ровно 2 Wishlist с разными id
 - **AND** все поля W остаются прежними
 
 #### Scenario: Владелец не выбирается через query
 
 - **GIVEN** у A действует Session; существует другой User B; PostgreSQL доступен; в БД ровно 0 Wishlist
-- **WHEN** A отправляет `POST /api/wishlists?ownerId=<id B>` с `{ "title": "Books" }`
+- **WHEN** A отправляет `POST /api/wishlists?ownerId=<id B>` с минимальным телом
 - **THEN** в БД ровно 1 Wishlist с владельцем A
 
 ### Requirement: Представление созданного Wishlist
@@ -229,7 +231,7 @@ API SHALL отвечать 401 problem+json с `code: AUTH_INVALID_SESSION` и `
 #### Scenario: Create без действующей Session
 
 - **GIVEN** PostgreSQL доступен; cookie `wishlist_session` отсутствует, повреждена, не соответствует Session либо соответствует истекшей Session
-- **WHEN** клиент отправляет `POST /api/wishlists?source=test` с `{ "title": "Books" }`
+- **WHEN** клиент отправляет `POST /api/wishlists?source=test` с минимальным телом
 - **THEN** ответ имеет статус 401, тип `application/problem+json`, `code: AUTH_INVALID_SESSION`, `instance: /api/wishlists`
 
 #### Scenario: Public Wishlist без действующей Session
@@ -298,7 +300,7 @@ API Wishlist SHALL отвечать на технические отказы cre
 #### Scenario: Временный отказ сохранения
 
 - **GIVEN** у A действует Session; аутентификация завершается успешно; persistence create отказывает временно
-- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books" }`
+- **WHEN** A отправляет `POST /api/wishlists` с минимальным телом
 - **THEN** API отвечает 503 problem+json по `api-errors`, с `instance: /api/wishlists`
 
 #### Scenario: Повреждённая строка при read

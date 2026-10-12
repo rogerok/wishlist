@@ -52,7 +52,7 @@
 
 ### Допущения планирования
 
-- Пропущенные `description` и `occasionDate` становятся `null`; явный `null` для них допустим. Для `visibility` допустимо отсутствие, но не `null`.
+- Тело create содержит каждый ключ ([ADR-0007](../../../docs/adr/0007-request-body-contains-every-field.md)): `description` и `occasionDate` принимают `null`, `visibility` — только `private` или `public`; отсутствующий ключ — 400.
 - Успешные ответы: 201 при create, 200 при read; JSON содержит ровно 8 полей: `id`, `ownerId`, четыре поля входного контракта, `createdAt`, `updatedAt`.
 - Основной путь окна — входная Schema с `SchemaGetter.checkEffect` и `Clock`, ответ 400 `REQUEST_VALIDATION_FAILED`. Прямой service окно не проверяет.
 - Если первая HTTP-проверка опровергает основной путь, окно проверяет service с `Clock` и предлагаемым кодом 400 `WISHLIST_OCCASION_DATE_OUT_OF_RANGE`. Выбранный путь фиксируется до дальнейшей реализации.
