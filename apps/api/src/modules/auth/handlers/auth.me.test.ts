@@ -12,6 +12,7 @@ import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
 } from '#infra/errors/defect-boundary.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
@@ -23,7 +24,6 @@ import {
   SessionAuthenticationLive,
 } from '#modules/auth/handlers/auth.handlers.js';
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
-import { AuthUnavailableError } from '#modules/auth/service/auth.service.errors.js';
 import { AuthService } from '#modules/auth/service/auth.service.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 
@@ -113,10 +113,14 @@ const expectInvalidSession = (response: Response) =>
     expect(response.headers.get('content-type')).toContain(
       'application/problem+json',
     );
+    // Тело совпадает с контрактом до перехода на доменные ошибки (7861119).
     const body: unknown = yield* Effect.promise(() => response.json());
-    expect(body).toMatchObject({
+    expect(body).toEqual({
       code: 'AUTH_INVALID_SESSION',
+      detail: 'Session is invalid',
       status: 401,
+      title: 'Invalid session',
+      type: '/errors/auth-invalid-session',
       instance: mePath,
     });
   });
@@ -175,7 +179,12 @@ describe('GET /api/auth/me technical failures', () => {
         login: () => Effect.die(new Error('Unexpected call: login')),
         logout: () => Effect.die(new Error('Unexpected call: logout')),
         authenticate: () =>
-          new AuthUnavailableError({ cause: 'connection reset' }),
+          new OperationFailed({
+            reason: 'unavailable',
+            source: 'sessionRepository',
+            operation: 'getByTokenDigest',
+            cause: 'connection reset',
+          }),
       });
 
       const response = yield* getMe(

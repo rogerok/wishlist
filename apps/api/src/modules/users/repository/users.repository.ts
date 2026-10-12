@@ -2,13 +2,7 @@ import { Context, Effect, Layer, Option, Schema } from 'effect';
 import { SqlError } from 'effect/unstable/sql';
 import { sql } from 'kysely';
 
-import type {
-  UsersRepositoryCreateError,
-  UsersRepositoryDeleteError,
-  UsersRepositoryGetAllError,
-  UsersRepositoryGetByError,
-  UsersRepositoryUpdateError,
-} from '#modules/users/repository/users.repository.errors.js';
+import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
 import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
@@ -16,12 +10,14 @@ import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';
 import {
-  UserEmailAlreadyExists,
-  UserInvalidRecord,
-  UsersRepositoryError,
-} from '#modules/users/repository/users.repository.errors.js';
+  invalidRecordFailed,
+  sqlOperationFailed,
+} from '#infra/db/repository-failure.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
+import { UserEmailAlreadyExistsError } from '#modules/users/users.errors.js';
+
+const source = 'usersRepository';
 
 const userSelection = ['id', 'email', 'displayName'] as const;
 
@@ -33,7 +29,7 @@ const getSomeOrNone = (row: unknown, operation: UserOperation) =>
 
 const decodeRow = (row: unknown, operation: UserOperation) =>
   Schema.decodeUnknownEffect(UserResponseSchema)(row).pipe(
-    Effect.mapError((cause) => new UserInvalidRecord({ cause, operation })),
+    Effect.mapError(invalidRecordFailed(source, operation)),
   );
 
 const isUsersEmailUniqueViolation = (error: unknown): boolean => {
@@ -47,30 +43,31 @@ const isUsersEmailUniqueViolation = (error: unknown): boolean => {
   );
 };
 
-const mapRepoError = (operation: UserOperation) => (cause: SqlError.SqlError) =>
-  new UsersRepositoryError({ cause, operation });
+const mapRepoError = (operation: UserOperation) =>
+  sqlOperationFailed(source, operation);
 
 export interface UsersRepositoryShape {
   readonly create: (
     input: CreateUserBody,
-  ) => Effect.Effect<UserResponse, UsersRepositoryCreateError>;
-  readonly getAll: Effect.Effect<
-    ReadonlyArray<UserResponse>,
-    UsersRepositoryGetAllError
+  ) => Effect.Effect<
+    UserResponse,
+    OperationFailed | UserEmailAlreadyExistsError
   >;
+  readonly getAll: Effect.Effect<ReadonlyArray<UserResponse>, OperationFailed>;
   readonly getById: (
     id: UserId,
-  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByError>;
+  ) => Effect.Effect<Option.Option<UserResponse>, OperationFailed>;
   readonly update: (
     id: UserId,
     input: UpdateUserBody,
-  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryUpdateError>;
-  readonly deleteById: (
-    id: UserId,
-  ) => Effect.Effect<boolean, UsersRepositoryDeleteError>;
+  ) => Effect.Effect<
+    Option.Option<UserResponse>,
+    OperationFailed | UserEmailAlreadyExistsError
+  >;
+  readonly deleteById: (id: UserId) => Effect.Effect<boolean, OperationFailed>;
   readonly getByEmail: (
     id: UserEmail,
-  ) => Effect.Effect<Option.Option<UserResponse>, UsersRepositoryGetByError>;
+  ) => Effect.Effect<Option.Option<UserResponse>, OperationFailed>;
 }
 
 export class UsersRepository extends Context.Service<
@@ -96,10 +93,7 @@ export const UsersRepositoryLive = Layer.effect(
           .pipe(Effect.mapError(mapRepoError(UserOperation.create)));
 
         if (row === undefined) {
-          return yield* new UserEmailAlreadyExists({
-            email: input.email,
-            operation: UserOperation.create,
-          });
+          return yield* new UserEmailAlreadyExistsError();
         }
 
         return yield* decodeRow(row, UserOperation.create);
@@ -150,16 +144,11 @@ export const UsersRepositoryLive = Layer.effect(
           .where('id', '=', id)
           .returning(userSelection)
           .pipe(
-            Effect.mapError((cause) => {
-              if (isUsersEmailUniqueViolation(cause)) {
-                return new UserEmailAlreadyExists({
-                  email: input.email,
-                  operation: UserOperation.update,
-                });
-              }
-
-              return mapRepoError(UserOperation.update)(cause);
-            }),
+            Effect.mapError((cause) =>
+              isUsersEmailUniqueViolation(cause)
+                ? new UserEmailAlreadyExistsError()
+                : mapRepoError(UserOperation.update)(cause),
+            ),
           );
 
         return yield* getSomeOrNone(row, UserOperation.update);

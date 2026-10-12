@@ -2,21 +2,19 @@ import { randomBytes } from 'crypto';
 import { Context, Effect, Encoding, Layer, Redacted, Schema } from 'effect';
 import { createHash } from 'node:crypto';
 
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { isSafeIntegerInRange } from '#infra/lib/utils/checkers.js';
 import { CredentialsSchema } from '#modules/auth/schemas/auth.schema.js';
 import {
   secureRandomBytesMaxLength,
   secureRandomBytesMinLength,
 } from '#modules/auth/service/constants.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
 export const digestSessionToken = (tokenBytes: Uint8Array): Uint8Array =>
   createHash('sha256').update(tokenBytes).digest();
 
 interface SecureRandomBytesShape {
-  readonly get: (
-    total: number,
-  ) => Effect.Effect<Uint8Array, SecurePrimitiveUnavailableError>;
+  readonly get: (total: number) => Effect.Effect<Uint8Array, OperationFailed>;
 }
 
 export class SecureRandomBytes extends Context.Service<
@@ -36,7 +34,13 @@ export const SecureRandomBytesLive = Layer.succeed(SecureRandomBytes, {
       ) {
         return yield* Effect.try({
           try: () => randomBytes(total),
-          catch: (cause) => new SecurePrimitiveUnavailableError({ cause }),
+          catch: (cause) =>
+            new OperationFailed({
+              reason: 'unavailable',
+              source: 'secureRandomBytes',
+              operation: 'get',
+              cause,
+            }),
         });
       }
 
@@ -56,10 +60,7 @@ type GeneratedSessionToken = Schema.Schema.Type<
 >;
 
 interface SessionTokenGeneratorShape {
-  readonly generate: Effect.Effect<
-    GeneratedSessionToken,
-    SecurePrimitiveUnavailableError
-  >;
+  readonly generate: Effect.Effect<GeneratedSessionToken, OperationFailed>;
 }
 
 export class SessionTokenGenerator extends Context.Service<

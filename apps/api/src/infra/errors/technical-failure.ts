@@ -2,6 +2,11 @@ import { Effect } from 'effect';
 import { HttpServerRequest } from 'effect/unstable/http';
 import { randomBytes } from 'node:crypto';
 
+import type {
+  FailureReason,
+  OperationFailed,
+} from '#infra/errors/operation-failed.js';
+
 import { getRequestPathname } from '#infra/errors/http-problem.js';
 import {
   InternalHttpError,
@@ -9,30 +14,26 @@ import {
 } from '#infra/errors/technical-http-errors.js';
 import { describeErrorChain } from '#infra/logging/error-chain.js';
 
-export type FailureReason = 'dataIntegrity' | 'internal' | 'unavailable';
-
 // failure — типизированная ошибка сервиса, defect — непредвиденное исключение.
 export type FailureKind = 'defect' | 'failure';
 
 export const operationFailedEvent = 'operation.failed';
 
+// Дополнительный контекст строки лога. Только примитивы: объект целиком (строку
+// БД, тело запроса, ошибку) сюда не передать.
+export type FailureMeta = Readonly<
+  Record<string, boolean | number | string | null>
+>;
+
 type TechnicalFailureContext<Operation extends string> = {
   readonly operation: Operation;
-  readonly userId: string | null;
+  readonly meta?: FailureMeta;
 };
 
-type TaggedError = { readonly _tag: string };
-
-type TechnicalFailureOptions<
-  Operation extends string,
-  TechnicalError extends TaggedError,
-> = {
+type TechnicalFailureOptions<Operation extends string> = {
   readonly module: string;
   // Нужно только для вывода типа Operation из значений вроде AuthOperation.
   readonly operations: Readonly<Record<string, Operation>>;
-  // Тег технической ошибки сервиса → причина в логе и статус ответа.
-  // Ключи — ровно теги TechnicalError: лишний или пропущенный тег не скомпилируется.
-  readonly reasons: Readonly<Record<TechnicalError['_tag'], FailureReason>>;
 };
 
 type TechnicalFailure = {
@@ -56,21 +57,16 @@ type TechnicalFailureResponse = Effect.Effect<
   HttpServerRequest.HttpServerRequest
 >;
 
-// Обработчик для catchTags: переводит ошибку сервиса в 5xx.
-type TechnicalErrorHandler<TechnicalError extends TaggedError> = (
-  error: TechnicalError,
+// Обработчик для catchTag('OperationFailed'): переводит отказ в 5xx.
+type TechnicalErrorHandler = (
+  error: OperationFailed,
 ) => TechnicalFailureResponse;
 
-// Привязывает обработчик к операции и пользователю конкретного запроса.
-type MakeTechnicalErrorHandler<
-  Operation extends string,
-  TechnicalError extends TaggedError,
-> = (
+// Привязывает обработчик к операции конкретного запроса.
+type MakeTechnicalErrorHandler<Operation extends string> = (
   context: TechnicalFailureContext<Operation>,
-) => TechnicalErrorHandler<TechnicalError>;
+) => TechnicalErrorHandler;
 
-// Свой идентификатор, а не trace id: trace id Effect берёт из заголовков
-// traceparent/b3, которые выбирает клиент (ADR-0005).
 const generateErrorId = Effect.sync(() => randomBytes(16).toString('hex'));
 
 // Одна строка лога на технический отказ; возвращает поля для 5xx-ответа
@@ -78,10 +74,10 @@ const generateErrorId = Effect.sync(() => randomBytes(16).toString('hex'));
 export const logTechnicalFailure = ({
   error,
   kind,
+  meta = {},
   module,
   operation,
   reason,
-  userId,
 }: TechnicalFailure): Effect.Effect<
   ProblemContext,
   never,
@@ -97,7 +93,7 @@ export const logTechnicalFailure = ({
         kind,
         module,
         operation,
-        userId,
+        meta,
         reason,
         errorChain: describeErrorChain(error),
         errorId,
@@ -116,22 +112,18 @@ const failTechnically = (failure: TechnicalFailure): TechnicalFailureResponse =>
       : new InternalHttpError(problem);
   });
 
-// Первый вызов принимает тип ошибок явно, второй выводит Operation из
-// operations: TypeScript не умеет задать один параметр типа и вывести другой.
+// reason уже назначил источник отказа; handler добавляет модуль и операцию
+// запроса, логирует и отвечает 500 или 503.
 export const makeTechnicalFailureHandler =
-  <TechnicalError extends TaggedError>() =>
   <Operation extends string>(
-    options: TechnicalFailureOptions<Operation, TechnicalError>,
-  ): MakeTechnicalErrorHandler<Operation, TechnicalError> =>
+    options: TechnicalFailureOptions<Operation>,
+  ): MakeTechnicalErrorHandler<Operation> =>
   (context) =>
-  (error) => {
-    const tag: TechnicalError['_tag'] = error._tag;
-
-    return failTechnically({
+  (error) =>
+    failTechnically({
       ...context,
       error,
       kind: 'failure',
       module: options.module,
-      reason: options.reasons[tag],
+      reason: error.reason,
     });
-  };

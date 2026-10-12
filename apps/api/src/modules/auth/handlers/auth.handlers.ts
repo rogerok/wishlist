@@ -5,17 +5,11 @@ import { Duration, Effect, Layer } from 'effect';
 import { HttpApiBuilder } from 'effect/unstable/httpapi';
 
 import type { Mode } from '#infra/config/config.js';
-import type { AuthTechnicalError } from '#modules/auth/service/auth.service.errors.js';
 
 import { AppApi } from '#infra/api/api.js';
 import { ModeConfig } from '#infra/config/config.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
 import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
-import {
-  AuthEmailAlreadyExistsHttpError,
-  AuthInvalidCredentialsHttpError,
-  AuthUnauthenticatedHttpError,
-} from '#modules/auth/api/auth.api.errors.js';
 import {
   CurrentSession,
   SessionAuthentication,
@@ -30,16 +24,12 @@ type SessionCookieData = {
   readonly expiresAt: Date;
 };
 
-const makeTechnicalErrorHandler =
-  makeTechnicalFailureHandler<AuthTechnicalError>()({
-    module: 'auth',
-    operations: AuthOperation,
-    reasons: {
-      AuthDataIntegrityError: 'dataIntegrity',
-      AuthInternalError: 'internal',
-      AuthUnavailableError: 'unavailable',
-    },
-  });
+// Доменные ошибки (email занят, неверные данные входа, нет Session) уходят
+// как есть: в ответ их кодируют схемы из auth.api.ts и session-authentication.ts.
+const makeTechnicalErrorHandler = makeTechnicalFailureHandler({
+  module: 'auth',
+  operations: AuthOperation,
+});
 
 const getBaseCookieOptions = (mode: Mode): Cookie['options'] => ({
   httpOnly: true,
@@ -67,19 +57,13 @@ export const AuthHandlersLive = HttpApiBuilder.group(
           Effect.gen(function* () {
             const { passwordConfirm: __, ...rest } = payload;
             const service = yield* AuthService;
-            const handleTechnicalError = makeTechnicalErrorHandler({
-              userId: null,
-              operation: AuthOperation.signup,
-            });
-
             const signupResult = yield* service.signup(rest).pipe(
-              Effect.catchTags({
-                AuthEmailAlreadyExistsError: () =>
-                  new AuthEmailAlreadyExistsHttpError(),
-                AuthDataIntegrityError: handleTechnicalError,
-                AuthInternalError: handleTechnicalError,
-                AuthUnavailableError: handleTechnicalError,
-              }),
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: AuthOperation.signup,
+                }),
+              ),
             );
 
             yield* setSessionCookie(signupResult);
@@ -90,19 +74,14 @@ export const AuthHandlersLive = HttpApiBuilder.group(
         .handle(AuthOperation.login, ({ payload }) =>
           Effect.gen(function* () {
             const service = yield* AuthService;
-            const handleTechnicalError = makeTechnicalErrorHandler({
-              userId: null,
-              operation: AuthOperation.login,
-            });
-            const loginResult = yield* service.login(payload).pipe(
-              Effect.catchTags({
-                AuthInvalidCredentialsError: () =>
-                  new AuthInvalidCredentialsHttpError(),
-                AuthDataIntegrityError: handleTechnicalError,
-                AuthInternalError: handleTechnicalError,
-                AuthUnavailableError: handleTechnicalError,
-              }),
-            );
+            const loginResult = yield* service
+              .login(payload)
+              .pipe(
+                Effect.catchTag(
+                  'OperationFailed',
+                  makeTechnicalErrorHandler({ operation: AuthOperation.login }),
+                ),
+              );
 
             yield* setSessionCookie(loginResult);
 
@@ -122,17 +101,13 @@ export const AuthHandlersLive = HttpApiBuilder.group(
               sessionCookieSecurity,
             );
 
-            const handleTechnicalError = makeTechnicalErrorHandler({
-              userId: null,
-              operation: AuthOperation.logout,
-            });
-
             yield* service.logout(cookie).pipe(
-              Effect.catchTags({
-                AuthUnavailableError: handleTechnicalError,
-                AuthInternalError: handleTechnicalError,
-                AuthDataIntegrityError: handleTechnicalError,
-              }),
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: AuthOperation.logout,
+                }),
+              ),
             );
 
             yield* HttpApiBuilder.securitySetCookie(sessionCookieSecurity, '', {
@@ -150,22 +125,15 @@ export const SessionAuthenticationLive = Layer.effect(
   Effect.gen(function* () {
     const service = yield* AuthService;
     const handleTechnicalError = makeTechnicalErrorHandler({
-      userId: null,
       operation: AuthOperation.me,
     });
 
     return {
       cookie: (httpEffect, { credential }) =>
         Effect.gen(function* () {
-          const session = yield* service.authenticate(credential).pipe(
-            Effect.catchTags({
-              AuthUnauthenticatedError: () =>
-                new AuthUnauthenticatedHttpError(),
-              AuthDataIntegrityError: handleTechnicalError,
-              AuthInternalError: handleTechnicalError,
-              AuthUnavailableError: handleTechnicalError,
-            }),
-          );
+          const session = yield* service
+            .authenticate(credential)
+            .pipe(Effect.catchTag('OperationFailed', handleTechnicalError));
 
           return yield* httpEffect.pipe(
             Effect.provideService(CurrentSession, session),

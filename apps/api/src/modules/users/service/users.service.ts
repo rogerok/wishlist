@@ -1,56 +1,36 @@
 import { Context, Effect, Layer } from 'effect';
 
-import type { UsersRepositoryError } from '#modules/users/repository/users.repository.errors.js';
+import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { CreateUserBody } from '#modules/users/schemas/create-user.schema.js';
 import type { UpdateUserBody } from '#modules/users/schemas/update-user.schema.js';
 import type { UserResponse } from '#modules/users/schemas/user-response.schema.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
-import type {
-  UserServiceDeleteByIdError,
-  UserServiceUpdateError,
-  UsersServiceCreateError,
-  UsersServiceGetAllError,
-  UsersServiceGetByIdError,
-} from '#modules/users/service/users.service.errors.js';
+import type { UserEmailAlreadyExistsError } from '#modules/users/users.errors.js';
 
-import { isRetryableSqlFailure } from '#infra/db/sql-failure.js';
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
-import {
-  UserDataIntegrityError,
-  UserEmailAlreadyExistsError,
-  UserNotFoundError,
-  UsersInternalError,
-  UsersUnavailableError,
-} from '#modules/users/service/users.service.errors.js';
-
-const mapUsersRepositoryError = (
-  error: UsersRepositoryError,
-): UsersInternalError | UsersUnavailableError => {
-  if (isRetryableSqlFailure(error)) {
-    return new UsersUnavailableError({ cause: error });
-  }
-
-  return new UsersInternalError({ cause: error });
-};
+import { UserNotFoundError } from '#modules/users/users.errors.js';
 
 export interface UsersServiceShape {
   readonly create: (
     input: CreateUserBody,
-  ) => Effect.Effect<UserResponse, UsersServiceCreateError>;
-  readonly getAll: Effect.Effect<
-    ReadonlyArray<UserResponse>,
-    UsersServiceGetAllError
+  ) => Effect.Effect<
+    UserResponse,
+    OperationFailed | UserEmailAlreadyExistsError
   >;
+  readonly getAll: Effect.Effect<ReadonlyArray<UserResponse>, OperationFailed>;
   readonly getById: (
     id: UserId,
-  ) => Effect.Effect<UserResponse, UsersServiceGetByIdError>;
+  ) => Effect.Effect<UserResponse, OperationFailed | UserNotFoundError>;
   readonly update: (
     id: UserId,
     input: UpdateUserBody,
-  ) => Effect.Effect<UserResponse, UserServiceUpdateError>;
+  ) => Effect.Effect<
+    UserResponse,
+    OperationFailed | UserEmailAlreadyExistsError | UserNotFoundError
+  >;
   readonly deleteById: (
     id: UserId,
-  ) => Effect.Effect<void, UserServiceDeleteByIdError>;
+  ) => Effect.Effect<void, OperationFailed | UserNotFoundError>;
 }
 
 export class UsersService extends Context.Service<
@@ -63,63 +43,36 @@ export const UsersServiceLive = Layer.effect(
   Effect.gen(function* () {
     const repository = yield* UsersRepository;
 
-    const create: UsersServiceShape['create'] = (input) =>
-      repository.create(input).pipe(
-        Effect.catchTags({
-          InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
-          UserEmailAlreadyExists: (cause) =>
-            new UserEmailAlreadyExistsError({ email: input.email, cause }),
-          UsersRepositoryError: mapUsersRepositoryError,
-        }),
-      );
+    const create: UsersServiceShape['create'] = repository.create;
 
-    const getAll: UsersServiceShape['getAll'] = repository.getAll.pipe(
-      Effect.catchTags({
-        InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
-        UsersRepositoryError: mapUsersRepositoryError,
-      }),
-    );
+    const getAll: UsersServiceShape['getAll'] = repository.getAll;
 
     const getById: UsersServiceShape['getById'] = (id) =>
       Effect.gen(function* () {
-        const option = yield* repository.getById(id).pipe(
-          Effect.catchTags({
-            InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
-            UsersRepositoryError: mapUsersRepositoryError,
-          }),
-        );
+        const option = yield* repository.getById(id);
 
         return yield* Effect.fromOption(
           option,
-          () => new UserNotFoundError({ cause: id }),
+          () => new UserNotFoundError({ id }),
         );
       });
 
     const update: UsersServiceShape['update'] = (id, input) =>
       Effect.gen(function* () {
-        const option = yield* repository.update(id, input).pipe(
-          Effect.catchTags({
-            InvalidUserRecord: (cause) => new UserDataIntegrityError({ cause }),
-            UsersRepositoryError: mapUsersRepositoryError,
-            UserEmailAlreadyExists: (cause) =>
-              new UserEmailAlreadyExistsError({ email: input.email, cause }),
-          }),
-        );
+        const option = yield* repository.update(id, input);
 
         return yield* Effect.fromOption(
           option,
-          () => new UserNotFoundError({ cause: id }),
+          () => new UserNotFoundError({ id }),
         );
       });
 
     const deleteById: UsersServiceShape['deleteById'] = (id) =>
       Effect.gen(function* () {
-        const deleted = yield* repository
-          .deleteById(id)
-          .pipe(Effect.mapError(mapUsersRepositoryError));
+        const deleted = yield* repository.deleteById(id);
 
         if (!deleted) {
-          return yield* new UserNotFoundError({ cause: id });
+          return yield* new UserNotFoundError({ id });
         }
       });
 

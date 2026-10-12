@@ -4,11 +4,8 @@ import { SqlClient } from 'effect/unstable/sql/SqlClient';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
-import {
-  PasswordCredentialsAlreadyExists,
-  PasswordCredentialsInvalidRecord,
-  PasswordCredentialsRepositoryError,
-} from '#modules/auth/repository/password/password-credential.repository.errors.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
+import { PasswordCredentialsAlreadyExists } from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import {
   PasswordCredentialsRepository,
   PasswordCredentialsRepositoryLive,
@@ -109,10 +106,11 @@ describe('PasswordCredentialsRepository', () => {
           const repo = yield* PasswordCredentialsRepository;
           const result = yield* Effect.result(repo.getByUserId(userId));
 
-          expect(result).toBeResultFailure(
-            PasswordCredentialsInvalidRecord,
-            {},
-          );
+          expect(result).toBeResultFailure(OperationFailed, {
+            reason: 'dataIntegrity',
+            source: 'passwordCredentialsRepository',
+            operation: 'getByIdUserId',
+          });
         }),
       );
 
@@ -126,10 +124,12 @@ describe('PasswordCredentialsRepository', () => {
           const repo = yield* PasswordCredentialsRepository;
           const result = yield* Effect.result(repo.create(userId, hash));
 
-          expect(result).toBeResultFailure(
-            PasswordCredentialsRepositoryError,
-            {},
-          );
+          // Нарушение внешнего ключа: повтор не поможет.
+          expect(result).toBeResultFailure(OperationFailed, {
+            reason: 'internal',
+            source: 'passwordCredentialsRepository',
+            operation: 'create',
+          });
         }),
       );
     },

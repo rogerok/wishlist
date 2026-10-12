@@ -4,35 +4,30 @@ import { Clock, Option } from 'effect';
 import { Context, Effect, Layer, Schema } from 'effect';
 import { match } from 'ts-pattern';
 
-import type {
-  SessionCreateError,
-  SessionDeleteByTokenDigestError,
-  SessionGetByTokenDigestError,
-} from '#modules/auth/repository/session/session.repository.errors.js';
+import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { Session } from '#modules/auth/schemas/session/session.schema.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';
 import {
-  SessionInvalidRecordError,
-  SessionRepositoryError,
-  SessionTokenDigestAlreadyExistsError,
-} from '#modules/auth/repository/session/session.repository.errors.js';
+  invalidRecordFailed,
+  sqlOperationFailed,
+} from '#infra/db/repository-failure.js';
+import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/session/session.repository.errors.js';
 import { SessionOperations } from '#modules/auth/schemas/session/session-operations.schema.js';
 import { SessionSchema } from '#modules/auth/schemas/session/session.schema.js';
 
 const sessionSelection = ['userId', 'id', 'createdAt', 'expiresAt'] as const;
+const source = 'sessionRepository';
 
 const decodeRow = (row: unknown, operation: SessionOperations) =>
   Schema.decodeUnknownEffect(SessionSchema)(row).pipe(
-    Effect.mapError(
-      (cause) => new SessionInvalidRecordError({ cause, operation }),
-    ),
+    Effect.mapError(invalidRecordFailed(source, operation)),
   );
 
-const mapRepoError =
-  (operation: SessionOperations) => (cause: SqlError.SqlError) =>
-    new SessionRepositoryError({ cause, operation });
+const mapRepoError = (operation: SessionOperations) =>
+  sqlOperationFailed(source, operation);
+
 const mapSessionCreateSqlError = (cause: SqlError.SqlError) =>
   match(cause.reason)
     .with(
@@ -45,26 +40,23 @@ const mapSessionCreateSqlError = (cause: SqlError.SqlError) =>
           operation: SessionOperations.create,
         }),
     )
-    .otherwise(
-      () =>
-        new SessionRepositoryError({
-          cause: cause,
-          operation: SessionOperations.create,
-        }),
-    );
+    .otherwise(() => mapRepoError(SessionOperations.create)(cause));
 
 interface SessionRepositoryShape {
   readonly create: (
     userId: UserId,
     tokenDigest: Uint8Array,
     expiresAt: Date,
-  ) => Effect.Effect<Session, SessionCreateError>;
+  ) => Effect.Effect<
+    Session,
+    OperationFailed | SessionTokenDigestAlreadyExistsError
+  >;
   readonly deleteByTokenDigest: (
     tokenDigest: Uint8Array,
-  ) => Effect.Effect<void, SessionDeleteByTokenDigestError>;
+  ) => Effect.Effect<void, OperationFailed>;
   readonly getByTokenDigest: (
     tokenDigest: Uint8Array,
-  ) => Effect.Effect<Option.Option<Session>, SessionGetByTokenDigestError>;
+  ) => Effect.Effect<Option.Option<Session>, OperationFailed>;
 }
 
 export class SessionRepository extends Context.Service<

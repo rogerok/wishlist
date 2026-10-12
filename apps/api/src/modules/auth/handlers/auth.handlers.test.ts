@@ -12,13 +12,14 @@ import { HttpRouter } from 'effect/unstable/http';
 import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
 import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
 
+import type { FailureReason } from '#infra/errors/operation-failed.js';
 import type { SignupResult } from '#modules/auth/schemas/signup/signup.schema.js';
-import type { AuthSignupError } from '#modules/auth/service/auth.service.errors.js';
 
 import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
 } from '#infra/errors/defect-boundary.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import {
   RequestValidationHttpError,
   RequestValidationMiddleware,
@@ -31,7 +32,6 @@ import {
 } from '#infra/errors/technical-http-errors.js';
 import { captureConsole } from '#infra/logging/capture-console.js';
 import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
-import { AuthEmailAlreadyExistsHttpError } from '#modules/auth/api/auth.api.errors.js';
 import { authGroup } from '#modules/auth/api/auth.api.js';
 import {
   AuthHandlersLive,
@@ -39,21 +39,10 @@ import {
 } from '#modules/auth/handlers/auth.handlers.js';
 import { cookieSessionKey } from '#modules/auth/handlers/constants.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
-import {
-  AuthDataIntegrityError,
-  AuthEmailAlreadyExistsError,
-  AuthInternalError,
-  AuthUnavailableError,
-} from '#modules/auth/service/auth.service.errors.js';
 import { AuthService } from '#modules/auth/service/auth.service.js';
-import { PasswordHashOverloadedError } from '#modules/auth/service/password/password-hasher.service.errors.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
-import {
-  UserInvalidRecord,
-  UsersRepositoryError,
-} from '#modules/users/repository/users.repository.errors.js';
 import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.js';
 import { UserOperation } from '#modules/users/schemas/users-operations.schema.js';
+import { UserEmailAlreadyExistsError } from '#modules/users/users.errors.js';
 
 const email = 'user@example.test';
 const password = 'Password1!';
@@ -79,7 +68,10 @@ const testApi = HttpApi.make('app')
   .middleware(DefectBoundaryMiddleware);
 
 const makeApp = (
-  effect: Effect.Effect<SignupResult, AuthSignupError>,
+  effect: Effect.Effect<
+    SignupResult,
+    OperationFailed | UserEmailAlreadyExistsError
+  >,
   mode: 'production' | 'test' = 'test',
 ) => {
   const authLayer = Layer.succeed(AuthService, {
@@ -135,16 +127,25 @@ beforeEach(() => {
 const failedLogs = () =>
   logs.filter((log) => log.annotations.event === operationFailedEvent);
 
-const usersRepositoryError = new UsersRepositoryError({
-  cause: sqlError,
-  operation: UserOperation.create,
-});
+const failed = (
+  reason: FailureReason,
+  source: string,
+  operation: string,
+  cause: unknown,
+) => new OperationFailed({ reason, source, operation, cause });
+
+const usersRepositoryError = failed(
+  'internal',
+  'usersRepository',
+  UserOperation.create,
+  sqlError,
+);
 
 describe('signup errors handling', () => {
   it.effect.each([
     {
       name: 'SQL error',
-      failure: new AuthInternalError({ cause: sqlError }),
+      failure: failed('internal', 'authService', 'signup', sqlError),
       reason: 'internal',
       status: 500,
       schema: InternalHttpError,
@@ -152,7 +153,7 @@ describe('signup errors handling', () => {
     },
     {
       name: 'repository error',
-      failure: new AuthInternalError({ cause: usersRepositoryError }),
+      failure: usersRepositoryError,
       reason: 'internal',
       status: 500,
       schema: InternalHttpError,
@@ -160,7 +161,12 @@ describe('signup errors handling', () => {
     },
     {
       name: 'unknown cause',
-      failure: new AuthInternalError({ cause: new Error(sensitiveMarker) }),
+      failure: failed(
+        'internal',
+        'authService',
+        'signup',
+        new Error(sensitiveMarker),
+      ),
       reason: 'internal',
       status: 500,
       schema: InternalHttpError,
@@ -168,12 +174,12 @@ describe('signup errors handling', () => {
     },
     {
       name: 'corrupted record',
-      failure: new AuthDataIntegrityError({
-        cause: new UserInvalidRecord({
-          cause: new Error(sensitiveMarker),
-          operation: UserOperation.create,
-        }),
-      }),
+      failure: failed(
+        'dataIntegrity',
+        'usersRepository',
+        UserOperation.create,
+        new Error(sensitiveMarker),
+      ),
       reason: 'dataIntegrity',
       status: 500,
       schema: InternalHttpError,
@@ -181,11 +187,12 @@ describe('signup errors handling', () => {
     },
     {
       name: 'password hasher overload',
-      failure: new AuthUnavailableError({
-        cause: new PasswordHashOverloadedError({
-          cause: new Error(sensitiveMarker),
-        }),
-      }),
+      failure: failed(
+        'unavailable',
+        'passwordHasher',
+        'hash',
+        new Error(sensitiveMarker),
+      ),
       reason: 'unavailable',
       status: 503,
       schema: ServiceUnavailableHttpError,
@@ -193,11 +200,12 @@ describe('signup errors handling', () => {
     },
     {
       name: 'secure primitive failure',
-      failure: new AuthUnavailableError({
-        cause: new SecurePrimitiveUnavailableError({
-          cause: new Error(sensitiveMarker),
-        }),
-      }),
+      failure: failed(
+        'unavailable',
+        'secureRandomBytes',
+        'get',
+        new Error(sensitiveMarker),
+      ),
       reason: 'unavailable',
       status: 503,
       schema: ServiceUnavailableHttpError,
@@ -231,7 +239,7 @@ describe('signup errors handling', () => {
           kind: 'failure',
           module: 'auth',
           operation: 'signup',
-          userId: null,
+          meta: {},
           reason,
           errorId: body.errorId,
         });
@@ -256,7 +264,9 @@ describe('signup errors handling', () => {
   ])('ignores an incoming $header header', ({ traceHeaders, clientValue }) =>
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
-        Effect.sync(() => makeApp(new AuthInternalError({ cause: sqlError }))),
+        Effect.sync(() =>
+          makeApp(failed('internal', 'authService', 'signup', sqlError)),
+        ),
         (app) => Effect.promise(() => app.dispose()),
       );
       const request = makeSignupRequest();
@@ -314,17 +324,18 @@ describe('signup errors handling', () => {
   it.effect('logs the error chain down to the SQL reason', () =>
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          makeApp(new AuthInternalError({ cause: usersRepositoryError })),
-        ),
+        Effect.sync(() => makeApp(usersRepositoryError)),
         (app) => Effect.promise(() => app.dispose()),
       );
 
       yield* Effect.promise(() => app.handler(makeSignupRequest()));
 
       expect(failedLogs()[0]?.annotations.errorChain).toEqual([
-        { tag: 'AuthInternalError' },
-        { tag: 'UsersRepositoryError', operation: UserOperation.create },
+        {
+          tag: 'OperationFailed',
+          source: 'usersRepository',
+          operation: UserOperation.create,
+        },
         { tag: 'SqlError' },
         { tag: 'UnknownError' },
       ]);
@@ -336,33 +347,33 @@ describe('signup errors handling', () => {
     () =>
       Effect.gen(function* () {
         const app = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            makeApp(
-              new AuthEmailAlreadyExistsError({
-                cause: new Error(sensitiveMarker),
-              }),
-            ),
-          ),
+          Effect.sync(() => makeApp(new UserEmailAlreadyExistsError())),
           (app) => Effect.promise(() => app.dispose()),
         );
 
         const resp = yield* Effect.promise(() =>
           app.handler(makeSignupRequest()),
         );
-        const json = yield* Effect.promise(() => resp.json());
-        const body = yield* Schema.decodeUnknownEffect(
-          AuthEmailAlreadyExistsHttpError,
-        )(json);
+        const text = yield* Effect.promise(() => resp.text());
+
         expect(failedLogs()).toHaveLength(0);
         expect(logs.filter((log) => log.level === 'ERROR')).toHaveLength(0);
-        expect(JSON.stringify(logs)).not.toContain(sensitiveMarker);
         expect(resp.status).toBe(409);
         expect(resp.headers.get('content-type')).toBe(
           'application/problem+json',
         );
         expect(resp.headers.get('set-cookie')).toBeNull();
-        expect(body.code).toBe('USER_EMAIL_ALREADY_EXISTS');
-        expect(JSON.stringify(json)).not.toContain(sensitiveMarker);
+        // Тело совпадает с контрактом до перехода на доменные ошибки (7861119).
+        expect(text).toBe(
+          JSON.stringify({
+            code: 'USER_EMAIL_ALREADY_EXISTS',
+            detail: 'A user with this email already exists',
+            status: 409,
+            title: 'User email already exists',
+            type: '/errors/user-email-already-exists',
+            instance: '/api/auth/signup',
+          }),
+        );
       }),
   );
 });

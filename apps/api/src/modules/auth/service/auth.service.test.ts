@@ -6,10 +6,7 @@ import { createHash } from 'node:crypto';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
-import {
-  PasswordCredentialsInvalidRecord,
-  PasswordCredentialsRepositoryError,
-} from '#modules/auth/repository/password/password-credential.repository.errors.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import {
   PasswordCredentialsRepository,
   PasswordCredentialsRepositoryLive,
@@ -22,20 +19,12 @@ import { SessionTokenDigestAlreadyExistsError } from '#modules/auth/repository/s
 import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
-import {
-  AuthDataIntegrityError,
-  AuthInternalError,
-  AuthInvalidCredentialsError,
-  AuthUnavailableError,
-} from '#modules/auth/service/auth.service.errors.js';
+import { AuthInvalidCredentialsError } from '#modules/auth/service/auth.service.errors.js';
 import {
   AuthService,
   AuthServiceLive,
 } from '#modules/auth/service/auth.service.js';
-import {
-  PasswordHashIntegrityError,
-  PasswordHashOverloadedError,
-} from '#modules/auth/service/password/password-hasher.service.errors.js';
+import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
@@ -88,15 +77,18 @@ const makeAuthLayerWithHasher = (hasherLive: Layer.Layer<PasswordHasher>) =>
     ),
   );
 
+const overloadedVerify = new OperationFailed({
+  reason: 'unavailable',
+  source: 'passwordHasher',
+  operation: 'verify',
+  cause: 'too many requests',
+});
+
 const overloadedVerifyHasherLive = Layer.effect(
   PasswordHasher,
   Effect.gen(function* () {
     const hasher = yield* PasswordHasher;
-    return {
-      ...hasher,
-      verify: () =>
-        new PasswordHashOverloadedError({ cause: 'too many requests' }),
-    };
+    return { ...hasher, verify: () => Effect.fail(overloadedVerify) };
   }),
 ).pipe(Layer.provide(PasswordHasherLive));
 
@@ -236,12 +228,13 @@ describe('AuthService', () => {
           email: email2,
         }),
       );
-      expect(signupError).toBeInstanceOf(AuthInternalError);
-      if (signupError._tag === 'AuthInternalError') {
-        expect(signupError.cause).toBeInstanceOf(
-          SessionTokenDigestAlreadyExistsError,
-        );
-      }
+      expect(signupError).toBeInstanceOf(OperationFailed);
+      expect(signupError).toMatchObject({
+        reason: 'internal',
+        source: 'authService',
+        operation: 'signup',
+        cause: expect.any(SessionTokenDigestAlreadyExistsError),
+      });
 
       const usersAfter = yield* usersReq;
       const sessionsAfter = yield* sessionsReq;
@@ -259,12 +252,14 @@ describe('AuthService', () => {
   );
   it.effect('rolls back the user when password credential creation fails', () =>
     Effect.gen(function* () {
+      const createFailure = new OperationFailed({
+        reason: 'internal',
+        source: 'passwordCredentialsRepository',
+        operation: PasswordCredentialsOperations.create,
+        cause: 'error',
+      });
       const passwordRepo = Layer.succeed(PasswordCredentialsRepository, {
-        create: () =>
-          new PasswordCredentialsRepositoryError({
-            cause: 'error',
-            operation: PasswordCredentialsOperations.create,
-          }),
+        create: () => Effect.fail(createFailure),
         getByUserId: () => Effect.die('Should not be used'),
       });
 
@@ -297,12 +292,8 @@ describe('AuthService', () => {
             email: email2,
           }),
         );
-        expect(signupError).toBeInstanceOf(AuthInternalError);
-        if (signupError._tag === 'AuthInternalError') {
-          expect(signupError.cause).toBeInstanceOf(
-            PasswordCredentialsRepositoryError,
-          );
-        }
+        // Отказ репозитория уже классифицирован: сервис его не переупаковывает.
+        expect(signupError).toBe(createFailure);
 
         const usersAfter = yield* usersReq;
         const sessionsAfter = yield* sessionsReq;
@@ -346,10 +337,12 @@ describe('AuthService', () => {
         const loginResult = yield* Effect.flip(auth.login({ email, password }));
         const sessionsAfter = yield* sessionsReq;
         expect(sessionsAfter).toEqual(sessionsBefore);
-        expect(loginResult).toBeInstanceOf(AuthDataIntegrityError);
-        expect(loginResult.cause).toBeInstanceOf(
-          PasswordCredentialsInvalidRecord,
-        );
+        expect(loginResult).toBeInstanceOf(OperationFailed);
+        expect(loginResult).toMatchObject({
+          reason: 'dataIntegrity',
+          source: 'passwordCredentialsRepository',
+          operation: PasswordCredentialsOperations.getByIdUserId,
+        });
       }).pipe(Effect.provide(authLayer)),
   );
 
@@ -372,8 +365,7 @@ describe('AuthService', () => {
         const sessionsAfter = yield* sessions;
 
         expect(sessionsAfter).toEqual(sessionsBefore);
-        expect(loginResult).toBeInstanceOf(AuthUnavailableError);
-        expect(loginResult.cause).toBeInstanceOf(PasswordHashOverloadedError);
+        expect(loginResult).toBe(overloadedVerify);
       }).pipe(Effect.provide(overloadedAuthLayer)),
   );
   it.effect(
@@ -392,8 +384,13 @@ describe('AuthService', () => {
         const sessionsAfter = yield* sessions;
 
         expect(sessionsAfter).toEqual(sessionsBefore);
-        expect(loginResult).toBeInstanceOf(AuthDataIntegrityError);
-        expect(loginResult.cause).toBeInstanceOf(PasswordHashIntegrityError);
+        expect(loginResult).toBeInstanceOf(OperationFailed);
+        expect(loginResult).toMatchObject({
+          reason: 'dataIntegrity',
+          source: 'authService',
+          operation: 'login',
+          cause: expect.any(PasswordHashIntegrityError),
+        });
       }).pipe(Effect.provide(brokenStoredHashAuthLayer)),
   );
 
@@ -408,8 +405,13 @@ describe('AuthService', () => {
         const users = yield* db.selectFrom('users').select('id');
 
         expect(users).toEqual([]);
-        expect(signupError).toBeInstanceOf(AuthInternalError);
-        expect(signupError.cause).toBeInstanceOf(PasswordHashIntegrityError);
+        expect(signupError).toBeInstanceOf(OperationFailed);
+        expect(signupError).toMatchObject({
+          reason: 'internal',
+          source: 'authService',
+          operation: 'signup',
+          cause: expect.any(PasswordHashIntegrityError),
+        });
       }).pipe(Effect.provide(brokenNewHashAuthLayer)),
   );
   it.effect('runs one password check for an unknown email', () =>
