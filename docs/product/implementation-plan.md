@@ -177,14 +177,15 @@ Work:
 - return typed not-found, conflict, validation, and persistence failures through the existing Problem Details convention.
 
 Поля входного контракта (шаг 3.1, решения владельца 2026-10-12). `id`, `ownerId` и timestamps клиент не присылает:
-`ownerId` берётся из `CurrentSession`.
+`ownerId` берётся из `CurrentSession`. Каждый ключ ниже обязателен в теле запроса, необязательное значение — `null`
+([ADR-0007](../adr/0007-request-body-contains-every-field.md)).
 
-| Поле           | PostgreSQL                                                                      | Обязательно                 | Schema                                          |
-| -------------- | ------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------- |
-| `title`        | `varchar(255) NOT NULL`, `CHECK (btrim(title) <> '')`                           | да                          | trim, 1–255 символов                            |
-| `description`  | `varchar(1000) NULL`, `CHECK (description IS NULL OR btrim(description) <> '')` | нет                         | trim; `""` и пробелы → `null`; до 1000 символов |
-| `occasionDate` | `date NULL`                                                                     | нет                         | строка `YYYY-MM-DD`, существующая дата          |
-| `visibility`   | ENUM `private \| public`, `NOT NULL DEFAULT 'private'`                          | нет, по умолчанию `private` | `Schema.Literals`; `unlisted` — Milestone 3     |
+| Поле           | PostgreSQL                                                                      | Обязательно                  | Schema                                          |
+| -------------- | ------------------------------------------------------------------------------- | ---------------------------- | ----------------------------------------------- |
+| `title`        | `varchar(255) NOT NULL`, `CHECK (btrim(title) <> '')`                           | да                           | trim, 1–255 символов                            |
+| `description`  | `varchar(1000) NULL`, `CHECK (description IS NULL OR btrim(description) <> '')` | нет, `null`                  | trim; `""` и пробелы → `null`; до 1000 символов |
+| `occasionDate` | `date NULL`                                                                     | нет, `null`                  | строка `YYYY-MM-DD`, существующая дата          |
+| `visibility`   | ENUM `private \| public`, `NOT NULL DEFAULT 'private'`                          | да; `DEFAULT` только для SQL | `Schema.Literals`; `unlisted` — Milestone 3     |
 
 Валюты у Wishlist нет: она входит в Item Price (Milestone 4, решение владельца 2026-10-12).
 
