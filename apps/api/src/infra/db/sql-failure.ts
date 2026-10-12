@@ -12,8 +12,8 @@ const isRetryableSqlError = (error: SqlError) => {
 };
 
 // Повтор может помочь, если SQL-отказ временный (обрыв соединения, deadlock, таймаут).
-// Принимает сам SqlError (например, begin/commit транзакции) или ошибку
-// репозитория, которая держит SqlError в cause. У SqlError тоже есть cause —
+// Принимает сам SqlError (например, BEGIN транзакции; ошибки COMMIT/ROLLBACK
+// Effect делает дефектами) или ошибку, которая держит SqlError в cause. У SqlError тоже есть cause —
 // это его reason, поэтому сначала проверяем сам SqlError.
 
 export const isRetryableSqlFailure = (error: unknown): boolean => {

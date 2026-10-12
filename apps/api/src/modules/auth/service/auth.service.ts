@@ -3,13 +3,13 @@ import {
   Context,
   Effect,
   Layer,
-  Match,
   Option,
   Redacted,
   Result,
   Schema,
 } from 'effect';
 
+import type { FailureReason } from '#infra/errors/operation-failed.js';
 import type {
   LoginRequestBody,
   LoginResult,
@@ -20,29 +20,18 @@ import type {
   SignupInput,
   SignupResult,
 } from '#modules/auth/schemas/signup/signup.schema.js';
-import type {
-  AuthAuthenticateError,
-  AuthenticateOperationError,
-  AuthLoginError,
-  AuthSignupError,
-  AuthTechnicalError,
-  LoginOperationError,
-  LogoutOperationError,
-  SignupOperationError,
-} from '#modules/auth/service/auth.service.errors.js';
+import type { UserEmailAlreadyExistsError } from '#modules/users/users.errors.js';
 
 import { DB } from '#infra/db/db.service.js';
-import { isRetryableSqlFailure } from '#infra/db/sql-failure.js';
+import { sqlOperationFailed } from '#infra/db/repository-failure.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { PasswordCredentialsRepository } from '#modules/auth/repository/password/password-credentials.repository.js';
 import { SessionRepository } from '#modules/auth/repository/session/sesion.repository.js';
+import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
 import { AuthTokenSchema } from '#modules/auth/schemas/auth.schema.js';
 import {
-  AuthDataIntegrityError,
-  AuthEmailAlreadyExistsError,
-  AuthInternalError,
   AuthInvalidCredentialsError,
   AuthUnauthenticatedError,
-  AuthUnavailableError,
 } from '#modules/auth/service/auth.service.errors.js';
 import { sessionLifetimeMs } from '#modules/auth/service/constants.js';
 import { PasswordHasher } from '#modules/auth/service/password/password-hasher.service.js';
@@ -52,118 +41,42 @@ import {
 } from '#modules/auth/service/session/session-token-generator.js';
 import { UsersRepository } from '#modules/users/repository/users.repository.js';
 
-const invalidCredentialsError = new AuthInvalidCredentialsError({
-  cause: 'Invalid credentials',
-});
+const invalidCredentialsError = new AuthInvalidCredentialsError();
 // Строка для фиктивного хэша. Совпадение с ней ничего не даёт
 const dummyHashInput = 'wishlist-dummy-password';
 
-const unAuthenticatedError = new AuthUnauthenticatedError({
-  cause: `Can't authenticate`,
-});
+const unAuthenticatedError = new AuthUnauthenticatedError();
 
-// PasswordHashIntegrityError означает разное в разных операциях, поэтому его
-// сопоставляют mapSignupError и mapLoginError
-type TechnicalOperationError = Exclude<
-  | AuthenticateOperationError
-  | LoginOperationError
-  | LogoutOperationError
-  | SignupOperationError,
-  {
-    readonly _tag:
-      | 'AuthInvalidCredentialsError'
-      | 'AuthUnauthenticatedError'
-      | 'PasswordHashIntegrityError'
-      | 'SchemaError'
-      | 'UserEmailAlreadyExists';
-  }
->;
+const source = 'authService';
 
-const mapTechnicalError = (
-  error: TechnicalOperationError,
-): AuthTechnicalError =>
-  Match.value(error).pipe(
-    Match.tag(
-      'PasswordHashOverloadedError',
-      'SecurePrimitiveUnavailableError',
-      (cause) => new AuthUnavailableError({ cause }),
-    ),
-
-    Match.tag(
-      'InvalidUserRecord',
-      'PasswordCredentialsInvalidRecord',
-      'SessionInvalidRecordError',
-      (cause) => new AuthDataIntegrityError({ cause }),
-    ),
-
-    Match.tag(
-      'PasswordCredentialsAlreadyExists',
-      'SessionTokenDigestAlreadyExistsError',
-      (cause) => new AuthInternalError({ cause }),
-    ),
-
-    Match.tag(
-      'SqlError',
-      'UsersRepositoryError',
-      'PasswordCredentialsRepositoryError',
-      'SessionRepositoryError',
-      (cause) =>
-        isRetryableSqlFailure(cause)
-          ? new AuthUnavailableError({ cause })
-          : new AuthInternalError({ cause }),
-    ),
-
-    Match.exhaustive,
-  );
-
-const mapSignupError = (error: SignupOperationError): AuthSignupError =>
-  Match.value(error).pipe(
-    Match.tag(
-      'UserEmailAlreadyExists',
-      (cause) => new AuthEmailAlreadyExistsError({ cause }),
-    ),
-    // При signup хэш только что посчитан: неверная длина его частей — ошибка кода.
-    Match.tag(
-      'PasswordHashIntegrityError',
-      (cause) => new AuthInternalError({ cause }),
-    ),
-    Match.orElse(mapTechnicalError),
-  );
-
-const mapLoginError = (error: LoginOperationError): AuthLoginError =>
-  Match.value(error).pipe(
-    Match.tag('AuthInvalidCredentialsError', (cause) => cause),
-    // При login хэш прочитан из базы: не разбирается — значит, запись повреждена.
-    Match.tag(
-      'PasswordHashIntegrityError',
-      (cause) => new AuthDataIntegrityError({ cause }),
-    ),
-    Match.orElse(mapTechnicalError),
-  );
-
-const mapAuthenticateError = (
-  error: AuthenticateOperationError,
-): AuthAuthenticateError =>
-  Match.value(error).pipe(
-    Match.tag(
-      'SchemaError',
-      (cause) => new AuthUnauthenticatedError({ cause }),
-    ),
-    Match.tag('AuthUnauthenticatedError', (cause) => cause),
-    Match.orElse(mapTechnicalError),
-  );
+// Отказы, смысл которых известен только сценарию: источник их не
+// классифицирует, это делает AuthService.
+const failedIn =
+  (operation: AuthOperation, reason: FailureReason) => (cause: unknown) =>
+    new OperationFailed({ reason, source, operation, cause });
 
 interface AuthServiceShape {
   authenticate: (
     credential: Redacted.Redacted,
-  ) => Effect.Effect<AuthenticatedSession, AuthAuthenticateError>;
+  ) => Effect.Effect<
+    AuthenticatedSession,
+    AuthUnauthenticatedError | OperationFailed
+  >;
   login: (
     input: LoginRequestBody,
-  ) => Effect.Effect<LoginResult, AuthLoginError>;
+  ) => Effect.Effect<
+    LoginResult,
+    AuthInvalidCredentialsError | OperationFailed
+  >;
   logout: (
     credential: Redacted.Redacted,
-  ) => Effect.Effect<void, AuthTechnicalError>;
-  signup: (input: SignupInput) => Effect.Effect<SignupResult, AuthSignupError>;
+  ) => Effect.Effect<void, OperationFailed>;
+  signup: (
+    input: SignupInput,
+  ) => Effect.Effect<
+    SignupResult,
+    OperationFailed | UserEmailAlreadyExistsError
+  >;
 }
 
 export class AuthService extends Context.Service<
@@ -214,7 +127,26 @@ export const AuthServiceLive = Layer.effect(
         );
 
         return { user, credential, expiresAt };
-      }).pipe(Effect.mapError(mapSignupError));
+      }).pipe(
+        Effect.catchTags({
+          // Хэш только что посчитан: неверная длина его частей — ошибка кода.
+          PasswordHashIntegrityError: failedIn(
+            AuthOperation.signup,
+            'internal',
+          ),
+          // User создан в этой же транзакции: пароль или digest уже есть — ошибка кода.
+          PasswordCredentialsAlreadyExists: failedIn(
+            AuthOperation.signup,
+            'internal',
+          ),
+          SessionTokenDigestAlreadyExistsError: failedIn(
+            AuthOperation.signup,
+            'internal',
+          ),
+          // BEGIN транзакции; ошибки COMMIT/ROLLBACK Effect делает дефектами.
+          SqlError: sqlOperationFailed(source, AuthOperation.signup),
+        }),
+      );
 
     const login: AuthServiceShape['login'] = (input) =>
       Effect.gen(function* () {
@@ -248,7 +180,19 @@ export const AuthServiceLive = Layer.effect(
         );
 
         return { user: user.value, expiresAt: session.expiresAt, credential };
-      }).pipe(Effect.mapError(mapLoginError));
+      }).pipe(
+        Effect.catchTags({
+          // Хэш прочитан из базы: не разбирается — значит, запись повреждена.
+          PasswordHashIntegrityError: failedIn(
+            AuthOperation.login,
+            'dataIntegrity',
+          ),
+          SessionTokenDigestAlreadyExistsError: failedIn(
+            AuthOperation.login,
+            'internal',
+          ),
+        }),
+      );
 
     const authenticate: AuthServiceShape['authenticate'] = (credential) =>
       Effect.gen(function* () {
@@ -273,7 +217,10 @@ export const AuthServiceLive = Layer.effect(
           expiresAt: session.value.expiresAt,
           sessionId: session.value.id,
         };
-      }).pipe(Effect.mapError(mapAuthenticateError));
+      }).pipe(
+        // Cookie не разбирается как токен — это не отказ сервера, а нет Session.
+        Effect.catchTag('SchemaError', () => unAuthenticatedError),
+      );
 
     const logout: AuthServiceShape['logout'] = (credential) =>
       Effect.gen(function* () {
@@ -288,7 +235,7 @@ export const AuthServiceLive = Layer.effect(
         return yield* sessionRepo.deleteByTokenDigest(
           digestSessionToken(decodedCred.success),
         );
-      }).pipe(Effect.mapError(mapTechnicalError));
+      });
 
     return { signup, login, authenticate, logout };
   }),

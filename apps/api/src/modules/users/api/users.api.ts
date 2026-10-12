@@ -5,7 +5,6 @@ import {
   HttpApiSchema,
 } from 'effect/unstable/httpapi';
 
-import { asProblemJson } from '#infra/errors/http-problem.js';
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   userByIdPath,
@@ -13,8 +12,8 @@ import {
   usersGroupIdentifier,
 } from '#modules/users/api/users.api.constants.js';
 import {
-  UserEmailAlreadyExistsHttpError,
-  UserNotFoundHttpError,
+  UserEmailAlreadyExistsProblem,
+  UserNotFoundProblem,
 } from '#modules/users/api/users.api.errors.js';
 import {
   CreateUserBodySchema,
@@ -30,10 +29,7 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
   HttpApiEndpoint.post(UserOperation.create, usersCollectionPath, {
     payload: CreateUserBodySchema,
     success: CreateUserResponseSchema,
-    error: [
-      UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      ...technicalHttpErrors,
-    ],
+    error: [UserEmailAlreadyExistsProblem, ...technicalHttpErrors],
   }),
   HttpApiEndpoint.get(UserOperation.getAll, usersCollectionPath, {
     success: Schema.Array(UserResponseSchema),
@@ -42,7 +38,7 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
   HttpApiEndpoint.get(UserOperation.getById, userByIdPath, {
     params: { id: UserIdSchema },
     success: UserResponseSchema,
-    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
+    error: [...technicalHttpErrors, UserNotFoundProblem],
   }),
   HttpApiEndpoint.put(UserOperation.update, userByIdPath, {
     params: { id: UserIdSchema },
@@ -50,13 +46,13 @@ export const usersGroup = HttpApiGroup.make(usersGroupIdentifier).add(
     success: UserResponseSchema,
     error: [
       ...technicalHttpErrors,
-      UserEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      UserNotFoundHttpError.pipe(asProblemJson),
+      UserEmailAlreadyExistsProblem,
+      UserNotFoundProblem,
     ],
   }),
   HttpApiEndpoint.delete(UserOperation.delete, userByIdPath, {
     params: { id: UserIdSchema },
     success: HttpApiSchema.NoContent,
-    error: [...technicalHttpErrors, UserNotFoundHttpError.pipe(asProblemJson)],
+    error: [...technicalHttpErrors, UserNotFoundProblem],
   }),
 );

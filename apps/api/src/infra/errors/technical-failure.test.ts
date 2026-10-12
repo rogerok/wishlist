@@ -19,11 +19,14 @@ import {
 import { ConnectionError, SqlError } from 'effect/unstable/sql/SqlError';
 import { createServer, request as httpRequest } from 'node:http';
 
+import type { FailureReason } from '#infra/errors/operation-failed.js';
+
 import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
   defectDetailsEvent,
 } from '#infra/errors/defect-boundary.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import {
   makeTechnicalFailureHandler,
   operationFailedEvent,
@@ -41,29 +44,18 @@ const probePath = `/probe/${probeId}`;
 const clientTraceId = '0af7651916cd43dd8448eb211c80319c';
 const forgedTraceId = 'forged-by-client';
 
-class ProbeInternalError extends Data.TaggedError('ProbeInternalError')<{
-  readonly cause: unknown;
-}> {}
-
-class ProbeUnavailableError extends Data.TaggedError('ProbeUnavailableError')<{
-  readonly cause: unknown;
-}> {}
-
-class ProbeDataIntegrityError extends Data.TaggedError(
-  'ProbeDataIntegrityError',
-)<{
-  readonly cause: unknown;
-}> {}
-
 class ProbeRepositoryError extends Data.TaggedError('ProbeRepositoryError')<{
   readonly cause: unknown;
   readonly operation: string;
 }> {}
 
-type ProbeError =
-  | ProbeDataIntegrityError
-  | ProbeInternalError
-  | ProbeUnavailableError;
+const probeFailure = (reason: FailureReason, cause: unknown) =>
+  new OperationFailed({
+    reason,
+    source: 'probeRepository',
+    operation: 'getById',
+    cause,
+  });
 
 const ProbeOperation = { read: 'read' } as const;
 
@@ -79,14 +71,9 @@ const probeApi = HttpApi.make('probe')
   )
   .middleware(DefectBoundaryMiddleware);
 
-const handleTechnicalFailure = makeTechnicalFailureHandler<ProbeError>()({
+const handleTechnicalFailure = makeTechnicalFailureHandler({
   module: 'probe',
   operations: ProbeOperation,
-  reasons: {
-    ProbeDataIntegrityError: 'dataIntegrity',
-    ProbeInternalError: 'internal',
-    ProbeUnavailableError: 'unavailable',
-  },
 });
 
 const logs: Array<ReturnType<typeof Logger.formatStructured.log>> = [];
@@ -96,7 +83,7 @@ const logger = Logger.make(
 
 // Явный ConfigProvider: переменные окружения разработчика не влияют на тесты.
 const makeProbeLive = (
-  outcome: Effect.Effect<string, ProbeError>,
+  outcome: Effect.Effect<string, OperationFailed>,
   env: Readonly<Record<string, string>> = {},
 ) => {
   const probeHandlersLive = HttpApiBuilder.group(
@@ -106,15 +93,11 @@ const makeProbeLive = (
       handlers.handle(ProbeOperation.read, ({ params: { id } }) => {
         const handleTechnicalError = handleTechnicalFailure({
           operation: ProbeOperation.read,
-          userId: id,
+          meta: { probeId: id },
         });
 
         return outcome.pipe(
-          Effect.catchTags({
-            ProbeDataIntegrityError: handleTechnicalError,
-            ProbeInternalError: handleTechnicalError,
-            ProbeUnavailableError: handleTechnicalError,
-          }),
+          Effect.catchTag('OperationFailed', handleTechnicalError),
         );
       }),
   );
@@ -137,7 +120,7 @@ const makeProbeLive = (
 };
 
 const makeApp = (
-  outcome: Effect.Effect<string, ProbeError>,
+  outcome: Effect.Effect<string, OperationFailed>,
   env: Readonly<Record<string, string>> = {},
 ) => HttpRouter.toWebHandler(makeProbeLive(outcome, env));
 
@@ -147,13 +130,15 @@ const request = (headers: Record<string, string> = {}) =>
 const failedLogs = () =>
   logs.filter((log) => log.annotations.event === operationFailedEvent);
 
+const sqlCause = new SqlError({
+  reason: new ConnectionError({
+    cause: new Error(`connect failed for ${sensitiveMarker}`),
+  }),
+});
+
 const repositoryCause = new ProbeRepositoryError({
   operation: 'getById',
-  cause: new SqlError({
-    reason: new ConnectionError({
-      cause: new Error(`connect failed for ${sensitiveMarker}`),
-    }),
-  }),
+  cause: sqlCause,
 });
 
 beforeEach(() => {
@@ -163,52 +148,39 @@ beforeEach(() => {
 describe('makeTechnicalFailureHandler', () => {
   // Проверка выполняется в check-types: если ошибка типа исчезнет,
   // директива ts-expect-error ниже сама станет ошибкой.
-  it('accepts reasons only for exactly the technical error tags', () => {
-    const makeProbeHandler = makeTechnicalFailureHandler<ProbeError>();
-
-    const withUnknownTag = makeProbeHandler({
-      module: 'probe',
-      operations: ProbeOperation,
-      reasons: {
-        ProbeDataIntegrityError: 'dataIntegrity',
-        ProbeInternalError: 'internal',
-        ProbeUnavailableError: 'unavailable',
-        // @ts-expect-error тег, которого нет среди ошибок модуля
-        ProbeUnavailableEror: 'unavailable',
-      },
+  it('accepts only primitive meta values', () => {
+    const handle = handleTechnicalFailure({
+      operation: ProbeOperation.read,
+      meta: { probeId, attempt: 1, retried: false, parentId: null },
     });
-    const withMissingTag = makeProbeHandler({
-      module: 'probe',
-      operations: ProbeOperation,
-      // @ts-expect-error нет причины для ProbeUnavailableError
-      reasons: {
-        ProbeDataIntegrityError: 'dataIntegrity',
-        ProbeInternalError: 'internal',
-      },
+    const withObject = handleTechnicalFailure({
+      operation: ProbeOperation.read,
+      // @ts-expect-error объект целиком (строку БД, тело запроса) передать нельзя
+      meta: { record: { email: sensitiveMarker } },
     });
 
-    expect(withUnknownTag).toBeTypeOf('function');
-    expect(withMissingTag).toBeTypeOf('function');
+    expect(handle).toBeTypeOf('function');
+    expect(withObject).toBeTypeOf('function');
   });
 
   it.effect.each([
     {
       reason: 'internal',
-      failure: new ProbeInternalError({ cause: repositoryCause }),
+      failure: probeFailure('internal', sqlCause),
       status: 500,
       schema: InternalHttpError,
       code: 'INTERNAL_ERROR',
     },
     {
       reason: 'dataIntegrity',
-      failure: new ProbeDataIntegrityError({ cause: repositoryCause }),
+      failure: probeFailure('dataIntegrity', sqlCause),
       status: 500,
       schema: InternalHttpError,
       code: 'INTERNAL_ERROR',
     },
     {
       reason: 'unavailable',
-      failure: new ProbeUnavailableError({ cause: repositoryCause }),
+      failure: probeFailure('unavailable', sqlCause),
       status: 503,
       schema: ServiceUnavailableHttpError,
       code: 'SERVICE_UNAVAILABLE',
@@ -243,12 +215,15 @@ describe('makeTechnicalFailureHandler', () => {
             kind: 'failure',
             module: 'probe',
             operation: ProbeOperation.read,
-            userId: probeId,
+            meta: { probeId },
             reason,
             errorId: body.errorId,
             errorChain: [
-              { tag: failure._tag },
-              { tag: 'ProbeRepositoryError', operation: 'getById' },
+              {
+                tag: 'OperationFailed',
+                source: 'probeRepository',
+                operation: 'getById',
+              },
               { tag: 'SqlError' },
               { tag: 'ConnectionError' },
             ],
@@ -279,9 +254,7 @@ describe('makeTechnicalFailureHandler', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          makeApp(
-            Effect.fail(new ProbeInternalError({ cause: sensitiveMarker })),
-          ),
+          makeApp(Effect.fail(probeFailure('internal', sensitiveMarker))),
         ),
         (started) => Effect.promise(() => started.dispose()),
       );
@@ -303,9 +276,7 @@ describe('makeTechnicalFailureHandler', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          makeApp(
-            Effect.fail(new ProbeInternalError({ cause: sensitiveMarker })),
-          ),
+          makeApp(Effect.fail(probeFailure('internal', sensitiveMarker))),
         ),
         (started) => Effect.promise(() => started.dispose()),
       );
@@ -353,7 +324,7 @@ describe('DefectBoundaryMiddleware', () => {
           kind: 'defect',
           module: 'probe',
           operation: ProbeOperation.read,
-          userId: null,
+          meta: {},
           reason: 'internal',
           errorChain: [],
           errorId: body.errorId,
@@ -386,7 +357,7 @@ describe('DefectBoundaryMiddleware', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          makeApp(Effect.fail(new ProbeUnavailableError({ cause: null }))),
+          makeApp(Effect.fail(probeFailure('unavailable', null))),
         ),
         (started) => Effect.promise(() => started.dispose()),
       );
@@ -506,9 +477,7 @@ describe('instance on a Node HTTP server', () => {
     Effect.gen(function* () {
       const context = yield* Layer.build(
         HttpRouter.serve(
-          makeProbeLive(
-            Effect.fail(new ProbeInternalError({ cause: sensitiveMarker })),
-          ),
+          makeProbeLive(Effect.fail(probeFailure('internal', sensitiveMarker))),
         ).pipe(
           Layer.provideMerge(NodeHttpServer.layer(createServer, { port: 0 })),
         ),

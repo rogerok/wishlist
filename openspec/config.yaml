@@ -8,12 +8,12 @@ context: |
 
 rules:
   specs:
+    - Make GIVEN fix every piece of state that THEN depends on, including exact counts; fix nothing else, because an extra precondition makes the requirement look narrower than its text.
     - State exactly one behavior per requirement, with exactly one SHALL or MUST.
     - Do not reference scenarios from requirement text; a requirement must be understandable on its own.
     - Use SHALL/MUST only in requirement text, between `### Requirement:` and the first `#### Scenario:`; write scenario steps as observed facts in the present indicative.
     - Do not assert anything in a scenario that its requirement text does not state.
     - Describe exactly one event in WHEN; put prior events and preconditions in GIVEN.
-    - Make GIVEN fix every piece of state that THEN depends on, including exact counts.
     - Copy identifiers (cookie names, error codes, response fields, paths) from the code or tests; never retype them.
     - When a change documents existing behavior, include only behavior confirmed by a passing test; list anything else as unverified in the proposal.
   tasks:

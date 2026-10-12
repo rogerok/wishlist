@@ -24,7 +24,7 @@ Code inventory updated on 2026-10-04; verification results and limits live in [l
 - the generated database model contains only Users, Password Credentials, and Sessions;
 - Wishlists, Wishlist Items, Sharing Links, Reservations, Guest Sessions, outbox jobs, images, notifications, and URL import are absent.
 
-**Текущий шаг и результаты проверок:** [состояние обучения](../../learning/STATE.md). Порядок работ: Milestone R → оставшиеся критерии Session authentication. Существующие repositories, signup и сборку auth не реализовывать заново.
+**Текущий шаг и результаты проверок:** [состояние обучения](../../learning/STATE.md). Порядок работ: [решение 2026-10-12](#порядок-работ-решение-владельца-2026-10-12). Существующие repositories, signup и сборку auth не реализовывать заново.
 
 The old product sketch is not the technical plan. Fastify, Zod, JWT/refresh tokens, and nanoid are removed from the roadmap: the repository already chose Effect Platform/Schema, PostgreSQL-backed opaque Sessions in [ADR-0001](../adr/0001-postgresql-backed-sessions.md), and UUID internal IDs. Sharing Links receive their own cryptographically random public keys because they have a different lifecycle from internal entity IDs.
 
@@ -96,6 +96,33 @@ Required email and Import Preview work is persisted in PostgreSQL and claimed by
 
 Each milestone is a complete vertical slice. Do not start the next milestone with known failures in the current one.
 
+### Порядок работ (решение владельца 2026-10-12)
+
+Сначала основная логика продукта, затем правила доступа для других людей. Номера milestones не меняются, меняется
+только порядок:
+
+1. Milestone 2 — Owner-only Wishlists с visibility `private | public`.
+2. Milestone 4 — Wishlist Items.
+3. Milestone 5 — Reservations для User.
+4. Остаток Milestone 1 (удаление публичного CRUD Users, роли), Milestone 3 — Sharing, `unlisted` и Public
+   Profiles.
+5. Milestones 6–9 — без изменений.
+
+Не откладывается: владелец Wishlist берётся из `CurrentSession` с первого маршрута, клиент не передаёт `ownerId`.
+Каждый запрос изменения ограничен `id` и `owner_id` в одном SQL-запросе. Это окончательная форма, а не временная.
+
+Временные допущения до Milestone 3:
+
+- Visibility есть с первой миграции Wishlist (решение владельца 2026-10-12), по умолчанию `private`. Private
+  Wishlist читает только владелец; другой User получает 404, как на отсутствующий Wishlist. Public Wishlist читает
+  любой аутентифицированный User по id.
+- `unlisted` появляется в Milestone 3 вместе с Sharing Link: без ключа его нечем проверить. Аноним и Public Profile —
+  тоже Milestone 3; до этого все маршруты Wishlist требуют Session.
+- Чтение Items и Reservation проверяют ту же policy чтения Wishlist, а не свою копию: иначе Item в private Wishlist
+  можно зарезервировать по id.
+- Шаг 2.3 (Account, изменение своего Display Name) заморожен на каркасе `7861119`. Задачи из него, нужные Wishlist
+  (`instance` в ответе 401, PATCH в CORS), выполняются в Milestone 2.
+
 ### Milestone R — Ошибки и логирование
 
 Подробный порядок, границы и критерии готовности: [план рефакторинга](./error-handling-refactoring-plan.md).
@@ -141,16 +168,30 @@ Purpose: establish the aggregate and authorization boundary before sharing.
 
 Work:
 
-- add Wishlist persistence and runtime schemas for title, description, Occasion Date, visibility, and Wishlist Currency;
+- add Wishlist persistence and runtime schemas for title, description, Occasion Date, visibility `private | public`, and Wishlist Currency (`unlisted` — в Milestone 3);
+- read and write PostgreSQL `date` as a `YYYY-MM-DD` string: the pool option `types` returns OID 1082 unchanged in
+  every `PgClient.layer`, and kysely-codegen uses `"dateParser": "string"` (решение владельца 2026-10-12: правило
+  задаётся один раз; глобальный `pg.types.setTypeParser` не используется);
 - implement owner-only create, list, read, update, and delete use cases;
 - scope every repository mutation by both Wishlist ID and authenticated owner ID;
 - keep list pagination and stable ordering explicit; add only visibility filtering needed by the current screen;
 - return typed not-found, conflict, validation, and persistence failures through the existing Problem Details convention.
 
+Поля входного контракта (шаг 3.1, решения владельца 2026-10-12). `id`, `ownerId` и timestamps клиент не присылает:
+`ownerId` берётся из `CurrentSession`.
+
+| Поле           | PostgreSQL                                                                      | Обязательно                 | Schema                                          |
+| -------------- | ------------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| `title`        | `varchar(255) NOT NULL`, `CHECK (btrim(title) <> '')`                           | да                          | trim, 1–255 символов                            |
+| `description`  | `varchar(1000) NULL`, `CHECK (description IS NULL OR btrim(description) <> '')` | нет                         | trim; `""` и пробелы → `null`; до 1000 символов |
+| `occasionDate` | `date NULL`                                                                     | нет                         | строка `YYYY-MM-DD`, существующая дата          |
+| `currency`     | ENUM `RUB \| EUR \| USD`, `NOT NULL DEFAULT 'RUB'`                              | нет, по умолчанию `RUB`     | `Schema.Literals`                               |
+| `visibility`   | ENUM `private \| public`, `NOT NULL DEFAULT 'private'`                          | нет, по умолчанию `private` | `Schema.Literals`; `unlisted` — Milestone 3     |
+
 Acceptance:
 
 - a User may own multiple Wishlists;
-- another User cannot infer, read, update, or delete a Private Wishlist;
+- another User cannot infer, read, update, or delete a Private Wishlist, and cannot update or delete a Public one;
 - date-only and money invariants are validated at HTTP and persistence boundaries;
 - deletion is idempotent only if that is made explicit in the HTTP contract; do not accidentally conflate forbidden with absent.
 

@@ -9,7 +9,6 @@ export type UserId = Schema.Schema.Type<typeof UserIdSchema>;
 export const UserEmailSchema = makeEmailBrandedSchema('UserEmail');
 export type UserEmail = Schema.Schema.Type<typeof UserEmailSchema>;
 
-// Предел совпадает с колонкой display_name varchar(100).
 export const UserDisplayNameSchema = Schema.String.pipe(
   Schema.check(Schema.isMinLength(1)),
   Schema.check(Schema.isMaxLength(100)),

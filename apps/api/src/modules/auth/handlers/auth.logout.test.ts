@@ -11,8 +11,10 @@ import {
 import { createHash } from 'node:crypto';
 
 import type { DBKysely } from '#infra/db/db.service.js';
+import type { OperationFailed } from '#infra/errors/operation-failed.js';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
+import { sqlOperationFailed } from '#infra/db/repository-failure.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
   DefectBoundaryMiddleware,
@@ -34,7 +36,6 @@ import {
   SessionRepository,
   SessionRepositoryLive,
 } from '#modules/auth/repository/session/sesion.repository.js';
-import { SessionRepositoryError } from '#modules/auth/repository/session/session.repository.errors.js';
 import { SessionOperations } from '#modules/auth/schemas/session/session-operations.schema.js';
 import {
   AuthService,
@@ -107,14 +108,15 @@ const acquireApp = Effect.gen(function* () {
   return yield* acquireAppFor(yield* AuthService);
 });
 
+// Классификация та же, что у настоящего репозитория: обрыв → 503, остальное → 500.
 const deleteFailure = (reason: ConnectionError | UnknownError) =>
-  new SessionRepositoryError({
-    cause: new SqlError({ reason }),
-    operation: SessionOperations.deleteByTokenDigest,
-  });
+  sqlOperationFailed(
+    'sessionRepository',
+    SessionOperations.deleteByTokenDigest,
+  )(new SqlError({ reason }));
 
 // Настоящий SessionRepository, у которого удаление отказывает до SQL
-const failingDeleteRepo = (failure: SessionRepositoryError) =>
+const failingDeleteRepo = (failure: OperationFailed) =>
   Layer.effect(
     SessionRepository,
     Effect.gen(function* () {
@@ -125,7 +127,7 @@ const failingDeleteRepo = (failure: SessionRepositoryError) =>
 
 // Layer.fresh: без него layer() группы вернёт уже собранный AuthService
 // с настоящим репозиторием (вопрос 12 очереди повторения).
-const authWithFailingDelete = (failure: SessionRepositoryError) =>
+const authWithFailingDelete = (failure: OperationFailed) =>
   Effect.gen(function* () {
     return yield* AuthService;
   }).pipe(

@@ -76,6 +76,20 @@ Reusable rule: R проверяет компилятор, E случается �
 Mastery concept affected: Context.Service и Layer composition.
 ```
 
+### 2026-10-09 — ошибка хэша при signup принята за 503
+
+```text
+Date: 2026-10-09
+Context / task: повторение, вопрос 27 (разбор 0007, решение 1).
+My prediction: PasswordHashIntegrityError при login → 500, при signup → 503.
+Observed result: mapSignupError переводит её в AuthInternalError (auth.service.ts:124) → reason internal → 500.
+Root cause in plain language: 503 означает «временный сбой, повтор может помочь»; его даёт только AuthUnavailableError, а её создаёт только isRetryableSqlFailure для SQL-отказов. Испорченный хэш повтор не починит.
+Correction I made: —
+Verification: чтение mapSignupError и mapTechnicalError (auth.service.ts:100–126).
+Reusable rule: 503 — только то, что пройдёт само (обрыв соединения, deadlock, таймаут); ошибка кода или данных — 500, различаются полем reason в логе.
+Mastery concept affected: typed errors и их перевод в HTTP-статусы.
+```
+
 ## Potential misconception to verify
 
 ### Effect creation может быть перепутан с Effect execution

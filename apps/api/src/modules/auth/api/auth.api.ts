@@ -4,7 +4,6 @@ import {
   HttpApiSchema,
 } from 'effect/unstable/httpapi';
 
-import { asProblemJson } from '#infra/errors/http-problem.js';
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {
   authGroupIdentifier,
@@ -14,8 +13,8 @@ import {
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
 import {
-  AuthEmailAlreadyExistsHttpError,
-  AuthInvalidCredentialsHttpError,
+  AuthInvalidCredentialsProblem,
+  SignupEmailAlreadyExistsProblem,
 } from '#modules/auth/api/auth.api.errors.js';
 import { SessionAuthentication } from '#modules/auth/api/session-authentication.js';
 import { AuthOperation } from '#modules/auth/schemas/auth-operations.schema.js';
@@ -33,18 +32,12 @@ export const authGroup = HttpApiGroup.make(authGroupIdentifier).add(
   HttpApiEndpoint.post(AuthOperation.signup, authSignupPath, {
     payload: SignupRequestBodySchema,
     success: SignupResponseSuccessSchema,
-    error: [
-      AuthEmailAlreadyExistsHttpError.pipe(asProblemJson),
-      ...technicalHttpErrors,
-    ],
+    error: [SignupEmailAlreadyExistsProblem, ...technicalHttpErrors],
   }),
   HttpApiEndpoint.post(AuthOperation.login, authLoginPath, {
     payload: LoginRequestBodySchema,
     success: LoginResponseSuccessSchema,
-    error: [
-      AuthInvalidCredentialsHttpError.pipe(asProblemJson),
-      ...technicalHttpErrors,
-    ],
+    error: [AuthInvalidCredentialsProblem, ...technicalHttpErrors],
   }),
   HttpApiEndpoint.get(AuthOperation.me, authMePath, {
     success: MeResponseBodySchema,

@@ -1,37 +1,40 @@
 import { Context, Effect, Layer, Option, Schema } from 'effect';
 
-import type {
-  PasswordCredentialsCreateError,
-  PasswordCredentialsGetByIdError,
-} from '#modules/auth/repository/password/password-credential.repository.errors.js';
+import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
 import type { PasswordCredentials } from '#modules/auth/schemas/password/password.schema.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
 
 import { DB } from '#infra/db/db.service.js';
 import {
-  PasswordCredentialsAlreadyExists,
-  PasswordCredentialsInvalidRecord,
-} from '#modules/auth/repository/password/password-credential.repository.errors.js';
-import { PasswordCredentialsRepositoryError } from '#modules/auth/repository/password/password-credential.repository.errors.js';
+  invalidRecordFailed,
+  sqlOperationFailed,
+} from '#infra/db/repository-failure.js';
+import { PasswordCredentialsAlreadyExists } from '#modules/auth/repository/password/password-credential.repository.errors.js';
 import { PasswordCredentialsOperations } from '#modules/auth/schemas/password/password-credentials-operations.schema.js';
 import { PasswordCredentialsSchema } from '#modules/auth/schemas/password/password.schema.js';
 
-const decodePasswordCredentials = Schema.decodeUnknownEffect(
-  PasswordCredentialsSchema,
-);
+const source = 'passwordCredentialsRepository';
+
+const decodePasswordCredentials = (
+  row: unknown,
+  operation: PasswordCredentialsOperations,
+) =>
+  Schema.decodeUnknownEffect(PasswordCredentialsSchema)(row).pipe(
+    Effect.mapError(invalidRecordFailed(source, operation)),
+  );
 
 interface PasswordCredentialsRepositoryShape {
   create: (
     userId: UserId,
     passwordHash: StoredPasswordHash,
-  ) => Effect.Effect<PasswordCredentials, PasswordCredentialsCreateError>;
+  ) => Effect.Effect<
+    PasswordCredentials,
+    OperationFailed | PasswordCredentialsAlreadyExists
+  >;
   getByUserId: (
     userId: UserId,
-  ) => Effect.Effect<
-    Option.Option<PasswordCredentials>,
-    PasswordCredentialsGetByIdError
-  >;
+  ) => Effect.Effect<Option.Option<PasswordCredentials>, OperationFailed>;
 }
 
 export class PasswordCredentialsRepository extends Context.Service<
@@ -56,11 +59,7 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
           .returningAll()
           .pipe(
             Effect.mapError(
-              (cause) =>
-                new PasswordCredentialsRepositoryError({
-                  cause,
-                  operation: PasswordCredentialsOperations.create,
-                }),
+              sqlOperationFailed(source, PasswordCredentialsOperations.create),
             ),
           );
 
@@ -70,14 +69,9 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
           });
         }
 
-        return yield* decodePasswordCredentials(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new PasswordCredentialsInvalidRecord({
-                cause,
-                operation: PasswordCredentialsOperations.create,
-              }),
-          ),
+        return yield* decodePasswordCredentials(
+          row,
+          PasswordCredentialsOperations.create,
         );
       });
 
@@ -92,11 +86,10 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
           .limit(1)
           .pipe(
             Effect.mapError(
-              (cause) =>
-                new PasswordCredentialsRepositoryError({
-                  cause,
-                  operation: PasswordCredentialsOperations.getByIdUserId,
-                }),
+              sqlOperationFailed(
+                source,
+                PasswordCredentialsOperations.getByIdUserId,
+              ),
             ),
           );
 
@@ -104,14 +97,9 @@ export const PasswordCredentialsRepositoryLive = Layer.effect(
           return Option.none();
         }
 
-        const passwordCredentials = yield* decodePasswordCredentials(row).pipe(
-          Effect.mapError(
-            (cause) =>
-              new PasswordCredentialsInvalidRecord({
-                cause,
-                operation: PasswordCredentialsOperations.getByIdUserId,
-              }),
-          ),
+        const passwordCredentials = yield* decodePasswordCredentials(
+          row,
+          PasswordCredentialsOperations.getByIdUserId,
         );
 
         return Option.some(passwordCredentials);

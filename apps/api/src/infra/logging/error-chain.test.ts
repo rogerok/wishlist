@@ -6,6 +6,7 @@ import {
   UniqueViolation,
 } from 'effect/unstable/sql/SqlError';
 
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { describeErrorChain } from '#infra/logging/error-chain.js';
 
 const sensitiveMarker = 'sensitive@example.test';
@@ -58,6 +59,32 @@ describe('describeErrorChain', () => {
       { tag: 'SqlError' },
       { tag: 'ConnectionError' },
     ]);
+  });
+
+  it('copies source and operation of OperationFailed', () => {
+    const error = new OperationFailed({
+      reason: 'unavailable',
+      source: 'usersRepository',
+      operation: 'create',
+      cause: new SqlError({
+        reason: new ConnectionError({
+          cause: new Error(`connect failed for ${sensitiveMarker}`),
+        }),
+      }),
+    });
+
+    const chain = describeErrorChain(error);
+
+    expect(chain).toEqual([
+      {
+        tag: 'OperationFailed',
+        source: 'usersRepository',
+        operation: 'create',
+      },
+      { tag: 'SqlError' },
+      { tag: 'ConnectionError' },
+    ]);
+    expect(JSON.stringify(chain)).not.toContain(sensitiveMarker);
   });
 
   it('keeps operation of a SQL reason but drops its message and constraint', () => {
@@ -115,10 +142,11 @@ describe('describeErrorChain', () => {
     expect(describeErrorChain(value)).toEqual([]);
   });
 
-  it('ignores a non-string operation', () => {
+  it('ignores a non-string source and operation', () => {
     expect(
       describeErrorChain({
         _tag: 'LooseError',
+        source: { sensitiveMarker },
         operation: { sensitiveMarker },
       }),
     ).toEqual([{ tag: 'LooseError' }]);

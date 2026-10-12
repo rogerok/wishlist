@@ -5,16 +5,13 @@ import { randomBytes } from 'crypto';
 import { Deferred, Effect, Exit, Fiber, Redacted, Result } from 'effect';
 import { beforeEach, vi } from 'vitest';
 
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { serializePasswordHash } from '#modules/auth/service/password/password-hash-format.js';
-import {
-  PasswordHashIntegrityError,
-  PasswordHashOverloadedError,
-} from '#modules/auth/service/password/password-hasher.service.errors.js';
+import { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 import {
   PasswordHasher,
   PasswordHasherLive,
 } from '#modules/auth/service/password/password-hasher.service.js';
-import { SecurePrimitiveUnavailableError } from '#modules/auth/service/session/session-token-generator.errors.js';
 
 type Scrypt = typeof Crypto.scrypt;
 const scryptMock = vi.hoisted(() => vi.fn<Scrypt>());
@@ -220,14 +217,16 @@ describe('PasswordHasher concurrency', () => {
           );
         }
 
-        expect(excessHashExit.value).toBeResultFailure(
-          PasswordHashOverloadedError,
-          {},
-        );
-        expect(excessVerifyExit.value).toBeResultFailure(
-          PasswordHashOverloadedError,
-          {},
-        );
+        expect(excessHashExit.value).toBeResultFailure(OperationFailed, {
+          reason: 'unavailable',
+          source: 'passwordHasher',
+          operation: 'hash',
+        });
+        expect(excessVerifyExit.value).toBeResultFailure(OperationFailed, {
+          reason: 'unavailable',
+          source: 'passwordHasher',
+          operation: 'verify',
+        });
       }).pipe(Effect.provide(PasswordHasherLive)),
   );
 
@@ -272,7 +271,10 @@ describe('PasswordHasher concurrency', () => {
         yield* Fiber.joinAll([active, waiting, otherWaiting]);
         const replacementResult = yield* Fiber.join(replacement);
 
-        expect(result).toBeResultFailure(SecurePrimitiveUnavailableError, {
+        expect(result).toBeResultFailure(OperationFailed, {
+          reason: 'unavailable',
+          source: 'passwordHasher',
+          operation,
           cause: failure,
         });
         expect(callsAfterFailure).toBe(3);
@@ -426,10 +428,11 @@ describe('PasswordHasher concurrency', () => {
             new Error('Expected immediate typed overload'),
           );
         }
-        expect(excessBeforeCallback.value).toBeResultFailure(
-          PasswordHashOverloadedError,
-          {},
-        );
+        expect(excessBeforeCallback.value).toBeResultFailure(OperationFailed, {
+          reason: 'unavailable',
+          source: 'passwordHasher',
+          operation: 'hash',
+        });
         expect(scryptMock).toHaveBeenCalledTimes(5);
       }).pipe(Effect.scoped, Effect.provide(PasswordHasherLive)),
   );
@@ -496,7 +499,10 @@ describe('PasswordHasher concurrency', () => {
       const recoveredHash = yield* Fiber.join(recovery);
       const verified = yield* hasher.verify(password, recoveredHash);
 
-      expect(result).toBeResultFailure(SecurePrimitiveUnavailableError, {
+      expect(result).toBeResultFailure(OperationFailed, {
+        reason: 'unavailable',
+        source: 'secureRandomBytes',
+        operation: 'get',
         cause: failure,
       });
       expect(callsAfterFailure).toBe(0);

@@ -164,10 +164,14 @@ const readInvalidCredentials = (response: Response) =>
       'application/problem+json',
     );
     expect(response.headers.get('set-cookie')).toBeNull();
+    // Тело совпадает с контрактом до перехода на доменные ошибки (7861119).
     const body: unknown = yield* Effect.promise(() => response.json());
-    expect(body).toMatchObject({
+    expect(body).toEqual({
       code: 'AUTH_INVALID_CREDENTIALS',
+      detail: 'Invalid email or password',
       status: 401,
+      title: 'Invalid credentials',
+      type: '/errors/auth-invalid-credentials',
       instance: '/api/auth/login',
     });
     return body;
@@ -351,9 +355,9 @@ describe('login with PostgreSQL', () => {
             reason: 'dataIntegrity',
             errorId: body.errorId,
             errorChain: [
-              { tag: 'AuthDataIntegrityError' },
               {
-                tag: 'PasswordCredentialsInvalidRecord',
+                tag: 'OperationFailed',
+                source: 'passwordCredentialsRepository',
                 operation: 'getByIdUserId',
               },
               { tag: 'SchemaError' },

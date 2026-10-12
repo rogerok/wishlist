@@ -43,7 +43,6 @@ export const DefectBoundaryMiddlewareLive = Layer.effect(
               module: group.identifier,
               operation: endpoint.identifier,
               reason: 'internal',
-              userId: null,
             });
 
             if (logDefectDetails) {

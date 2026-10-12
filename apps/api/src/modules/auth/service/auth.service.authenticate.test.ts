@@ -8,20 +8,17 @@ import type { DB } from '#infra/db/db.service.js';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
+import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { PasswordCredentialsRepositoryLive } from '#modules/auth/repository/password/password-credentials.repository.js';
 import {
   SessionRepository,
   SessionRepositoryLive,
 } from '#modules/auth/repository/session/sesion.repository.js';
-import { SessionRepositoryError } from '#modules/auth/repository/session/session.repository.errors.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { SessionOperations } from '#modules/auth/schemas/session/session-operations.schema.js';
 import { SessionIdSchema } from '#modules/auth/schemas/session/session.schema.js';
 import { SignupInputSchema } from '#modules/auth/schemas/signup/signup.schema.js';
-import {
-  AuthInternalError,
-  AuthUnauthenticatedError,
-} from '#modules/auth/service/auth.service.errors.js';
+import { AuthUnauthenticatedError } from '#modules/auth/service/auth.service.errors.js';
 import {
   AuthService,
   AuthServiceLive,
@@ -195,7 +192,14 @@ describe('AuthService.authenticate', () => {
       ),
   );
 
-  it.effect('returns an internal error when the session lookup fails', () =>
+  const lookupFailure = new OperationFailed({
+    reason: 'unavailable',
+    source: 'sessionRepository',
+    operation: SessionOperations.getByTokenDigest,
+    cause: 'connection reset',
+  });
+
+  it.effect('passes a session lookup failure through unchanged', () =>
     Effect.gen(function* () {
       const auth = yield* AuthService;
 
@@ -203,18 +207,13 @@ describe('AuthService.authenticate', () => {
         auth.authenticate(credentialOf(Buffer.alloc(32, 0x55))),
       );
 
-      expect(error).toBeInstanceOf(AuthInternalError);
-      expect(error.cause).toBeInstanceOf(SessionRepositoryError);
+      expect(error).toBe(lookupFailure);
     }).pipe(
       Effect.provide(
         makeAuthLayer(
           Layer.succeed(SessionRepository, {
             create: () => Effect.die('Should not be used'),
-            getByTokenDigest: () =>
-              new SessionRepositoryError({
-                cause: 'connection reset',
-                operation: SessionOperations.getByTokenDigest,
-              }),
+            getByTokenDigest: () => Effect.fail(lookupFailure),
             deleteByTokenDigest: () => Effect.die('Should not be used'),
           }),
         ),
