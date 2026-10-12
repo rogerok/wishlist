@@ -6,6 +6,7 @@ import type { StoredPasswordHash } from '#modules/auth/schemas/password/password
 import type { PasswordHashIntegrityError } from '#modules/auth/service/password/password-hasher.service.errors.js';
 
 import { OperationFailed } from '#infra/errors/operation-failed.js';
+import { PasswordHasherOperation } from '#modules/auth/schemas/password/password-hasher-operations.schema.js';
 import {
   cryptOptions,
   derivedKeyBytesLength,
@@ -24,13 +25,6 @@ const passwordHasherPermits = 2;
 const passwordAdmissionPermits = 4;
 
 const source = 'passwordHasher';
-
-export const PasswordHasherOperation = {
-  hash: 'hash',
-  verify: 'verify',
-} as const;
-type PasswordHasherOperation =
-  (typeof PasswordHasherOperation)[keyof typeof PasswordHasherOperation];
 
 // Все слоты заняты: повтор позже может пройти.
 const overloaded = (operation: PasswordHasherOperation) =>
