@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Option, Schema } from 'effect';
-import { SqlError } from 'effect/unstable/sql';
+import { SqlError } from 'effect/sql';
 import { sql } from 'kysely';
 
 import type { OperationFailed } from '#infra/errors/operation-failed.js';

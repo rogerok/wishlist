@@ -1,4 +1,4 @@
-import type { SqlError } from 'effect/unstable/sql/SqlError';
+import type { SqlError } from 'effect/sql/SqlError';
 
 import { isRetryableSqlFailure } from '#infra/db/sql-failure.js';
 import { OperationFailed } from '#infra/errors/operation-failed.js';

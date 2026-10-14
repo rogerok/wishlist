@@ -1,8 +1,8 @@
 import type { Redacted } from 'effect';
-import type { Cookie } from 'effect/unstable/http/Cookies';
+import type { Cookie } from 'effect/http/Cookies';
 
 import { Duration, Effect, Layer } from 'effect';
-import { HttpApiBuilder } from 'effect/unstable/httpapi';
+import { HttpApiBuilder } from 'effect/http-api';
 
 import type { Mode } from '#infra/config/config.js';
 

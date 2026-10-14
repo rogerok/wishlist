@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { SqlClient } from 'effect/unstable/sql/SqlClient';
+import { SqlClient } from 'effect/sql/SqlClient';
 
 import type { UserEmail, UserId } from '#modules/users/schemas/user.schema.js';
 

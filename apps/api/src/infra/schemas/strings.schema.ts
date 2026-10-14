@@ -16,7 +16,7 @@ const blankToNull = (value: string | null) => {
 };
 
 export const makeTrimmedTextSchemas = ({ min, max }: TextLength) => {
-  const length = Schema.isLengthBetween(min, max);
+  const length = Schema.isBetweenLength(min, max);
 
   return {
     input: Schema.Trim.check(length),
@@ -26,7 +26,7 @@ export const makeTrimmedTextSchemas = ({ min, max }: TextLength) => {
 
 export const makeOptionalTextSchemas = ({ min, max }: TextLength) => {
   const stored = Schema.NullOr(
-    Schema.String.check(Schema.isTrimmed(), Schema.isLengthBetween(min, max)),
+    Schema.String.check(Schema.isTrimmed(), Schema.isBetweenLength(min, max)),
   );
   const input = Schema.NullOr(Schema.String).pipe(
     Schema.decodeTo(

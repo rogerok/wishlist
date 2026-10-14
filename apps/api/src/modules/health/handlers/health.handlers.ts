@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { HttpApiBuilder } from 'effect/unstable/httpapi';
+import { HttpApiBuilder } from 'effect/http-api';
 
 import { AppApi } from '#infra/api/api.js';
 import { healthGroupIdentifier } from '#modules/health/api/health.constants.js';

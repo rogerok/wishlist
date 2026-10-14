@@ -1,7 +1,7 @@
 import type { KyselyConfig } from 'kysely';
 
 import * as Effect from 'effect/Effect';
-import * as Client from 'effect/unstable/sql/SqlClient';
+import * as Client from 'effect/sql/SqlClient';
 import {
   AlterTableColumnAlteringBuilder,
   CreateIndexBuilder,

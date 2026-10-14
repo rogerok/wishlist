@@ -1,7 +1,7 @@
 import { PgMigrator } from '@effect/sql-pg';
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { SqlClient } from 'effect/unstable/sql/SqlClient';
+import { SqlClient } from 'effect/sql/SqlClient';
 
 import initialMigration from '#infra/db/migrations/0001_initial.js';
 import authMigration from '#infra/db/migrations/0002_auth.js';

@@ -1,6 +1,6 @@
 import { NodeHttpServer } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
-import { HttpRouter, HttpServer } from 'effect/unstable/http';
+import { HttpRouter, HttpServer } from 'effect/http';
 import { createServer } from 'node:http';
 
 import { AppApiLive } from '#infra/api/api-live.js';

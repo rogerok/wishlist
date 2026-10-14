@@ -1,5 +1,5 @@
 import { Predicate } from 'effect';
-import { isSqlError, type SqlError } from 'effect/unstable/sql/SqlError';
+import { isSqlError, type SqlError } from 'effect/sql/SqlError';
 
 const isRetryableSqlError = (error: SqlError) => {
   if (error.reason._tag === 'UnknownError') {

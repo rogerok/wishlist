@@ -1,38 +1,37 @@
 import { Config, Schema } from 'effect';
 
-export const ModeConfig = Config.literals(
+export const ModeConfig = Config.Literals(
   ['development', 'test', 'production'],
   'MODE',
 );
 export type Mode = Config.Success<typeof ModeConfig>;
 
 // Печатать текст и stack дефектов для отладки; при MODE=production игнорируется.
-export const DefectDetailsConfig = Config.boolean('LOG_DEFECT_DETAILS').pipe(
+export const DefectDetailsConfig = Config.Boolean('LOG_DEFECT_DETAILS').pipe(
   Config.withDefault(false),
 );
 
 export const AppConfig = Config.all({
-  appName: Config.string('APP_NAME'),
-  appPort: Config.port('APP_PORT'),
+  appName: Config.String('APP_NAME'),
+  appPort: Config.Port('APP_PORT'),
   mode: ModeConfig,
-  corsAllowedOrigins: Config.schema(
-    Config.Array(Schema.URL),
-    'CORS_ALLOWED_ORIGINS',
-  ).pipe(Config.map((urls) => urls.map((url) => url.origin))),
-  corsCredentials: Config.boolean('CORS_CREDENTIALS').pipe(
+  corsAllowedOrigins: Config.Array(Schema.URL, 'CORS_ALLOWED_ORIGINS').pipe(
+    Config.map((urls) => urls.map((url) => url.origin)),
+  ),
+  corsCredentials: Config.Boolean('CORS_CREDENTIALS').pipe(
     Config.withDefault(false),
   ),
 });
 
 export const PgConfig = Config.all({
-  postgresUrl: Config.redacted('POSTGRES_URL'),
-  maxConnections: Config.int('POSTGRES_MAX_CONNECTIONS').pipe(
+  postgresUrl: Config.Redacted('POSTGRES_URL'),
+  maxConnections: Config.Int('POSTGRES_MAX_CONNECTIONS').pipe(
     Config.withDefault(10),
   ),
-  idleTimeout: Config.duration('POSTGRES_IDLE_TIMEOUT').pipe(
+  idleTimeout: Config.Duration('POSTGRES_IDLE_TIMEOUT').pipe(
     Config.withDefault('20 seconds'),
   ),
-  connectTimeout: Config.duration('POSTGRES_CONNECT_TIMEOUT').pipe(
+  connectTimeout: Config.Duration('POSTGRES_CONNECT_TIMEOUT').pipe(
     Config.withDefault('10 seconds'),
   ),
 });

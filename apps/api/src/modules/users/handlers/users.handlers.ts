@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { HttpApiBuilder } from 'effect/unstable/httpapi';
+import { HttpApiBuilder } from 'effect/http-api';
 
 import { AppApi } from '#infra/api/api.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';

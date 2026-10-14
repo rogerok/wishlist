@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { HttpServerRequest } from 'effect/unstable/http';
+import { HttpServerRequest } from 'effect/http';
 import { randomBytes } from 'node:crypto';
 
 import type {
