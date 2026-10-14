@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@effect/vitest';
 import { assertSome, assertTrue } from '@effect/vitest/utils';
-import { Effect, Encoding, Layer, Option, Redacted } from 'effect';
+import { Effect, Layer, Option, Redacted } from 'effect';
+import { Base64Url } from 'effect/encoding';
 import * as TestClock from 'effect/testing/TestClock';
 import { createHash } from 'node:crypto';
 
@@ -48,7 +49,7 @@ const repoLayer = Layer.mergeAll(
 ).pipe(Layer.provideMerge(DbLayer));
 
 const bytes = Buffer.alloc(32, 0x22);
-const credential = Redacted.make(Encoding.encodeBase64Url(bytes));
+const credential = Redacted.make(Base64Url.encode(bytes));
 const digest = createHash('sha256').update(bytes).digest();
 const fixedTokenGenerator = Layer.succeed(SessionTokenGenerator, {
   generate: Effect.succeed({ credential, digest }),
@@ -163,6 +164,9 @@ const signupInput = SignupInputSchema.make({
   displayName: 'Test User',
 });
 
+// Тело теста получает свои TestClock через Layer.merge: соседние слои в merge не видят друг друга,
+// поэтому слой БД собирается на внешних часах. Его таймер не участвует в прыжке setTime(Date.now())
+// с 1970 года; иначе он отрабатывает десятилетия тиков и тест зависает (effect 4.0.4).
 describe('AuthService', () => {
   it.effect(
     'creates a user with a verifiable password and a session matching the issued token',
@@ -200,7 +204,7 @@ describe('AuthService', () => {
         assertTrue(Option.isSome(session));
         expect(session.value.userId).toBe(signupResult.user.id);
         expect(session.value.expiresAt).toEqual(signupResult.expiresAt);
-      }).pipe(Effect.provide(authLayer)),
+      }).pipe(Effect.provide(Layer.merge(authLayer, TestClock.layer()))),
   );
 
   it.effect('rollback failed transaction', () =>
@@ -244,8 +248,11 @@ describe('AuthService', () => {
       expect(passwordsAfter).toEqual(passwordsBefore);
     }).pipe(
       Effect.provide(
-        AuthServiceLive.pipe(
-          Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoFixedLayer)),
+        Layer.merge(
+          AuthServiceLive.pipe(
+            Layer.provideMerge(Layer.mergeAll(repoLayer, cryptoFixedLayer)),
+          ),
+          TestClock.layer(),
         ),
       ),
     ),
@@ -303,8 +310,11 @@ describe('AuthService', () => {
         expect(passwordsAfter).toEqual(passwordsBefore);
       }).pipe(
         Effect.provide(
-          AuthServiceLive.pipe(
-            Layer.provideMerge(Layer.mergeAll(repos, cryptoFixedLayer)),
+          Layer.merge(
+            AuthServiceLive.pipe(
+              Layer.provideMerge(Layer.mergeAll(repos, cryptoFixedLayer)),
+            ),
+            TestClock.layer(),
           ),
         ),
       );
@@ -343,7 +353,7 @@ describe('AuthService', () => {
           source: 'passwordCredentialsRepository',
           operation: PasswordCredentialsOperations.getByIdUserId,
         });
-      }).pipe(Effect.provide(authLayer)),
+      }).pipe(Effect.provide(Layer.merge(authLayer, TestClock.layer()))),
   );
 
   it.effect(
@@ -366,7 +376,9 @@ describe('AuthService', () => {
 
         expect(sessionsAfter).toEqual(sessionsBefore);
         expect(loginResult).toBe(overloadedVerify);
-      }).pipe(Effect.provide(overloadedAuthLayer)),
+      }).pipe(
+        Effect.provide(Layer.merge(overloadedAuthLayer, TestClock.layer())),
+      ),
   );
   it.effect(
     'returns a data integrity error when the stored password hash cannot be parsed',
@@ -391,7 +403,11 @@ describe('AuthService', () => {
           operation: 'login',
           cause: expect.any(PasswordHashIntegrityError),
         });
-      }).pipe(Effect.provide(brokenStoredHashAuthLayer)),
+      }).pipe(
+        Effect.provide(
+          Layer.merge(brokenStoredHashAuthLayer, TestClock.layer()),
+        ),
+      ),
   );
 
   it.effect(
@@ -412,7 +428,9 @@ describe('AuthService', () => {
           operation: 'signup',
           cause: expect.any(PasswordHashIntegrityError),
         });
-      }).pipe(Effect.provide(brokenNewHashAuthLayer)),
+      }).pipe(
+        Effect.provide(Layer.merge(brokenNewHashAuthLayer, TestClock.layer())),
+      ),
   );
   it.effect('runs one password check for an unknown email', () =>
     Effect.gen(function* () {
@@ -423,7 +441,9 @@ describe('AuthService', () => {
 
       expect(loginError).toBeInstanceOf(AuthInvalidCredentialsError);
       expect(verifyResults).toHaveLength(1);
-    }).pipe(Effect.provide(countingVerifyAuthLayer)),
+    }).pipe(
+      Effect.provide(Layer.merge(countingVerifyAuthLayer, TestClock.layer())),
+    ),
   );
 
   it.effect(
@@ -444,6 +464,8 @@ describe('AuthService', () => {
 
         expect(loginError).toBeInstanceOf(AuthInvalidCredentialsError);
         expect(verifyResults).toHaveLength(1);
-      }).pipe(Effect.provide(countingVerifyAuthLayer)),
+      }).pipe(
+        Effect.provide(Layer.merge(countingVerifyAuthLayer, TestClock.layer())),
+      ),
   );
 });

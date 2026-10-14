@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
-import { FastCheck } from 'effect/testing';
+import * as FastCheck from 'fast-check';
 
+import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import {
   passwordConfirmIssue,
@@ -162,7 +163,11 @@ describe('SignupBodySchema', () => {
   });
 
   it('Rejects extra field', () => {
-    const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
+    // Строгий разбор задаёт HttpApi (requestParseOptions); здесь те же настройки передаются явно.
+    const result = Schema.decodeUnknownResult(
+      SignupRequestBodySchema,
+      requestParseOptions,
+    )({
       ...commonBodyFields,
       ...passwords,
       role: 'admin',

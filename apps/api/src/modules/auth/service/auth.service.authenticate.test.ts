@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@effect/vitest';
 import { assertTrue } from '@effect/vitest/utils';
-import { Effect, Encoding, Layer, Option, Redacted } from 'effect';
+import { Effect, Layer, Option, Redacted } from 'effect';
+import { Base64Url } from 'effect/encoding';
 import * as TestClock from 'effect/testing/TestClock';
 import { createHash } from 'node:crypto';
 
@@ -71,13 +72,16 @@ const signupInput = SignupInputSchema.make({
 });
 
 const credentialOf = (bytes: Uint8Array) =>
-  Redacted.make(Encoding.encodeBase64Url(bytes));
+  Redacted.make(Base64Url.encode(bytes));
 
 export const digestOf = (credential: Redacted.Redacted<string>) =>
   createHash('sha256')
     .update(Buffer.from(Redacted.value(credential), 'base64url'))
     .digest();
 
+// Тело теста получает свои TestClock через Layer.merge: соседние слои в merge не видят друг друга,
+// поэтому слой БД собирается на внешних часах. Его таймер не участвует в прыжке setTime(Date.now())
+// с 1970 года; иначе он отрабатывает десятилетия тиков и тест зависает (effect 4.0.4).
 describe('AuthService.authenticate', () => {
   it.effect('rejects a missing credential without querying sessions', () =>
     Effect.gen(function* () {
@@ -86,7 +90,11 @@ describe('AuthService.authenticate', () => {
       const error = yield* Effect.flip(auth.authenticate(Redacted.make('')));
 
       expect(error).toBeInstanceOf(AuthUnauthenticatedError);
-    }).pipe(Effect.provide(makeAuthLayer(sessionsNotQueried))),
+    }).pipe(
+      Effect.provide(
+        Layer.merge(makeAuthLayer(sessionsNotQueried), TestClock.layer()),
+      ),
+    ),
   );
 
   it.effect(
@@ -96,8 +104,8 @@ describe('AuthService.authenticate', () => {
         const auth = yield* AuthService;
         const malformed = [
           'abc',
-          Encoding.encodeBase64Url(Buffer.alloc(31, 0x11)),
-          Encoding.encodeBase64Url(Buffer.alloc(33, 0x11)),
+          Base64Url.encode(Buffer.alloc(31, 0x11)),
+          Base64Url.encode(Buffer.alloc(33, 0x11)),
           '!'.repeat(43),
         ];
 
@@ -107,7 +115,11 @@ describe('AuthService.authenticate', () => {
           );
           expect(error, value).toBeInstanceOf(AuthUnauthenticatedError);
         }
-      }).pipe(Effect.provide(makeAuthLayer(sessionsNotQueried))),
+      }).pipe(
+        Effect.provide(
+          Layer.merge(makeAuthLayer(sessionsNotQueried), TestClock.layer()),
+        ),
+      ),
   );
 
   it.effect('rejects a well-formed credential without a session', () =>
@@ -119,7 +131,7 @@ describe('AuthService.authenticate', () => {
       );
 
       expect(error).toBeInstanceOf(AuthUnauthenticatedError);
-    }).pipe(Effect.provide(authLayer)),
+    }).pipe(Effect.provide(Layer.merge(authLayer, TestClock.layer()))),
   );
 
   it.effect('rejects a session at its expiry time', () =>
@@ -133,7 +145,7 @@ describe('AuthService.authenticate', () => {
       const error = yield* Effect.flip(auth.authenticate(signup.credential));
 
       expect(error).toBeInstanceOf(AuthUnauthenticatedError);
-    }).pipe(Effect.provide(authLayer)),
+    }).pipe(Effect.provide(Layer.merge(authLayer, TestClock.layer()))),
   );
 
   it.effect('returns the user and session for a valid credential', () =>
@@ -155,7 +167,7 @@ describe('AuthService.authenticate', () => {
         user: signup.user,
         expiresAt: signup.expiresAt,
       });
-    }).pipe(Effect.provide(authLayer)),
+    }).pipe(Effect.provide(Layer.merge(authLayer, TestClock.layer()))),
   );
 
   it.effect(
@@ -171,22 +183,25 @@ describe('AuthService.authenticate', () => {
         expect(error).toBeInstanceOf(AuthUnauthenticatedError);
       }).pipe(
         Effect.provide(
-          makeAuthLayer(
-            Layer.succeed(SessionRepository, {
-              create: () => Effect.die('Should not be used'),
-              getByTokenDigest: () =>
-                Effect.succeedSome({
-                  id: SessionIdSchema.make(
-                    '9c1f6f3e-2a7b-4c8d-9e0f-1a2b3c4d5e6f',
-                  ),
-                  userId: UserIdSchema.make(
-                    'f26699b7-6a55-4971-aecc-aac8d2474e35',
-                  ),
-                  createdAt: new Date(),
-                  expiresAt: new Date(Date.now() + 60_000),
-                }),
-              deleteByTokenDigest: () => Effect.die('Should not be used'),
-            }),
+          Layer.merge(
+            makeAuthLayer(
+              Layer.succeed(SessionRepository, {
+                create: () => Effect.die('Should not be used'),
+                getByTokenDigest: () =>
+                  Effect.succeedSome({
+                    id: SessionIdSchema.make(
+                      '9c1f6f3e-2a7b-4c8d-9e0f-1a2b3c4d5e6f',
+                    ),
+                    userId: UserIdSchema.make(
+                      'f26699b7-6a55-4971-aecc-aac8d2474e35',
+                    ),
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 60_000),
+                  }),
+                deleteByTokenDigest: () => Effect.die('Should not be used'),
+              }),
+            ),
+            TestClock.layer(),
           ),
         ),
       ),
@@ -210,12 +225,15 @@ describe('AuthService.authenticate', () => {
       expect(error).toBe(lookupFailure);
     }).pipe(
       Effect.provide(
-        makeAuthLayer(
-          Layer.succeed(SessionRepository, {
-            create: () => Effect.die('Should not be used'),
-            getByTokenDigest: () => Effect.fail(lookupFailure),
-            deleteByTokenDigest: () => Effect.die('Should not be used'),
-          }),
+        Layer.merge(
+          makeAuthLayer(
+            Layer.succeed(SessionRepository, {
+              create: () => Effect.die('Should not be used'),
+              getByTokenDigest: () => Effect.fail(lookupFailure),
+              deleteByTokenDigest: () => Effect.die('Should not be used'),
+            }),
+          ),
+          TestClock.layer(),
         ),
       ),
     ),

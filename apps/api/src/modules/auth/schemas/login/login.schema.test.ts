@@ -1,5 +1,6 @@
 import { Schema } from 'effect';
 
+import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import { LoginRequestBodySchema } from '#modules/auth/schemas/login/login.schema.js';
 import { PasswordSchema } from '#modules/auth/schemas/password/password.schema.js';
 import { UserEmailSchema } from '#modules/users/schemas/user.schema.js';
@@ -33,7 +34,11 @@ describe('LoginRequestBodySchema', () => {
   });
 
   it('Failure with invalid excess', () => {
-    const result = Schema.decodeUnknownResult(LoginRequestBodySchema)({
+    // Строгий разбор задаёт HttpApi (requestParseOptions); здесь те же настройки передаются явно.
+    const result = Schema.decodeUnknownResult(
+      LoginRequestBodySchema,
+      requestParseOptions,
+    )({
       password,
       passwordConfirm: password,
       email: 'user@example.com',

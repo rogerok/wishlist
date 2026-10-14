@@ -9,18 +9,19 @@ import {
   Logger,
   Schema,
 } from 'effect';
-import { HttpRouter, HttpServer } from 'effect/unstable/http';
+import { HttpRouter, HttpServer } from 'effect/http';
 import {
   HttpApi,
   HttpApiBuilder,
   HttpApiEndpoint,
   HttpApiGroup,
-} from 'effect/unstable/httpapi';
-import { ConnectionError, SqlError } from 'effect/unstable/sql/SqlError';
+} from 'effect/http-api';
+import { ConnectionError, SqlError } from 'effect/sql/SqlError';
 import { createServer, request as httpRequest } from 'node:http';
 
 import type { FailureReason } from '#infra/errors/operation-failed.js';
 
+import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
@@ -60,6 +61,7 @@ const probeFailure = (reason: FailureReason, cause: unknown) =>
 const ProbeOperation = { read: 'read' } as const;
 
 const probeApi = HttpApi.make('probe')
+  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(
     HttpApiGroup.make('probe').add(
       HttpApiEndpoint.get(ProbeOperation.read, '/probe/:id', {
@@ -484,7 +486,7 @@ describe('instance on a Node HTTP server', () => {
       );
       const { address } = Context.get(context, HttpServer.HttpServer);
 
-      if (address._tag !== 'TcpAddress') {
+      if (address._tag === 'UnixPathAddress') {
         return yield* Effect.die(new Error('Expected a TCP address'));
       }
 
