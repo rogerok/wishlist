@@ -1,6 +1,9 @@
 import { Schema } from 'effect';
 
-import { makeBrandedSchema } from '#infra/schemas/utils.js';
+import {
+  type BrandIdentifier,
+  makeBrandedSchema,
+} from '#infra/schemas/utils.js';
 
 export const Uuid4Schema = Schema.String.pipe(
   Schema.check(
@@ -11,5 +14,6 @@ export const Uuid4Schema = Schema.String.pipe(
   ),
 );
 
-export const makeIdBrandedSchema = <Brand extends string>(brand: Brand) =>
-  makeBrandedSchema(brand, Uuid4Schema);
+export const makeIdBrandedSchema = <const Brand extends string>(
+  brand: BrandIdentifier<Brand>,
+) => makeBrandedSchema<Brand, typeof Uuid4Schema>(brand, Uuid4Schema);

@@ -1,6 +1,9 @@
 import { Schema, SchemaTransformation } from 'effect';
 
-import { makeBrandedSchema } from '#infra/schemas/utils.js';
+import {
+  type BrandIdentifier,
+  makeBrandedSchema,
+} from '#infra/schemas/utils.js';
 
 const ValidEmailSchema = Schema.String.pipe(
   Schema.check(Schema.isMaxLength(255)),
@@ -36,5 +39,5 @@ export const EmailSchema = Schema.String.pipe(
 );
 
 export const makeEmailBrandedSchema = <const Brand extends string>(
-  brand: Brand,
-) => makeBrandedSchema(brand, EmailSchema);
+  brand: BrandIdentifier<Brand>,
+) => makeBrandedSchema<Brand, typeof EmailSchema>(brand, EmailSchema);
