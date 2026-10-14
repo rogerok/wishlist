@@ -11,7 +11,10 @@
     "types": ["node", "vitest/globals"],
     "plugins": [
       {
-        "name": "@effect/language-service"
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "unstableApiUsage": "suggestion"
+        }
       }
     ]
   },

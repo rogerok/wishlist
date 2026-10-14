@@ -26,8 +26,8 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.108",
-    "kysely": "0.29.5"
+    "effect": "4.0.4",
+    "kysely": "0.29.6"
   },
   "devDependencies": {
     "@effect/sql-pg": "4.0.4",
