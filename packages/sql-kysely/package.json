@@ -30,14 +30,14 @@
     "kysely": "0.29.5"
   },
   "devDependencies": {
-    "@effect/sql-pg": "4.0.0-rc.108",
-    "@effect/vitest": "4.0.0-rc.108",
+    "@effect/sql-pg": "4.0.4",
+    "@effect/vitest": "4.0.4",
     "@repo/typescript-config": "workspace:^",
-    "@testcontainers/postgresql": "^12.1.0",
-    "@types/node": "^22.15.3",
-    "effect": "4.0.0-rc.108",
-    "kysely": "0.29.5",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/node": "^26.6.5",
+    "effect": "4.0.4",
+    "kysely": "0.29.6",
     "typescript": "7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.4"
   }
 }
