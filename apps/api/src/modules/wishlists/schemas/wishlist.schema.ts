@@ -9,6 +9,7 @@ import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
 
 export const WishlistIdSchema = makeIdBrandedSchema('WishlistId');
+export const WishlistOwnerIdSchema = makeIdBrandedSchema('WishlistOwnerId');
 
 const title = makeTrimmedTextSchemas({ min: 1, max: 255 });
 export const WishlistTitleSchema = title.stored;
@@ -18,7 +19,10 @@ const description = makeOptionalTextSchemas({ min: 1, max: 1000 });
 export const WishlistDescriptionSchema = description.stored;
 export const WishlistDescriptionInputSchema = description.input;
 
-export const WishlistVisibility = makeLiteralUnionSchema(['private', 'public']);
+export const WishlistVisibilitySchema = makeLiteralUnionSchema([
+  'private',
+  'public',
+]);
 
 export const WishlistOccasionDateSchema = Schema.NullOr(CalendarDate);
 
@@ -49,3 +53,19 @@ export const CalendarDateInWindow = CalendarDate.pipe(
 
 export const WishlistOccasionDateInputSchema =
   Schema.NullOr(CalendarDateInWindow);
+
+export const wishlistFields = {
+  id: WishlistIdSchema,
+  ownerId: WishlistOwnerIdSchema,
+  title: WishlistTitleSchema,
+  description: WishlistDescriptionSchema,
+  occasionDate: WishlistOccasionDateSchema,
+  visibility: WishlistVisibilitySchema,
+} as const;
+
+export const WishlistSchema = Schema.Struct({
+  ...wishlistFields,
+  createdAt: Schema.Date,
+  updatedAt: Schema.Date,
+});
+export type Wishlist = Schema.Schema.Type<typeof WishlistSchema>;

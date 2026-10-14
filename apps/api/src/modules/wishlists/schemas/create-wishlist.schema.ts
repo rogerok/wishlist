@@ -1,5 +1,25 @@
-// TODO(you): входная Schema 4 полей с withRequestParseOptions;
-//  окно occasionDate через SchemaGetter.checkEffect + Clock (задачи 1.1–1.3).
 import { Schema } from 'effect';
+import { HttpApiSchema } from 'effect/http-api';
 
-export const CreateWishlistRequestSchema = Schema.Struct({});
+import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
+import {
+  WishlistDescriptionInputSchema,
+  WishlistOccasionDateInputSchema,
+  WishlistTitleInputSchema,
+  WishlistVisibilitySchema,
+} from '#modules/wishlists/schemas/wishlist.schema.js';
+
+export const CreateWishlistBodySchema = Schema.Struct({
+  description: WishlistDescriptionInputSchema,
+  title: WishlistTitleInputSchema,
+  visibility: WishlistVisibilitySchema,
+  occasionDate: WishlistOccasionDateInputSchema,
+});
+
+export type CreateWishlistBody = Schema.Schema.Type<
+  typeof CreateWishlistBodySchema
+>;
+
+export const CreateWishlistResponseSchema = WishlistResponseSchema.pipe(
+  HttpApiSchema.status(201),
+);
