@@ -7,9 +7,9 @@ import {
 } from '#infra/schemas/strings.schema.js';
 import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
+import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
 export const WishlistIdSchema = makeIdBrandedSchema('WishlistId');
-export const WishlistOwnerIdSchema = makeIdBrandedSchema('WishlistOwnerId');
 
 const title = makeTrimmedTextSchemas({ min: 1, max: 255 });
 export const WishlistTitleSchema = title.stored;
@@ -56,7 +56,7 @@ export const WishlistOccasionDateInputSchema =
 
 export const wishlistFields = {
   id: WishlistIdSchema,
-  ownerId: WishlistOwnerIdSchema,
+  ownerId: UserIdSchema,
   title: WishlistTitleSchema,
   description: WishlistDescriptionSchema,
   occasionDate: WishlistOccasionDateSchema,
