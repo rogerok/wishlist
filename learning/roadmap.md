@@ -110,8 +110,8 @@ Production memory budget не определён; локальные лимит�
 
 1. **→ 3.1 — Минимальный aggregate contract.** Определить title, description, Occasion Date, visibility
    `private | public`. Проверка: boundary matrix Schema. Вопрос: какие поля нужны текущему product path?
-2. **3.2 — Persistence invariant.** Добавить migration/FK/indexes и generated types; `date` читается строкой через
-   `types` пула. Проверка: migration test. Вопрос:
+2. **3.2 — Persistence invariant.** Добавить migration/FK/indexes и generated types; `date` строкой отдаёт кодек
+   sql-pg 4.0.4. Проверка: migration test. Вопрос:
    что гарантирует FK при удалении owner?
 3. **3.3 — Create/read one.** Реализовать два use case с owner ID. Проверка: integration test owner/other. Вопрос: где
    должен участвовать owner ID?

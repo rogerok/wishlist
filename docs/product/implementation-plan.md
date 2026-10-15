@@ -168,9 +168,9 @@ Purpose: establish the aggregate and authorization boundary before sharing.
 Work:
 
 - add Wishlist persistence and runtime schemas for title, description, Occasion Date, and visibility `private | public` (`unlisted` — в Milestone 3);
-- read and write PostgreSQL `date` as a `YYYY-MM-DD` string: the pool option `types` returns OID 1082 unchanged in
-  every `PgClient.layer`, and kysely-codegen uses `"dateParser": "string"` (решение владельца 2026-10-12: правило
-  задаётся один раз; глобальный `pg.types.setTypeParser` не используется);
+- read and write PostgreSQL `date` as a `YYYY-MM-DD` string: `@effect/sql-pg` 4.0.4 returns it as a string with its
+  built-in codec, so no pool parser is configured; kysely-codegen uses `"dateParser": "string"`; `pg-date.test.ts` pins
+  the behaviour under three `TZ` values (пересмотрено 2026-10-15 после перехода с rc.108);
 - implement owner-only create, list, read, update, and delete use cases;
 - scope every repository mutation by both Wishlist ID and authenticated owner ID;
 - keep list pagination and stable ordering explicit; add only visibility filtering needed by the current screen;

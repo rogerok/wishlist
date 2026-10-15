@@ -10,7 +10,7 @@
 - Ограничить Occasion Date при create окном «сегодня по UTC − 1 день» — «сегодня по UTC + 5 лет» включительно.
 - Первой проверкой доказать выполнение `SchemaGetter.checkEffect` с `Clock` при декодировании payload в HttpApi; при отказе выбрать запасной путь плана.
 - Добавить PostgreSQL persistence Wishlist: UUID, владелец, поля контракта, timestamps, FK, ограничения и индекс владельца.
-- Читать PostgreSQL `date` строкой через общую настройку `types` каждого `PgClient.layer`; задать `dateParser: "string"` генератору.
+- Читать PostgreSQL `date` строкой встроенным кодеком `@effect/sql-pg` 4.0.4 и закрепить это тестом под тремя `TZ`; задать `dateParser: "string"` генератору.
 - Добавить защищённые Session маршруты `POST /api/wishlists` и `GET /api/wishlists/:id`.
 - Создавать Wishlist только для `CurrentSession.user.id`. Читать Private Wishlist только владельцу; Public Wishlist — любому аутентифицированному User.
 - Возвращать одинаковый 404 для чужого Private Wishlist и отсутствующего id по соглашению Users: `makeNotFoundBody`, запрошенный `id`, `title: "Wishlist not found"` и `instance` из id.
@@ -42,7 +42,7 @@
 ### Расхождения с кодом
 
 - `modules/` не содержит Wishlist; generated `DB` содержит только `users`, `passwordCredentials`, `sessions`.
-- Оба `PgClient.layer` в `infra/db/config.ts` и `test-database.layer.ts` не задают `types`; генератор не задаёт `dateParser`.
+- Генератор не задаёт `dateParser`. Свой разбор `date` для пула не нужен: в 4.0.4 его выполняет кодек sql-pg (пересмотрено 2026-10-15).
 - `AuthUnauthenticatedBody.instance` закреплён за `authMePath`, хотя `SessionAuthentication` уже является общим middleware.
 - `SessionAuthenticationLive` назначает технической ошибке операцию `AuthOperation.me` даже на другом защищённом маршруте; переименование операции остаётся вне scope.
 - Account содержит учебные заготовки и не подключён к API; change не использует его как рабочий образец и не реализует его заново.

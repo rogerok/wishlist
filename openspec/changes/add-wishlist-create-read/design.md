@@ -8,7 +8,7 @@
 
 Текущая инфраструктура использует `DBLive` поверх PgClient и SQL/Kysely, camelCase на TypeScript-границе и snake_case в PostgreSQL. Миграции выполняются через PgMigrator. Тесты поднимают PostgreSQL 16.3 через Testcontainers.
 
-Установленный `@effect/sql-pg` версии `4.0.0-rc.108` поддерживает `PgClientConfig.types` и передаёт его пулу и отдельному соединению. Установленный kysely-codegen `0.20.0` поддерживает `dateParser: "string"`. Новая зависимость не нужна.
+Установленный `@effect/sql-pg` 4.0.4 работает на собственном протоколе PostgreSQL, без `pg`; его встроенный кодек `date` возвращает строку `YYYY-MM-DD` (`PgTypes.ts`, `dateCodec`). Установленный kysely-codegen `0.20.0` поддерживает `dateParser: "string"`. Новая зависимость не нужна.
 
 ## Goals / Non-Goals
 
@@ -90,13 +90,11 @@ Read и Schema сохранённой строки не получают Clock �
 
 Проверка varchar и CHECK не заменяет входной trim. Прямой SQL не нормализует поля автоматически. Точность существующей календарной даты обеспечивает PostgreSQL `date`; формат и текущее окно create проверяются на входе. CHECK с `now()` не добавляется.
 
-### 3. Настройка date parser общая для live и test
+### 3. Date-only читается встроенным кодеком sql-pg
 
-Создать небольшой `infra/db/pg-types.ts` с единственным объектом `types` для пула.
+`@effect/sql-pg` 4.0.4 возвращает `date` строкой встроенным кодеком; своё правило для пула не задаём; `pg-date.test.ts` фиксирует это поведение под тремя `TZ`. `.kysely-codegenrc.json` получает `dateParser: "string"`, чтобы generated type совпадал с runtime string.
 
-Его `getTypeParser` возвращает OID 1082 в текстовом формате без изменений. Для остальных OID и форматов он делегирует стандартному parser `pg.types.getTypeParser`. Тип выводится из установленных типов `pg`, без `any` или небезопасных assertions.
-
-Оба существующих `PgClient.layer` — `config.ts` и `test-database.layer.ts` — получают этот объект. Глобальный `pg.types.setTypeParser` не используется. `.kysely-codegenrc.json` получает `dateParser: "string"`.
+Первая версия change (под `rc.108`, работавший поверх node-postgres) предлагала `infra/db/pg-types.ts` с правилом разбора OID 1082 для пула. В 4.0.4 опция `types` имеет тип `PgTypes.Registry` (`PgClient.d.ts:108`), а `pg` пакетом не используется: такой файл был бы мёртвым кодом. Пересмотрено 2026-10-15.
 
 Альтернатива — превращать `Date` обратно в строку в каждом repository — отклонена принятым решением Milestone 2. Она также может сдвинуть дату при смене TZ.
 
@@ -193,7 +191,7 @@ sequenceDiagram
 
 - Открытый CRUD Users позволяет удалить владельца и каскадно его Wishlist → явно сохранить этот риск; роли остаются отложенными по решению владельца.
 - Public Wishlist пока требует Session → проверить 401 анонима даже для `public`; не подключать Sharing и Public Profile заранее.
-- Некорректный parser остальных OID ломает timestamps или другие значения → делегировать стандартному parser, проверить существующие тесты после изменения.
+- Будущая версия sql-pg изменит кодек `date` → `pg-date.test.ts` упадёт на `typeof` или значении; не подменять кодек без этого теста.
 - `btrim` PostgreSQL и trim JavaScript не совпадают для всех Unicode whitespace → не обещать одинаковую нормализацию; сохранить точные CHECK из таблицы Milestone 2.
 - User исчезает между аутентификацией и INSERT → FK отклоняет запись; не выдавать ложный 201 и не добавлять отдельную транзакцию ради снимка Session.
 - Отказ декодирования после успешного INSERT может дать 500 при уже сохранённой строке → не обещать rollback для любого 5xx и не добавлять повтор INSERT.
