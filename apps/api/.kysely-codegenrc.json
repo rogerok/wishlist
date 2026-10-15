@@ -5,5 +5,6 @@
   "envFile": ".env.development",
   "excludePattern": "public.effect_sql_migrations",
   "outFile": "src/infra/db/generated/database.ts",
-  "url": "env(POSTGRES_URL)"
+  "url": "env(POSTGRES_URL)",
+  "dateParser": "string"
 }
