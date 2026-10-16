@@ -189,6 +189,21 @@ users.update)`), TypeScript выдаст ошибку — `Type` схем не �
 @wishlist/api> await fake.users.createMany(20)                         // от 1 до 100
 ```
 
+`fake.auth` регистрирует User через `auth.signup`, то есть вместе с Password Credential и Session. Пароль
+возвращается открытым текстом — иначе под фейковым User не войти:
+
+```text
+@wishlist/api> const s = await fake.auth.signup()
+{ user: { … }, credential: <redacted>, expiresAt: …, password: 'Nyxhetfm14@' }
+@wishlist/api> await auth.login({ email: s.user.email, password: s.password })
+@wishlist/api> await auth.authenticate(s.credential)   // или строка-токен из cookie
+@wishlist/api> await auth.logout(s.credential)
+@wishlist/api> await fake.auth.signupMany(5)            // от 1 до 100, ~0,3 с на каждого из-за scrypt
+```
+
+`auth.authenticate` и `auth.logout` принимают и `Redacted` из результата `signup`/`login`, и обычную строку.
+Сам токен в выводе скрыт.
+
 В других режимах `fake` не добавляется, а в лог пишется предупреждение — чтобы случайно не наполнить мусором
 не ту базу.
 
@@ -218,3 +233,5 @@ Faker — dev-зависимость: REPL-файлы попадают в `dist`
    ```ts
    wishlists: yield* makeReplFacade(yield* WishlistsFake),
    ```
+
+   Генератор полей User можно взять из `users.fake.ts` (`makeCreateUserInput`), как это делает `auth.fake.ts`.
