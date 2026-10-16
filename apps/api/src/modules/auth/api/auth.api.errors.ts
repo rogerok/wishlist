@@ -1,15 +1,11 @@
 import { Schema } from 'effect';
 
-import { domainProblem } from '#infra/errors/http-problem.js';
+import { asProblemJson, domainProblem } from '#infra/errors/http-problem.js';
 import {
   authLoginPath,
-  authMePath,
   authSignupPath,
 } from '#modules/auth/api/auth.api.constants.js';
-import {
-  AuthInvalidCredentialsError,
-  AuthUnauthenticatedError,
-} from '#modules/auth/service/auth.service.errors.js';
+import { AuthInvalidCredentialsError } from '#modules/auth/service/auth.service.errors.js';
 import { makeEmailAlreadyExistsBody } from '#modules/users/api/users.api.errors.js';
 import { UserEmailAlreadyExistsError } from '#modules/users/users.errors.js';
 
@@ -40,19 +36,24 @@ export const AuthInvalidCredentialsProblem = domainProblem({
   encode: () => AuthInvalidCredentialsBody.make({}),
 });
 
-const AuthUnauthenticatedBody = Schema.Struct({
-  code: Schema.tag('AUTH_INVALID_SESSION'),
-  detail: Schema.tag('Session is invalid'),
-  status: Schema.tag(401),
-  title: Schema.tag('Invalid session'),
-  type: Schema.tag('/errors/auth-invalid-session'),
-  instance: Schema.tag(authMePath),
-});
+// 401 любого маршрута под SessionAuthentication. Доменная AuthUnauthenticatedError не знает
+// адреса запроса, поэтому instance подставляет middleware на границе HTTP.
+export class AuthUnauthenticatedHttpError extends Schema.Error<
+  AuthUnauthenticatedHttpError,
+  { readonly brand: unique symbol }
+>('AuthUnauthenticatedHttpError')(
+  {
+    code: Schema.tag('AUTH_INVALID_SESSION'),
+    detail: Schema.tag('Session is invalid'),
+    status: Schema.tag(401),
+    title: Schema.tag('Invalid session'),
+    type: Schema.tag('/errors/auth-invalid-session'),
+    instance: Schema.String,
+  },
+  {
+    httpApiStatus: 401,
+  },
+) {}
 
-export const AuthUnauthenticatedProblem = domainProblem({
-  body: AuthUnauthenticatedBody,
-  error: AuthUnauthenticatedError,
-  status: 401,
-  decode: () => new AuthUnauthenticatedError(),
-  encode: () => AuthUnauthenticatedBody.make({}),
-});
+export const AuthUnauthenticatedProblem =
+  AuthUnauthenticatedHttpError.pipe(asProblemJson);

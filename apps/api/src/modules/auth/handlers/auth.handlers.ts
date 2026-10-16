@@ -2,14 +2,17 @@ import type { Redacted } from 'effect';
 import type { Cookie } from 'effect/http/Cookies';
 
 import { Duration, Effect, Layer } from 'effect';
+import { HttpServerRequest } from 'effect/http';
 import { HttpApiBuilder } from 'effect/http-api';
 
 import type { Mode } from '#infra/config/config.js';
 
 import { AppApi } from '#infra/api/api.js';
 import { ModeConfig } from '#infra/config/config.js';
+import { getRequestPathname } from '#infra/errors/http-problem.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
 import { authGroupIdentifier } from '#modules/auth/api/auth.api.constants.js';
+import { AuthUnauthenticatedHttpError } from '#modules/auth/api/auth.api.errors.js';
 import {
   CurrentSession,
   SessionAuthentication,
@@ -131,9 +134,19 @@ export const SessionAuthenticationLive = Layer.effect(
     return {
       cookie: (httpEffect, { credential }) =>
         Effect.gen(function* () {
-          const session = yield* service
-            .authenticate(credential)
-            .pipe(Effect.catchTag('OperationFailed', handleTechnicalError));
+          const session = yield* service.authenticate(credential).pipe(
+            Effect.catchTags({
+              AuthUnauthenticatedError: () =>
+                Effect.gen(function* () {
+                  const request = yield* HttpServerRequest.HttpServerRequest;
+
+                  return yield* new AuthUnauthenticatedHttpError({
+                    instance: getRequestPathname(request),
+                  });
+                }),
+              OperationFailed: handleTechnicalError,
+            }),
+          );
 
           return yield* httpEffect.pipe(
             Effect.provideService(CurrentSession, session),
