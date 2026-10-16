@@ -10,6 +10,7 @@ import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
 export const WishlistIdSchema = makeIdBrandedSchema('WishlistId');
+export type WishlistId = Schema.Schema.Type<typeof WishlistIdSchema>;
 
 const title = makeTrimmedTextSchemas({ min: 1, max: 255 });
 export const WishlistTitleSchema = title.stored;
