@@ -1,1 +1,3 @@
-// TODO(you): wishlistsGroupIdentifier, wishlistsCollectionPath = '/api/wishlists', wishlistByIdPath = '/api/wishlists/:id' (образец: users/api/users.api.constants.ts).
+export const wishlistsGroupIdentifier = 'wishlists';
+export const wishlistsCollectionPath = '/api/wishlists';
+export const wishlistsByIdPath = `${wishlistsCollectionPath}/:id`;

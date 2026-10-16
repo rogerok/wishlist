@@ -6,11 +6,13 @@ import { RequestValidationMiddleware } from '#infra/errors/request-validation.js
 import { authGroup } from '#modules/auth/api/auth.api.js';
 import { healthGroup } from '#modules/health/api/health.api.js';
 import { usersGroup } from '#modules/users/api/users.api.js';
+import { wishlistsGroup } from '#modules/wishlists/api/wishlists.api.js';
 
 export const AppApi = HttpApi.make('app')
   .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(healthGroup)
   .add(usersGroup)
   .add(authGroup)
+  .add(wishlistsGroup)
   .middleware(RequestValidationMiddleware)
   .middleware(DefectBoundaryMiddleware);

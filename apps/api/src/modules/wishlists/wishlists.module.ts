@@ -1,1 +1,8 @@
-// TODO(you): WishlistsModuleLive = service + repository (образец: users/users.module.ts).
+import { Layer } from 'effect';
+
+import { WishlistRepositoryLive } from './repository/wishlists.repository.js';
+import { WishlistsServiceLive } from './service/wishlists.service.js';
+
+export const WishlistsModuleLive = WishlistsServiceLive.pipe(
+  Layer.provide(WishlistRepositoryLive),
+);
