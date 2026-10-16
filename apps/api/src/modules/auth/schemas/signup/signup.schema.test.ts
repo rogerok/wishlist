@@ -96,7 +96,7 @@ describe('SignupBodySchema', () => {
   it.each(invalidDisplayNameCases)(
     'rejects displayName of $name',
     ({ displayName }) => {
-      const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
+      const result = Schema.decodeResult(SignupRequestBodySchema)({
         ...commonBodyFields,
         ...passwords,
         displayName,
@@ -109,7 +109,7 @@ describe('SignupBodySchema', () => {
   );
 
   it('trims spaces around displayName', () => {
-    const result = Schema.decodeUnknownResult(SignupRequestBodySchema)({
+    const result = Schema.decodeResult(SignupRequestBodySchema)({
       ...commonBodyFields,
       ...passwords,
       displayName: '  Ada  ',

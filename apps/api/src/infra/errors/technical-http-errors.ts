@@ -7,9 +7,10 @@ export const ErrorIdSchema = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{32}$/),
 );
 
-export class InternalHttpError extends Schema.Error<InternalHttpError>(
-  'InternalHttpError',
-)(
+export class InternalHttpError extends Schema.Error<
+  InternalHttpError,
+  { readonly brand: unique symbol }
+>('InternalHttpError')(
   {
     code: Schema.tag('INTERNAL_ERROR'),
     detail: Schema.tag('Unable to process the request'),
@@ -24,9 +25,10 @@ export class InternalHttpError extends Schema.Error<InternalHttpError>(
   },
 ) {}
 
-export class ServiceUnavailableHttpError extends Schema.Error<ServiceUnavailableHttpError>(
-  'ServiceUnavailableHttpError',
-)(
+export class ServiceUnavailableHttpError extends Schema.Error<
+  ServiceUnavailableHttpError,
+  { readonly brand: unique symbol }
+>('ServiceUnavailableHttpError')(
   {
     code: Schema.tag('SERVICE_UNAVAILABLE'),
     detail: Schema.tag('Unable to process the request'),

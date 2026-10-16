@@ -161,7 +161,7 @@ describe('WishlistOccasionDateInputSchema', () => {
 
 describe('WishlistOccasionDateSchema', () => {
   it('reads a past date without the window', () => {
-    const result = Schema.decodeUnknownResult(WishlistOccasionDateSchema)(
+    const result = Schema.decodeResult(WishlistOccasionDateSchema)(
       '2020-02-29',
     );
 
@@ -169,13 +169,13 @@ describe('WishlistOccasionDateSchema', () => {
   });
 
   it('reads null', () => {
-    const result = Schema.decodeUnknownResult(WishlistOccasionDateSchema)(null);
+    const result = Schema.decodeResult(WishlistOccasionDateSchema)(null);
 
     expect(result).toBeResultSuccess(null);
   });
 
   it('rejects a date that does not exist', () => {
-    const result = Schema.decodeUnknownResult(WishlistOccasionDateSchema)(
+    const result = Schema.decodeResult(WishlistOccasionDateSchema)(
       '2027-02-29',
     );
 

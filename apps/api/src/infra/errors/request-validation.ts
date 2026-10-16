@@ -30,9 +30,10 @@ export const RequestValidationIssueSchema = Schema.Struct({
   message: Schema.String,
 });
 
-export class RequestValidationHttpError extends Schema.Error<RequestValidationHttpError>(
-  'RequestValidationHttpError',
-)(
+export class RequestValidationHttpError extends Schema.Error<
+  RequestValidationHttpError,
+  { readonly brand: unique symbol }
+>('RequestValidationHttpError')(
   {
     code: Schema.tag('REQUEST_VALIDATION_FAILED'),
     detail: Schema.tag('The request contains invalid data'),

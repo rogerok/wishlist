@@ -13,7 +13,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-          "unstableApiUsage": "suggestion"
+          "unstableApiUsage": "off"
         }
       }
     ]

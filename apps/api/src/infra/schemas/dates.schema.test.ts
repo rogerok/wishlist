@@ -37,13 +37,13 @@ describe('isCalendarDate', () => {
 
 describe('CalendarDate', () => {
   it('decodes a calendar date unchanged', () => {
-    const result = Schema.decodeUnknownResult(CalendarDate)('2028-02-29');
+    const result = Schema.decodeResult(CalendarDate)('2028-02-29');
 
     expect(result).toBeResultSuccess('2028-02-29');
   });
 
   it('rejects a date that does not exist with a calendar message', () => {
-    const result = Schema.decodeUnknownResult(CalendarDate)('2027-02-29');
+    const result = Schema.decodeResult(CalendarDate)('2027-02-29');
 
     expect(result).toBeResultSchemaFailure([
       expect.objectContaining({

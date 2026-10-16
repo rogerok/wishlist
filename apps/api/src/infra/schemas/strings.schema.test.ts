@@ -39,7 +39,7 @@ describe('optional text schemas', () => {
   it.each(normalizedInputCases)(
     'input normalizes $name',
     ({ body, expected }) => {
-      const result = Schema.decodeUnknownResult(InputBody)(body);
+      const result = Schema.decodeResult(InputBody)(body);
 
       expect(result).toBeResultSuccess({ text: expected });
     },
@@ -54,16 +54,12 @@ describe('optional text schemas', () => {
   });
 
   it('stored accepts null and trimmed text unchanged', () => {
-    expect(Schema.decodeUnknownResult(text.stored)(null)).toBeResultSuccess(
-      null,
-    );
-    expect(Schema.decodeUnknownResult(text.stored)('Art')).toBeResultSuccess(
-      'Art',
-    );
+    expect(Schema.decodeResult(text.stored)(null)).toBeResultSuccess(null);
+    expect(Schema.decodeResult(text.stored)('Art')).toBeResultSuccess('Art');
   });
 
   it.each(rejectedStoredCases)('stored rejects $name', ({ value }) => {
-    const result = Schema.decodeUnknownResult(text.stored)(value);
+    const result = Schema.decodeResult(text.stored)(value);
 
     expect(result).toBeResultSchemaFailure([expect.anything()]);
   });
@@ -97,7 +93,7 @@ const rejectedRequiredStoredCases = [
 
 describe('required text schemas', () => {
   it.each(trimmedInputCases)('input trims $name', ({ value, expected }) => {
-    const result = Schema.decodeUnknownResult(requiredText.input)(value);
+    const result = Schema.decodeResult(requiredText.input)(value);
 
     expect(result).toBeResultSuccess(expected);
   });
@@ -109,13 +105,13 @@ describe('required text schemas', () => {
   });
 
   it('stored accepts trimmed text unchanged', () => {
-    const result = Schema.decodeUnknownResult(requiredText.stored)('Art');
+    const result = Schema.decodeResult(requiredText.stored)('Art');
 
     expect(result).toBeResultSuccess('Art');
   });
 
   it.each(rejectedRequiredStoredCases)('stored rejects $name', ({ value }) => {
-    const result = Schema.decodeUnknownResult(requiredText.stored)(value);
+    const result = Schema.decodeResult(requiredText.stored)(value);
 
     expect(result).toBeResultSchemaFailure([expect.anything()]);
   });

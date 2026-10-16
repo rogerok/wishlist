@@ -24,7 +24,7 @@ const userSelection = ['id', 'email', 'displayName'] as const;
 const getSomeOrNone = (row: unknown, operation: UserOperation) =>
   Option.match(Option.fromUndefinedOr(row), {
     onNone: () => Effect.succeedNone,
-    onSome: (some) => decodeRow(some, operation).pipe(Effect.map(Option.some)),
+    onSome: (some) => decodeRow(some, operation).pipe(Effect.asSome),
   });
 
 const decodeRow = (row: unknown, operation: UserOperation) =>
