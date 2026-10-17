@@ -12,9 +12,9 @@ import {
   CreateWishlistBodySchema,
   CreateWishlistResponseSchema,
 } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import { WishlistsOperations } from '#modules/wishlists/schemas/wishlist-operations.schema.js';
 import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
 import { WishlistIdSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
-import { WishlistsOperations } from '#modules/wishlists/schemas/wishlists-operations.schema.js';
 
 export const wishlistsGroup = HttpApiGroup.make(wishlistsGroupIdentifier)
   .add(

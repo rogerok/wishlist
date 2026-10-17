@@ -5,7 +5,7 @@ import { AppApi } from '#infra/api/api.js';
 import { makeTechnicalFailureHandler } from '#infra/errors/technical-failure.js';
 import { CurrentSession } from '#modules/auth/api/session-authentication.js';
 import { wishlistsGroupIdentifier } from '#modules/wishlists/api/wishlists.api.constants.js';
-import { WishlistsOperations } from '#modules/wishlists/schemas/wishlists-operations.schema.js';
+import { WishlistsOperations } from '#modules/wishlists/schemas/wishlist-operations.schema.js';
 import { WishlistsService } from '#modules/wishlists/service/wishlists.service.js';
 
 const makeTechnicalErrorHandler = makeTechnicalFailureHandler({

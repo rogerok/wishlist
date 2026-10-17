@@ -13,8 +13,8 @@ import {
   invalidRecordFailed,
   sqlOperationFailed,
 } from '#infra/db/repository-failure.js';
+import { WishlistsOperations } from '#modules/wishlists/schemas/wishlist-operations.schema.js';
 import { WishlistSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
-import { WishlistsOperations } from '#modules/wishlists/schemas/wishlists-operations.schema.js';
 
 const source = 'wishlistsRepository';
 
