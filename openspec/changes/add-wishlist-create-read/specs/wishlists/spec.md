@@ -48,15 +48,15 @@
 
 ### Requirement: Окно Occasion Date при create
 
-API create Wishlist SHALL принимать ненулевую Occasion Date только в включительном UTC-окне [сегодня − 1 день, сегодня + 5 календарных лет]; вне окна — 400 problem+json без вставки: основной путь возвращает `code: REQUEST_VALIDATION_FAILED` и ровно одну запись `errors` с `location: "payload"`, `path: ["occasionDate"]`, `message` с границами окна; выбранный запасной путь возвращает `code: WISHLIST_OCCASION_DATE_OUT_OF_RANGE`.
+API create Wishlist SHALL принимать ненулевую Occasion Date только в включительном UTC-окне [сегодня − 1 день, сегодня + 5 календарных лет]; вне окна — 400 problem+json без вставки с `code: REQUEST_VALIDATION_FAILED` и ровно одной записью `errors` с `location: "payload"`, `path: ["occasionDate"]`, `message` с границами окна.
 
 #### Scenario: Вчера минус один день отклоняется
 
-- **GIVEN** у A действует Session; Clock фиксирует `2026-10-12T12:00:00Z`; PostgreSQL доступен; в БД ровно 0 Wishlist; активен основной либо выбранный запасной контракт
-- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books", "occasionDate": "2026-10-10" }`
+- **GIVEN** у A действует Session; Clock фиксирует `2026-10-12T12:00:00Z`; PostgreSQL доступен; в БД ровно 0 Wishlist
+- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books", "description": null, "occasionDate": "2026-10-10", "visibility": "private" }`
 - **THEN** ответ имеет статус 400 и тип `application/problem+json`
-- **AND** `code` равен `REQUEST_VALIDATION_FAILED` в основном контракте либо `WISHLIST_OCCASION_DATE_OUT_OF_RANGE` в запасном
-- **AND** в основном пути `errors` содержит ровно одну запись: `location: "payload"`, `path: ["occasionDate"]`, а `message` содержит допустимые границы `2026-10-11` и `2031-10-12`
+- **AND** `code` равен `REQUEST_VALIDATION_FAILED`
+- **AND** `errors` содержит ровно одну запись: `location: "payload"`, `path: ["occasionDate"]`, а `message` содержит допустимые границы `2026-10-11` и `2031-10-12`
 - **AND** в БД остаётся ровно 0 Wishlist
 
 #### Scenario: Вчера принимается
@@ -73,11 +73,11 @@ API create Wishlist SHALL принимать ненулевую Occasion Date т
 
 #### Scenario: Пять лет плюс один день отклоняются
 
-- **GIVEN** у A действует Session; Clock фиксирует `2026-10-12T12:00:00Z`; PostgreSQL доступен; в БД ровно 0 Wishlist; активен основной либо выбранный запасной контракт
-- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books", "occasionDate": "2031-10-13" }`
+- **GIVEN** у A действует Session; Clock фиксирует `2026-10-12T12:00:00Z`; PostgreSQL доступен; в БД ровно 0 Wishlist
+- **WHEN** A отправляет `POST /api/wishlists` с `{ "title": "Books", "description": null, "occasionDate": "2031-10-13", "visibility": "private" }`
 - **THEN** ответ имеет статус 400 и тип `application/problem+json`
-- **AND** `code` равен `REQUEST_VALIDATION_FAILED` в основном контракте либо `WISHLIST_OCCASION_DATE_OUT_OF_RANGE` в запасном
-- **AND** в основном пути `errors` содержит ровно одну запись: `location: "payload"`, `path: ["occasionDate"]`, а `message` содержит допустимые границы `2026-10-11` и `2031-10-12`
+- **AND** `code` равен `REQUEST_VALIDATION_FAILED`
+- **AND** `errors` содержит ровно одну запись: `location: "payload"`, `path: ["occasionDate"]`, а `message` содержит допустимые границы `2026-10-11` и `2031-10-12`
 - **AND** в БД остаётся ровно 0 Wishlist
 
 ### Requirement: Значения visibility
