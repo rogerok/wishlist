@@ -5,7 +5,6 @@ import { HttpRouter } from 'effect/http';
 import { HttpApi, HttpApiBuilder } from 'effect/http-api';
 import { SqlError, UnknownError } from 'effect/sql/SqlError';
 
-import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
@@ -66,7 +65,6 @@ const UsersServiceTest = UsersServiceLive.pipe(
 );
 
 const TestApi = HttpApi.make('app')
-  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(usersGroup)
   .middleware(RequestValidationMiddleware)
   .middleware(DefectBoundaryMiddleware);

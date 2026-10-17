@@ -6,7 +6,6 @@ import { HttpApi, HttpApiBuilder } from 'effect/http-api';
 
 import type { DBKysely } from '#infra/db/db.service.js';
 
-import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
@@ -31,7 +30,6 @@ import { UserResponseSchema } from '#modules/users/schemas/user-response.schema.
 const databaseLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 const servicesLayer = AuthModuleLive.pipe(Layer.provideMerge(databaseLayer));
 const testApi = HttpApi.make('app')
-  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(authGroup)
   .middleware(RequestValidationMiddleware)
   .middleware(DefectBoundaryMiddleware);

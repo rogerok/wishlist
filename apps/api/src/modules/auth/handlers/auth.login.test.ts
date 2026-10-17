@@ -7,7 +7,6 @@ import { createHash } from 'node:crypto';
 
 import type { DBKysely } from '#infra/db/db.service.js';
 
-import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import {
@@ -40,7 +39,6 @@ const servicesLayer = Layer.mergeAll(
   SessionRepositoryLive,
 ).pipe(Layer.provideMerge(databaseLayer));
 const testApi = HttpApi.make('app')
-  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(authGroup)
   .middleware(RequestValidationMiddleware)
   .middleware(DefectBoundaryMiddleware);

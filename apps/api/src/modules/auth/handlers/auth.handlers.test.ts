@@ -15,7 +15,6 @@ import { SqlError, UnknownError } from 'effect/sql/SqlError';
 import type { FailureReason } from '#infra/errors/operation-failed.js';
 import type { SignupResult } from '#modules/auth/schemas/signup/signup.schema.js';
 
-import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import {
   DefectBoundaryMiddleware,
   DefectBoundaryMiddlewareLive,
@@ -64,7 +63,6 @@ const logger = Logger.make(
 );
 
 const testApi = HttpApi.make('app')
-  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(authGroup)
   .middleware(RequestValidationMiddleware)
   .middleware(DefectBoundaryMiddleware);
