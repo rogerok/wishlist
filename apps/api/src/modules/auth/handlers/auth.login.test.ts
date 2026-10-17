@@ -1,8 +1,8 @@
 import { NodeHttpServer } from '@effect/platform-node';
 import { describe, expect, layer } from '@effect/vitest';
 import { ConfigProvider, Effect, Layer, Logger, Option, Schema } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
-import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
+import { HttpRouter } from 'effect/http';
+import { HttpApi, HttpApiBuilder } from 'effect/http-api';
 import { createHash } from 'node:crypto';
 
 import type { DBKysely } from '#infra/db/db.service.js';

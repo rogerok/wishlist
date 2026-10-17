@@ -1,13 +1,9 @@
 import { NodeHttpServer } from '@effect/platform-node';
 import { describe, expect, layer } from '@effect/vitest';
 import { ConfigProvider, Effect, Layer, Schema } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
-import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
-import {
-  ConnectionError,
-  SqlError,
-  UnknownError,
-} from 'effect/unstable/sql/SqlError';
+import { HttpRouter } from 'effect/http';
+import { HttpApi, HttpApiBuilder } from 'effect/http-api';
+import { ConnectionError, SqlError, UnknownError } from 'effect/sql/SqlError';
 import { createHash } from 'node:crypto';
 
 import type { DBKysely } from '#infra/db/db.service.js';

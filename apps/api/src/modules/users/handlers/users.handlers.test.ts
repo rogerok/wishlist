@@ -1,9 +1,9 @@
 import { NodeHttpServer } from '@effect/platform-node';
 import { describe } from '@effect/vitest';
 import { Effect, Layer, Logger } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
-import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
-import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
+import { HttpRouter } from 'effect/http';
+import { HttpApi, HttpApiBuilder } from 'effect/http-api';
+import { SqlError, UnknownError } from 'effect/sql/SqlError';
 
 import {
   DefectBoundaryMiddleware,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, Encoding, Layer, Redacted } from 'effect';
+import { Effect, Layer, Redacted } from 'effect';
+import { Base64Url } from 'effect/encoding';
 import { createHash } from 'node:crypto';
 
 import { secureRandomBytesMaxLength } from '#modules/auth/service/constants.js';
@@ -55,7 +56,7 @@ const SecureRandomBytesTest = Layer.succeed(SecureRandomBytes, {
 const SessionTokenGeneratorTest = SessionTokenGeneratorLive.pipe(
   Layer.provide(SecureRandomBytesTest),
 );
-const credential = Encoding.encodeBase64Url(knownBytes);
+const credential = Base64Url.encode(knownBytes);
 const digest = createHash('sha256').update(knownBytes).digest();
 
 describe('SessionTokenGenerator', () => {

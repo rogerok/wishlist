@@ -8,9 +8,9 @@ import {
   Redacted,
   Schema,
 } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
-import { HttpApi, HttpApiBuilder } from 'effect/unstable/httpapi';
-import { SqlError, UnknownError } from 'effect/unstable/sql/SqlError';
+import { HttpRouter } from 'effect/http';
+import { HttpApi, HttpApiBuilder } from 'effect/http-api';
+import { SqlError, UnknownError } from 'effect/sql/SqlError';
 
 import type { FailureReason } from '#infra/errors/operation-failed.js';
 import type { SignupResult } from '#modules/auth/schemas/signup/signup.schema.js';

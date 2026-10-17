@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Option, Schema } from 'effect';
-import { SqlError } from 'effect/unstable/sql';
+import { SqlError } from 'effect/sql';
 import { sql } from 'kysely';
 
 import type { OperationFailed } from '#infra/errors/operation-failed.js';
@@ -24,7 +24,7 @@ const userSelection = ['id', 'email', 'displayName'] as const;
 const getSomeOrNone = (row: unknown, operation: UserOperation) =>
   Option.match(Option.fromUndefinedOr(row), {
     onNone: () => Effect.succeedNone,
-    onSome: (some) => decodeRow(some, operation).pipe(Effect.map(Option.some)),
+    onSome: (some) => decodeRow(some, operation).pipe(Effect.asSome),
   });
 
 const decodeRow = (row: unknown, operation: UserOperation) =>
@@ -79,9 +79,6 @@ export const UsersRepositoryLive = Layer.effect(
   UsersRepository,
   Effect.gen(function* () {
     const db = yield* DB;
-
-    // TODO: нужна транзакция?
-    // TODO: попробовать переписать Command
 
     const create: UsersRepositoryShape['create'] = (input) =>
       Effect.gen(function* () {

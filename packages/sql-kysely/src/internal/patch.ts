@@ -1,10 +1,9 @@
-import type * as Client from 'effect/unstable/sql/SqlClient';
-import type { SqlError } from 'effect/unstable/sql/SqlError';
+import type * as Client from 'effect/sql/SqlClient';
+import type { SqlError } from 'effect/sql/SqlError';
 import type { Compilable } from 'kysely';
 
 import * as Effect from 'effect/Effect';
 import * as Effectable from 'effect/Effectable';
-
 
 const COMMIT_ERROR =
   "Kysely instance not properly initialised: use 'make' to create an Effect compatible instance";
@@ -19,11 +18,12 @@ const NATIVE_EXECUTION_METHODS = {
   transaction: true,
 } as const satisfies Readonly<Record<string, true>>;
 
-interface EffectifiedQuery
-  extends Effect.Effect<ReadonlyArray<unknown>, SqlError> {
+interface EffectifiedQuery extends Effect.Effect<
+  ReadonlyArray<unknown>,
+  SqlError
+> {
   commit(): Effect.Effect<ReadonlyArray<unknown>, SqlError>;
 }
-
 
 const PatchProto = {
   ...Effectable.Prototype<EffectifiedQuery>({
@@ -50,9 +50,7 @@ export const patch = (prototype: object) => {
  */
 function effectifyWith<T>(
   obj: T,
-  commit: (
-    this: Compilable,
-  ) => Effect.Effect<ReadonlyArray<unknown>, SqlError>,
+  commit: (this: Compilable) => Effect.Effect<ReadonlyArray<unknown>, SqlError>,
   whitelist: ReadonlyArray<string>,
 ): T {
   if (typeof obj !== 'object' || obj === null) {
@@ -85,7 +83,6 @@ function effectifyWith<T>(
           );
         };
       }
-
 
       const prototype: object | null = Object.getPrototypeOf(target);
       if (

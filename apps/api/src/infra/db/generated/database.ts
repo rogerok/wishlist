@@ -13,6 +13,8 @@ export type Roles = "admin" | "user";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export type WishlistsVisibility = "private" | "public";
+
 export interface PasswordCredentials {
   createdAt: Generated<Timestamp>;
   passwordHash: string;
@@ -37,8 +39,20 @@ export interface Users {
   updatedAt: Generated<Timestamp>;
 }
 
+export interface Wishlists {
+  createdAt: Generated<Timestamp>;
+  description: string | null;
+  id: Generated<string>;
+  occasionDate: string | null;
+  ownerId: string;
+  title: string;
+  updatedAt: Generated<Timestamp>;
+  visibility: Generated<WishlistsVisibility>;
+}
+
 export interface DB {
   passwordCredentials: PasswordCredentials;
   sessions: Sessions;
   users: Users;
+  wishlists: Wishlists;
 }

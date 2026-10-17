@@ -1,7 +1,7 @@
-import type { HttpServerRequest } from 'effect/unstable/http';
+import type { HttpServerRequest } from 'effect/http';
 
 import { Schema, SchemaTransformation } from 'effect';
-import { HttpApiSchema } from 'effect/unstable/httpapi';
+import { HttpApiSchema } from 'effect/http-api';
 
 export const asProblemJson = HttpApiSchema.asJson({
   contentType: 'application/problem+json',

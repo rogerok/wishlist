@@ -22,7 +22,8 @@
       "dependsOn": ["^check-types"]
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": ["^test"],
+      "env": ["TZ"]
     },
     "test:watch": {
       "cache": false,

@@ -1,8 +1,8 @@
-import type { HttpApiError } from 'effect/unstable/httpapi';
+import type { HttpApiError } from 'effect/http-api';
 
 import { Effect, Schema, SchemaIssue } from 'effect';
-import { HttpServerRequest } from 'effect/unstable/http';
-import { HttpApiMiddleware } from 'effect/unstable/httpapi';
+import { HttpServerRequest } from 'effect/http';
+import { HttpApiMiddleware } from 'effect/http-api';
 import { match } from 'ts-pattern';
 
 import {
@@ -30,9 +30,10 @@ export const RequestValidationIssueSchema = Schema.Struct({
   message: Schema.String,
 });
 
-export class RequestValidationHttpError extends Schema.Error<RequestValidationHttpError>(
-  'RequestValidationHttpError',
-)(
+export class RequestValidationHttpError extends Schema.Error<
+  RequestValidationHttpError,
+  { readonly brand: unique symbol }
+>('RequestValidationHttpError')(
   {
     code: Schema.tag('REQUEST_VALIDATION_FAILED'),
     detail: Schema.tag('The request contains invalid data'),

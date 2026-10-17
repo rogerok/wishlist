@@ -1,4 +1,4 @@
-import type { SqlError } from 'effect/unstable/sql';
+import type { SqlError } from 'effect/sql';
 
 import { Clock, Option } from 'effect';
 import { Context, Effect, Layer, Schema } from 'effect';

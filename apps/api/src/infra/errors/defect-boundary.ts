@@ -1,5 +1,5 @@
 import { Cause, Config, Effect, Layer, Option } from 'effect';
-import { HttpApiMiddleware } from 'effect/unstable/httpapi';
+import { HttpApiMiddleware } from 'effect/http-api';
 
 import { DefectDetailsConfig, ModeConfig } from '#infra/config/config.js';
 import { asProblemJson } from '#infra/errors/http-problem.js';

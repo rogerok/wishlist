@@ -58,8 +58,9 @@ becomes less visible. _Avoid_: Permalink, public link
 A user-owned snapshot of one gift idea within exactly one Wishlist. Imported external metadata may seed the snapshot but
 does not own it. _Avoid_: Position, Product, Gift
 
-**Wishlist Currency**:
-The single currency in which all optional Wishlist Item prices in one Wishlist are expressed. _Avoid_: Item currency
+**Item Price**:
+An optional exact amount together with its own currency, as the gift costs in the store. Items of one Wishlist may have
+prices in different currencies. _Avoid_: Wishlist Currency
 
 **Reservation**:
 An exclusive intention by exactly one User or Guest to give one Wishlist Item. At most one Reservation is active for an

@@ -1,8 +1,4 @@
-import {
-  HttpApiEndpoint,
-  HttpApiGroup,
-  HttpApiSchema,
-} from 'effect/unstable/httpapi';
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from 'effect/http-api';
 
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import {

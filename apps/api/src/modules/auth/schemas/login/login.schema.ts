@@ -1,7 +1,6 @@
 import { Schema } from 'effect';
-import { HttpApiSchema } from 'effect/unstable/httpapi';
+import { HttpApiSchema } from 'effect/http-api';
 
-import { withRequestParseOptions } from '#infra/schemas/utils.js';
 import {
   CredentialsSchema,
   ExpiresAtSchema,
@@ -13,7 +12,7 @@ import { UserEmailSchema } from '#modules/users/schemas/user.schema.js';
 export const LoginRequestBodySchema = Schema.Struct({
   email: UserEmailSchema,
   password: PasswordSchema,
-}).pipe(withRequestParseOptions);
+});
 
 export type LoginRequestBody = Schema.Schema.Type<
   typeof LoginRequestBodySchema

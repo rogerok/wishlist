@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
-import { Context, Effect, Encoding, Layer, Redacted, Schema } from 'effect';
+import { Context, Effect, Layer, Redacted, Schema } from 'effect';
+import { Base64Url } from 'effect/encoding';
 import { createHash } from 'node:crypto';
 
 import { OperationFailed } from '#infra/errors/operation-failed.js';
@@ -76,7 +77,7 @@ export const SessionTokenGeneratorLive = Layer.effect(
     return {
       generate: Effect.gen(function* () {
         const random32 = yield* randomBytes.get(32);
-        const credential = Redacted.make(Encoding.encodeBase64Url(random32));
+        const credential = Redacted.make(Base64Url.encode(random32));
         const digest = createHash('sha256').update(random32).digest();
 
         return { credential, digest };

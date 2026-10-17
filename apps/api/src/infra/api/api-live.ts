@@ -1,5 +1,5 @@
 import { Layer } from 'effect';
-import { HttpApiBuilder } from 'effect/unstable/httpapi';
+import { HttpApiBuilder } from 'effect/http-api';
 
 import { AppApi } from '#infra/api/api.js';
 import { DefectBoundaryMiddlewareLive } from '#infra/errors/defect-boundary.js';
@@ -10,11 +10,13 @@ import {
 } from '#modules/auth/handlers/auth.handlers.js';
 import { HealthApiLive } from '#modules/health/handlers/health.handlers.js';
 import { UsersHandlersLive } from '#modules/users/handlers/users.handlers.js';
+import { WishlistsHandlersLive } from '#modules/wishlists/handlers/wishlists.handlers.js';
 
 const groupsLive = Layer.mergeAll(
   HealthApiLive,
   UsersHandlersLive,
   AuthHandlersLive,
+  WishlistsHandlersLive,
 );
 const groupsLiveWithMiddleware = groupsLive.pipe(
   Layer.provide([

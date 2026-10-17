@@ -1,4 +1,5 @@
-import { Effect, Encoding, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
+import { Base64Url } from 'effect/encoding';
 
 import type { StoredPasswordHash } from '#modules/auth/schemas/password/password-hash.schema.js';
 
@@ -30,8 +31,8 @@ export const serializePasswordHash = (
     });
   }
 
-  const saltBase64 = Encoding.encodeBase64Url(salt);
-  const hashBase64 = Encoding.encodeBase64Url(derivedKey);
+  const saltBase64 = Base64Url.encode(salt);
+  const hashBase64 = Base64Url.encode(derivedKey);
 
   return Effect.succeed(
     StoredPasswordHashSchema.make(

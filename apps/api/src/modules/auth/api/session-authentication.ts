@@ -1,5 +1,5 @@
 import { Context } from 'effect';
-import { HttpApiMiddleware, HttpApiSecurity } from 'effect/unstable/httpapi';
+import { HttpApiMiddleware, HttpApiSecurity } from 'effect/http-api';
 
 import type { AuthenticatedSession } from '#modules/auth/schemas/session/authenticated-session.schema.js';
 

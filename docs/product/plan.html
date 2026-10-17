@@ -777,7 +777,7 @@
 
       <div class="journey" aria-label="Первый пользовательский путь">
         <div class="journey-step"><span class="step-number">1</span><strong>Signup</strong><span>Opaque Session в HttpOnly cookie.</span></div>
-        <div class="journey-step"><span class="step-number">2</span><strong>Wishlist</strong><span>Название, visibility, currency, occasion.</span></div>
+        <div class="journey-step"><span class="step-number">2</span><strong>Wishlist</strong><span>Название, visibility, occasion.</span></div>
         <div class="journey-step"><span class="step-number">3</span><strong>Wishlist Item</strong><span>Ручная карточка без внешней зависимости.</span></div>
         <div class="journey-step"><span class="step-number">4</span><strong>Sharing</strong><span>Public Profile или текущая Sharing Link.</span></div>
         <div class="journey-step"><span class="step-number">5</span><strong>Reservation</strong><span>User Session или Guest magic link.</span></div>
@@ -842,7 +842,7 @@
         <article class="domain-card">
           <span class="badge green">Aggregate</span>
           <h3>Wishlist</h3>
-          <p>Принадлежит одному User. Содержит title, optional description, non-recurring Occasion Date, visibility и единую ISO currency.</p>
+          <p>Принадлежит одному User. Содержит title, optional description, non-recurring Occasion Date и visibility.</p>
         </article>
         <article class="domain-card">
           <span class="badge amber">Visibility</span>
@@ -891,7 +891,7 @@
         </li>
         <li class="milestone">
           <div class="milestone-number">2</div>
-          <div><h3>Owner-only Wishlists</h3><p>Persistence, runtime schemas и CRUD для title, description, Occasion Date, visibility и Wishlist Currency. Каждая mutation scoped по owner ID.</p></div>
+          <div><h3>Owner-only Wishlists</h3><p>Persistence, runtime schemas и CRUD для title, description, Occasion Date и visibility. Каждая mutation scoped по owner ID.</p></div>
           <div class="deliverable"><strong>Результат</strong>User управляет несколькими приватными списками.</div>
         </li>
         <li class="milestone">
@@ -901,7 +901,7 @@
         </li>
         <li class="milestone">
           <div class="milestone-number">4</div>
-          <div><h3>Wishlist Items без enrichment</h3><p>Manual CRUD, optional HTTPS URL, exact price в currency списка, priority sorting. Ни один read не делает outbound fetch.</p></div>
+          <div><h3>Wishlist Items без enrichment</h3><p>Manual CRUD, optional HTTPS URL, exact price со своей валютой у каждого Item, priority sorting. Ни один read не делает outbound fetch.</p></div>
           <div class="deliverable"><strong>Результат</strong>Полезный список работает без маркетплейсов и storage.</div>
         </li>
         <li class="milestone">

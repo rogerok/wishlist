@@ -6,19 +6,19 @@ import {
   SchemaIssue,
   SchemaTransformation,
 } from 'effect';
-import { HttpRouter } from 'effect/unstable/http';
+import { HttpRouter } from 'effect/http';
 import {
   HttpApi,
   HttpApiBuilder,
   HttpApiEndpoint,
   HttpApiGroup,
-} from 'effect/unstable/httpapi';
+} from 'effect/http-api';
 
+import { requestParseOptions } from '#infra/api/request-parse-options.js';
 import {
   RequestValidationMiddleware,
   RequestValidationMiddlewareLive,
 } from '#infra/errors/request-validation.js';
-import { withRequestParseOptions } from '#infra/schemas/utils.js';
 
 let handlerCalls = 0;
 
@@ -33,7 +33,7 @@ const headers = { 'Content-Type': 'application/json' };
 
 const TestPayloadSchema = Schema.Struct({
   quantity: Schema.Finite,
-}).pipe(withRequestParseOptions);
+});
 const TestIdSchema = Schema.String.pipe(
   Schema.check(
     Schema.isPattern(/^item-\d+$/u, {
@@ -45,7 +45,7 @@ const TestIdSchema = Schema.String.pipe(
 const BrokenResponseSchema = Schema.String.pipe(
   Schema.decodeTo(
     Schema.String,
-    SchemaTransformation.transformOrFail<string, string>({
+    SchemaTransformation.transformEffect<string, string>({
       decode: (value) => Effect.succeed(value),
 
       encode: () =>
@@ -72,6 +72,7 @@ const validationGroup = HttpApiGroup.make('validation').add(
   }),
 );
 const TestApi = HttpApi.make('test')
+  .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
   .add(validationGroup)
   .middleware(RequestValidationMiddleware);
 const TestHandlersLive = HttpApiBuilder.group(

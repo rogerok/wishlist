@@ -8,7 +8,7 @@ import { UsersRepl } from '#modules/users/repl/users.repl.js';
 
 type CreateUserInput = Schema.Codec.Encoded<typeof CreateUserBodySchema>;
 
-const makeCreateUserInput = (): CreateUserInput => {
+export const makeCreateUserInput = (): CreateUserInput => {
   const sex = faker.person.sexType();
   const givenName = faker.person.firstName(sex);
   const familyName = faker.person.lastName(sex);

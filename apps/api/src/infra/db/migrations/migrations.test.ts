@@ -1,6 +1,6 @@
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { SqlClient } from 'effect/unstable/sql/SqlClient';
+import { SqlClient } from 'effect/sql/SqlClient';
 
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 

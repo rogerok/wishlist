@@ -4,7 +4,7 @@ import {
   ConnectionError,
   SqlError,
   UniqueViolation,
-} from 'effect/unstable/sql/SqlError';
+} from 'effect/sql/SqlError';
 
 import { OperationFailed } from '#infra/errors/operation-failed.js';
 import { describeErrorChain } from '#infra/logging/error-chain.js';

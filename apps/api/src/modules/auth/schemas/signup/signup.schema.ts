@@ -1,7 +1,6 @@
 import { Schema, Struct } from 'effect';
-import { HttpApiSchema } from 'effect/unstable/httpapi';
+import { HttpApiSchema } from 'effect/http-api';
 
-import { withRequestParseOptions } from '#infra/schemas/utils.js';
 import {
   CredentialsSchema,
   ExpiresAtSchema,
@@ -23,13 +22,11 @@ export const SignupRequestBodySchema = Schema.Struct({
   password: PasswordSchema,
   passwordConfirm: PasswordSchema,
   displayName: UserDisplayNameInputSchema,
-})
-  .check(
-    Schema.makeFilter(({ password, passwordConfirm }) =>
-      password === passwordConfirm ? undefined : passwordConfirmIssue,
-    ),
-  )
-  .pipe(withRequestParseOptions);
+}).check(
+  Schema.makeFilter(({ password, passwordConfirm }) =>
+    password === passwordConfirm ? undefined : passwordConfirmIssue,
+  ),
+);
 
 export const SignupResponseSuccessSchema = UserResponseSchema.pipe(
   HttpApiSchema.status(201),

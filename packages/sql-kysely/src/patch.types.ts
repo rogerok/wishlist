@@ -1,5 +1,5 @@
 import type { Effect } from 'effect';
-import type { SqlError } from 'effect/unstable/sql/SqlError';
+import type { SqlError } from 'effect/sql/SqlError';
 import type { Kysely, Simplify } from 'kysely';
 
 declare module 'kysely' {
