@@ -489,6 +489,48 @@ describe('wishlists HTTP', () => {
               yield* expectInvalidSession(response, `/api/wishlists/${id}`);
             }),
         );
+
+        // CHECK expires_at > created_at не даёт сдвинуть один срок, поэтому
+        // в прошлое уходят оба timestamp. Repository сравнивает срок с Clock.
+        it.effect(
+          'create и read с истекшей Session: 401, instance без query',
+          () =>
+            Effect.gen(function* () {
+              const sql = yield* SqlClient;
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const wishlist = yield* createWishlist(app, owner, {
+                ...minimalBody,
+                visibility: 'public',
+              });
+              yield* sql`
+              UPDATE "public"."sessions"
+              SET "created_at" = now() - interval '2 days',
+                "expires_at" = now() - interval '1 day'
+              WHERE "user_id" = ${owner.id}
+            `;
+
+              const create = yield* postWishlist(
+                app,
+                owner.cookie,
+                minimalBody,
+                '?source=test',
+              );
+              const read = yield* getWishlist(
+                app,
+                owner.cookie,
+                wishlist.id,
+                '?source=test',
+              );
+
+              yield* expectInvalidSession(create, '/api/wishlists');
+              yield* expectInvalidSession(
+                read,
+                `/api/wishlists/${wishlist.id}`,
+              );
+              expect(yield* selectWishlists).toHaveLength(1);
+            }),
+        );
       });
 
       describe('create', () => {
