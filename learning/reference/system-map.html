@@ -11,7 +11,7 @@
     <div class="eyebrow">Справочник · архитектура API · 10 минут</div>
     <h1>Два графа: что собирается при старте и что выполняется на каждый запрос</h1>
     <p class="lede">Цель: для любого файла в <code>apps/api/src</code> назвать его место на карте и путь, по которому до него доходит запрос.</p>
-    <div class="toplinks"><a class="button" href="#layers">Сборка</a><a class="button" href="#request">Запрос</a><a class="button" href="#errors">Ошибки</a><a class="button" href="#tables">Таблицы</a><a class="button" href="#folders">Папки модуля</a></div>
+    <div class="toplinks"><a class="button" href="#layers">Сборка</a><a class="button" href="#request">Запрос</a><a class="button" href="#wishlist">Wishlist</a><a class="button" href="#errors">Ошибки</a><a class="button" href="#tables">Таблицы</a><a class="button" href="#folders">Папки модуля</a></div>
   </header>
   <div class="shell"><main>
 
@@ -22,16 +22,20 @@
 flowchart TB
   server["server.ts — запуск процесса"] --> http["HttpLive — Node HTTP сервер, CORS"]
   server --> app["AppServicesLive — app.ts"]
-  http --> api["AppApiLive — HttpApiBuilder + RequestValidationMiddleware"]
+  http --> api["AppApiLive — HttpApiBuilder, RequestValidation и DefectBoundary middleware"]
   api --> hh["HealthApiLive"]
   api --> uh["UsersHandlersLive"]
   api --> ah["AuthHandlersLive"]
+  api --> wh["WishlistsHandlersLive"]
   app --> um["UsersModuleLive — UsersService + UsersRepository"]
   app --> am["AuthModuleLive — AuthService, 3 репозитория, PasswordHasher, TokenGenerator"]
+  app --> wm["WishlistsModuleLive — WishlistsService + WishlistRepository"]
   uh -. "UsersService" .-> um
   ah -. "AuthService" .-> am
+  wh -. "WishlistsService" .-> wm
   um --> db["DBLive — Kysely + CamelCasePlugin"]
   am --> db
+  wm --> db
   db --> pg["PgClientLive — пул соединений PostgreSQL"]
 </pre>
       <p class="diagram-caption">Пунктир: handler получает сервис из Context. Связь появляется в <code>server.ts</code>: <code>HttpLive.pipe(Layer.provide(AppServicesLive))</code>.</p>
@@ -40,6 +44,7 @@ flowchart TB
         <tr><td>Сервисы и БД</td><td><a href="../../apps/api/src/app.ts"><code>app.ts</code></a>, <a href="../../apps/api/src/infra/db/db.service.ts"><code>infra/db/db.service.ts</code></a></td></tr>
         <tr><td>HTTP-контракт</td><td><a href="../../apps/api/src/infra/api/api.ts"><code>infra/api/api.ts</code></a>, <a href="../../apps/api/src/infra/api/api-live.ts"><code>infra/api/api-live.ts</code></a></td></tr>
         <tr><td>Auth</td><td><a href="../../apps/api/src/modules/auth/auth.module.ts"><code>modules/auth/auth.module.ts</code></a></td></tr>
+        <tr><td>Wishlist</td><td><a href="../../apps/api/src/modules/wishlists/wishlists.module.ts"><code>modules/wishlists/wishlists.module.ts</code></a></td></tr>
       </tbody></table>
       <p class="callout"><strong>Почему это важно.</strong> Код внутри конструктора Layer выполняется один раз. Если там вызвать <code>randomBytes</code>, все запросы получат одни и те же байты. Код внутри функции сервиса выполняется на каждый вызов.</p>
     </section>
@@ -77,8 +82,64 @@ sequenceDiagram
       <p>Вход работает. <code>/me</code> проходит через middleware <code>SessionAuthentication</code>: он вызывает <code>authenticate</code> и кладёт <code>CurrentSession</code> в Context — <a href="../lessons/0004-security-middleware.html">урок 0004</a>. Выход (<code>POST /api/auth/logout</code>) читает cookie сам, без middleware, и всегда истекает её при 204 — <a href="../lessons/0006-debrief-logout.html">разбор logout</a>.</p>
     </section>
 
+    <section class="card" id="wishlist">
+      <h2>3. Wishlist: create и read под Session</h2>
+      <p>Оба маршрута защищены middleware <code>SessionAuthentication</code>. Владелец и читатель берутся только из <code>CurrentSession</code>: ни тело, ни query их не выбирают.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Клиент
+  participant H as HttpApi
+  participant WH as WishlistsHandlers
+  participant R as WishlistRepository
+  participant DB as PostgreSQL
+  C->>H: POST /api/wishlists, cookie, JSON
+  H->>H: SessionAuthentication
+  alt Session нет или истекла
+    H-->>C: 401, instance — путь без query
+  end
+  H->>H: Schema payload, окно даты по Clock
+  alt тело невалидно или лишний ключ
+    H-->>C: 400 REQUEST_VALIDATION_FAILED
+  end
+  H->>WH: payload и CurrentSession
+  WH->>R: create(user.id, input) через service
+  R->>DB: INSERT 4 поля и owner_id явно
+  DB-->>R: строка с id и timestamps
+  R-->>WH: Wishlist после decode строки
+  WH-->>C: 201, JSON из 8 полей, ISO timestamps
+</pre>
+      <p class="diagram-caption">Окно Occasion Date — UTC [сегодня − 1 день, сегодня + 5 лет] — проверяет <code>SchemaGetter.checkEffect</code> при каждом запросе (<a href="../../apps/api/src/modules/wishlists/schemas/wishlist.schema.ts"><code>wishlist.schema.ts</code></a>). Тело содержит каждый ключ, лишний ключ — 400: <a href="../../docs/adr/0007-request-body-contains-every-field.md">ADR-0007</a>.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Клиент B
+  participant WH as WishlistsHandlers
+  participant S as WishlistsService
+  participant DB as PostgreSQL
+  C->>WH: GET /api/wishlists/:id, cookie B
+  WH->>S: getReadableById(B, id)
+  S->>DB: SELECT WHERE id AND (owner_id = B OR visibility = public)
+  alt строка найдена
+    DB-->>S: строка
+    S-->>C: 200, JSON из 8 полей
+  else чужой Private или id нет
+    DB-->>S: пусто
+    S-->>C: 404 WISHLIST_NOT_FOUND, одно тело
+  end
+</pre>
+      <p class="diagram-caption">Правило доступа живёт в одном SQL, поэтому скрытый и отсутствующий Wishlist неразличимы: тела 404 совпадают полностью. Технический отказ — 503 или 500 по <a href="../../docs/adr/0005-technical-failure-logging-and-5xx-contract.md">ADR-0005</a>; повреждённая строка не исправляется при чтении, а даёт 500.</p>
+      <table><thead><tr><th>Слой</th><th>Файл</th></tr></thead><tbody>
+        <tr><td>Контракт</td><td><a href="../../apps/api/src/modules/wishlists/api/wishlists.api.ts"><code>api/wishlists.api.ts</code></a></td></tr>
+        <tr><td>Handlers</td><td><a href="../../apps/api/src/modules/wishlists/handlers/wishlists.handlers.ts"><code>handlers/wishlists.handlers.ts</code></a></td></tr>
+        <tr><td>Service</td><td><a href="../../apps/api/src/modules/wishlists/service/wishlists.service.ts"><code>service/wishlists.service.ts</code></a></td></tr>
+        <tr><td>Repository</td><td><a href="../../apps/api/src/modules/wishlists/repository/wishlists.repository.ts"><code>repository/wishlists.repository.ts</code></a></td></tr>
+        <tr><td>Спецификация</td><td><a href="../../openspec/changes/add-wishlist-create-read/specs/wishlists/spec.md"><code>add-wishlist-create-read</code></a></td></tr>
+      </tbody></table>
+    </section>
+
     <section class="card" id="errors">
-      <h2>3. Ошибки переводятся на каждой границе</h2>
+      <h2>4. Ошибки переводятся на каждой границе</h2>
 <pre class="mermaid">
 flowchart LR
   subgraph R["Репозитории и crypto"]
@@ -104,16 +165,16 @@ flowchart LR
     </section>
 
     <section class="card" id="tables">
-      <h2>4. Таблицы</h2>
+      <h2>5. Таблицы</h2>
 <pre class="mermaid">
 erDiagram
   users ||--o| password_credentials : "пароль"
   users ||--o{ sessions : "сессии"
+  users ||--o{ wishlists : "владелец"
   users {
     uuid id PK
     varchar email "уникален без учёта регистра"
-    varchar first_name
-    varchar last_name
+    varchar display_name "без крайних пробелов"
     roles role
   }
   password_credentials {
@@ -126,12 +187,21 @@ erDiagram
     bytea token_digest "32 байта, уникален"
     timestamptz expires_at
   }
+  wishlists {
+    uuid id PK
+    uuid owner_id FK
+    varchar title "1-255, не пустой после btrim"
+    varchar description "NULL или 1-1000"
+    date occasion_date "NULL или дата без времени"
+    visibility visibility "private или public"
+  }
 </pre>
-      <p class="diagram-caption">Обе FK — <code>ON DELETE CASCADE</code>: удаление user удаляет его пароль и все сессии. Миграции: <a href="../../apps/api/src/infra/db/migrations/0001_initial.ts"><code>0001_initial.ts</code></a>, <a href="../../apps/api/src/infra/db/migrations/0002_auth.ts"><code>0002_auth.ts</code></a>.</p>
+      <p class="diagram-caption">Все FK — <code>ON DELETE CASCADE</code>: удаление user удаляет его пароль, сессии и Wishlist. Миграции: <a href="../../apps/api/src/infra/db/migrations/0001_initial.ts"><code>0001</code></a>, <a href="../../apps/api/src/infra/db/migrations/0002_auth.ts"><code>0002</code></a>, <a href="../../apps/api/src/infra/db/migrations/0003_display_name.ts"><code>0003</code></a>, <a href="../../apps/api/src/infra/db/migrations/0004_wishlists.ts"><code>0004</code></a>.</p>
+      <p class="callout"><strong>Два правила БД.</strong> <code>occasion_date</code> — тип <code>date</code>: драйвер возвращает строку <code>YYYY-MM-DD</code>, без превращения в момент времени, поэтому часовой пояс процесса её не сдвигает (<a href="../../apps/api/src/infra/db/pg-date.test.ts"><code>pg-date.test.ts</code></a>). Миграции идут только вперёд: обратных нет, локальная БД пересоздаётся.</p>
     </section>
 
     <section class="card" id="folders">
-      <h2>5. Папки модуля: у каждой одна работа</h2>
+      <h2>6. Папки модуля: у каждой одна работа</h2>
       <table><thead><tr><th>Папка</th><th>Отвечает за</th><th>Пример в auth</th></tr></thead><tbody>
         <tr><td><code>api/</code></td><td>HTTP-контракт: путь, payload, ответы, ошибки со статусами</td><td><code>auth.api.ts</code>, <code>auth.api.errors.ts</code></td></tr>
         <tr><td><code>schemas/</code></td><td>Проверка данных во время выполнения (Schema)</td><td><code>signup/signup.schema.ts</code></td></tr>
@@ -150,6 +220,8 @@ erDiagram
         <p>Транзакция — часть сценария «создать user, пароль и сессию вместе». Сценарий живёт в service. Handler знает только HTTP: статусы, cookie, логи.</p></details>
       <details class="quiz"><summary><strong>Пользователя удалили. Что стало с его сессиями и почему?</strong></summary>
         <p>Удалены: <code>sessions.user_id</code> ссылается на <code>users</code> с <code>ON DELETE CASCADE</code>. Это делает PostgreSQL, а не код приложения.</p></details>
+      <details class="quiz"><summary><strong>B запрашивает чужой Private Wishlist. Почему ответ 404, а не 403?</strong></summary>
+        <p>403 сказал бы B, что такой id существует. SQL читает строку только при <code>owner_id = B</code> или <code>public</code>, поэтому чужой Private и несуществующий id дают одно и то же пустое Option и одинаковое тело 404.</p></details>
     </section>
   </main></div>
   <footer class="shell">
