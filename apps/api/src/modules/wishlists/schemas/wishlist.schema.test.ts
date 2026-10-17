@@ -1,11 +1,13 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 import * as TestClock from 'effect/testing/TestClock';
 
+import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
 import {
   CalendarDateInWindow,
   WishlistOccasionDateInputSchema,
   WishlistOccasionDateSchema,
+  WishlistSchema,
 } from '#modules/wishlists/schemas/wishlist.schema.js';
 
 // Окно при этом времени: 2026-10-11 … 2031-10-12 включительно.
@@ -183,9 +185,65 @@ describe('WishlistOccasionDateSchema', () => {
   });
 });
 
-// TODO(you): задача 1.4.
+// Строка в том виде, в каком её отдаёт PostgreSQL: timestamps уже Date,
+// date-only — строка (pg-date.test.ts).
+const storedRow = {
+  id: '00000000-0000-4000-8000-0000000000aa',
+  ownerId: '00000000-0000-4000-8000-0000000000bb',
+  title: 'Books',
+  description: 'Art',
+  occasionDate: '2028-02-29',
+  visibility: 'public',
+  createdAt: new Date('2026-10-12T12:00:00Z'),
+  updatedAt: new Date('2026-10-12T12:30:00Z'),
+} as const;
+
+const decodeRow = (row: unknown) =>
+  Effect.result(Schema.decodeUnknownEffect(WishlistSchema)(row));
+
+// Задача 1.4. Сохранённая Schema и response не читают Clock и не исправляют
+// значения: decode только проверяет строку, encode только меняет форму.
 describe('Wishlist row and response schemas', () => {
-  it.todo('Ответ create соответствует записи');
-  it.todo('Чтение старой Occasion Date');
-  it.todo('Повреждённая строка при read');
+  it.effect('Ответ create соответствует записи', () =>
+    Effect.gen(function* () {
+      // Строка БД → Wishlist.
+      const wishlist =
+        yield* Schema.decodeUnknownEffect(WishlistSchema)(storedRow);
+
+      // Wishlist → JSON ответа: Date кодируется строкой ISO 8601.
+      const json = yield* Schema.encodeEffect(WishlistResponseSchema)(wishlist);
+
+      expect(json).toEqual({
+        id: storedRow.id,
+        ownerId: storedRow.ownerId,
+        title: 'Books',
+        description: 'Art',
+        occasionDate: '2028-02-29',
+        visibility: 'public',
+        createdAt: '2026-10-12T12:00:00.000Z',
+        updatedAt: '2026-10-12T12:30:00.000Z',
+      });
+    }),
+  );
+
+  it.effect('Чтение старой Occasion Date', () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(now);
+      const row = { ...storedRow, occasionDate: '2020-02-29' };
+
+      const result = yield* decodeRow(row);
+
+      expect(
+        Result.map(result, (wishlist) => wishlist.occasionDate),
+      ).toBeResultSuccess('2020-02-29');
+    }),
+  );
+
+  it.effect('Повреждённая строка при read', () =>
+    Effect.gen(function* () {
+      expect(
+        yield* decodeRow({ ...storedRow, title: ' ' }),
+      ).toBeResultSchemaFailure([expect.objectContaining({ path: ['title'] })]);
+    }),
+  );
 });
