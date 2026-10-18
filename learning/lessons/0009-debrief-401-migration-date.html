@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор: 401 любого маршрута, миграция 0004 и дата без времени</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Разбор · 401, миграция 0004, date-only · 5 минут</div>
+    <h1>Каждое значение приводится к правильной форме там, где оно впервые встречается: путь — на границе HTTP, имя — до CHECK, дата — в драйвере</h1>
+    <p class="lede">Три решения агента из шага 3: исправление <code>instance</code> в 401 (коммит 6e9a7e7), миграция <code>0004</code> с её тестом и чтение <code>date</code> после перехода на Effect 4.0.4.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/auth/handlers/auth.handlers.ts">auth.handlers.ts</a>
+      <a class="button" href="../../apps/api/src/infra/db/migrations/0004_wishlists.ts">0004_wishlists.ts</a>
+      <a class="button" href="../../apps/api/src/infra/db/pg-date.test.ts">pg-date.test.ts</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Откуда берётся instance в 401</h2>
+<pre class="mermaid">flowchart LR
+  R["GET /api/wishlists/ID?source=test"] --> M{"SessionAuthentication"}
+  M --> A["AuthService.authenticate"]
+  A -->|"нет Session"| E["AuthUnauthenticatedError — без адреса"]
+  E --> H["middleware: getRequestPathname"]
+  H --> B["401, instance = /api/wishlists/ID"]
+</pre>
+    </section>
+
+    <section class="card decision" id="d1">
+      <h2>1. Доменная ошибка не знает адреса; instance подставляет middleware из пути запроса</h2>
+      <p><span class="label">Что</span><code>auth.handlers.ts:137–147</code>:</p>
+<pre><code>const session = yield* service.authenticate(credential).pipe(
+  Effect.catchTags({
+    AuthUnauthenticatedError: () =>
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        return yield* new AuthUnauthenticatedHttpError({
+          instance: getRequestPathname(request),   // путь без query
+        });</code></pre>
+      <p><span class="label">Почему</span>Раньше тело 401 было схемой с <code>instance: Schema.tag('/api/auth/me')</code>. Пока Session проверял один <code>/me</code>, это работало. С <code>POST /api/wishlists</code> клиент получал 401 с <code>instance: /api/auth/me</code> — ссылкой на чужой ресурс. Полный URL вместо пути принёс бы в тело и в лог query: <code>?source=test</code> сегодня, токен приглашения завтра. Семь тестов Session в Wishlist проверяют путь без query.</p>
+      <p><span class="label">Цена</span><code>AuthService</code> больше не может отдать готовое тело 401: адрес знает только граница HTTP. Каждый защищённый маршрут отвечает одним классом <code>AuthUnauthenticatedHttpError</code>, а старая схема <code>AuthUnauthenticatedProblem</code> удалена без алиаса.</p>
+      <details><summary>В middleware заменили <code>getRequestPathname(request)</code> на <code>request.url</code>. Клиент без cookie отправляет <code>GET /api/wishlists/ID?source=test</code>. Что будет в <code>instance</code> и что упадёт?</summary><p><code>/api/wishlists/ID?source=test</code>: query попадёт в тело. Падают тесты Session «… instance без query» в <code>wishlists.handlers.test.ts</code>. <a href="#d1">Решение 1</a>.</p></details>
+    </section>
+
+    <section class="card decision" id="d2">
+      <h2>2. Миграция 0004 сначала чистит имена, потом добавляет CHECK; тест стартует со схемы 0003 и грязных строк</h2>
+      <p><span class="label">Что</span><code>0004_wishlists.ts:28–37</code> и <code>wishlists.migration.test.ts:66–80</code>:</p>
+<pre><code>UPDATE "public"."users"
+SET "display_name" = coalesce(nullif(btrim("display_name"), ''), 'User')
+WHERE "display_name" &lt;&gt; btrim("display_name") OR btrim("display_name") = '';
+ALTER TABLE "public"."users" ADD CONSTRAINT "users_display_name_trimmed_check"
+  CHECK ("display_name" = btrim("display_name") AND "display_name" &lt;&gt; '');
+-- тест: 0001–0003, затем строки '  Ada  ', '   ', 'Ada', затем все миграции</code></pre>
+      <p><span class="label">Почему</span>Если поменять шаги местами, <code>ADD CONSTRAINT</code> встретит строку <code>'  Ada  '</code> и PostgreSQL откажет с кодом 23514. Миграция не применится, запуск сервера остановится. На пустой тестовой БД этого не видно: строк нет, CHECK добавляется. Поэтому тест сначала применяет только <code>0001–0003</code>, вставляет три грязных имени и ждёт <code>'User'</code>, <code>'Ada'</code>, <code>'Ada'</code>. Отказ новой записи <code>' Bob '</code> он сверяет по коду 23514 и имени ограничения, а не по факту «что-то упало».</p>
+      <p><span class="label">Цена</span>Миграция молча меняет данные: имя <code>'   '</code> становится <code>'User'</code>. Обратных миграций нет, исходное значение не вернуть.</p>
+      <details><summary>В <code>0004</code> поменяли местами <code>UPDATE</code> и <code>ADD CONSTRAINT</code>. На локальной БД есть User с <code>display_name = '  Ada  '</code>. Что произойдёт при запуске миграций и какой тест это поймает?</summary><p>PostgreSQL отклонит <code>ADD CONSTRAINT</code> с 23514, миграция упадёт. Поймает тест «normalizes existing display names before adding the trimmed check»: он воспроизводит ровно такую БД. <a href="#d2">Решение 2</a>.</p></details>
+    </section>
+
+    <section class="card decision" id="d3">
+      <h2>3. Occasion Date остаётся строкой от драйвера до JSON</h2>
+      <p><span class="label">Что</span><code>pg-date.test.ts:7–9</code> и <code>.kysely-codegenrc.json</code>:</p>
+<pre><code>// @effect/sql-pg 4.0.4 читает `date` своим кодеком и отдаёт строку YYYY-MM-DD.
+// Тест упадёт, если дата начнёт приходить объектом Date или сдвигаться
+// вместе с часовым поясом процесса.
+"dateParser": "string"     // generated: occasionDate: string | null</code></pre>
+      <p><span class="label">Почему</span>Date — это момент времени, а у <code>2028-02-29</code> времени нет. Если превратить дату в Date по полуночи процесса, в <code>TZ=Europe/Moscow</code> получится <code>2028-02-28T21:00:00Z</code>. Обратное форматирование по UTC вернёт <code>2028-02-28</code>: клиент создал 29 февраля, а прочитал 28-е. Строка не зависит от пояса: <code>pg-date.test.ts</code> гоняет один и тот же круг в UTC, Москве и Лос-Анджелесе. В rc.108 для этого добавляли <code>pg.TypeOverrides</code>; в 4.0.4 у <code>sql-pg</code> свой протокол без <code>pg</code>, и такая настройка лишняя.</p>
+      <p><span class="label">Цена</span>Сравнение дат — строковое: окно проверяет <code>value &gt;= min</code>. Это верно только для формата <code>YYYY-MM-DD</code> с ведущими нулями, поэтому Schema отклоняет <code>2028-2-9</code>. Обновление <code>@effect/sql-pg</code> может сменить кодек — тогда первым упадёт <code>pg-date.test.ts</code>.</p>
+      <details><summary>Кто-то разбирает <code>date</code> в <code>Date</code> по полуночи процесса, а в ответе пишет <code>toISOString().slice(0, 10)</code>. Сервер работает с <code>TZ=Europe/Moscow</code>, клиент создал Wishlist с <code>2028-02-29</code>. Что вернёт GET?</summary><p><code>2028-02-28</code>: полночь по Москве — это 21:00 предыдущего дня по UTC. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+
+    <section class="card">
+      <h2>Источники и границы проверки</h2>
+      <p>Тело ошибок — <a href="../../docs/adr/0005-technical-failure-logging-and-5xx-contract.md">ADR-0005</a> и <a href="../../openspec/specs/wishlists/spec.md">спека wishlists</a>. Тип <code>date</code> в PostgreSQL — <a href="https://www.postgresql.org/docs/16/datatype-datetime.html">документация PostgreSQL 16, Date/Time Types</a>.</p>
+      <p>Что проверено и что нет — в <a href="../STATE.md">STATE.md</a>.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0008-debrief-wishlist-create-read.html">Предыдущий урок: create/read Wishlist</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>
