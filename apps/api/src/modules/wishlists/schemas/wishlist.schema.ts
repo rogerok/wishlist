@@ -9,6 +9,9 @@ import { makeLiteralUnionSchema } from '#infra/schemas/utils.js';
 import { makeIdBrandedSchema } from '#infra/schemas/uuid4.schema.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 
+const MIN_DATE_TIME_WINDOW_DAYS = 1;
+const MAX_DATE_TIME_WINDOW_YEARS = 5;
+
 export const WishlistIdSchema = makeIdBrandedSchema('WishlistId');
 export type WishlistId = Schema.Schema.Type<typeof WishlistIdSchema>;
 
@@ -31,8 +34,12 @@ const occasionDateWindow = (now: DateTime.Utc) => {
   const today = DateTime.startOf(now, 'day');
 
   return {
-    min: DateTime.formatIsoDateUtc(DateTime.subtract(today, { days: 1 })),
-    max: DateTime.formatIsoDateUtc(DateTime.add(today, { years: 5 })),
+    min: DateTime.formatIsoDateUtc(
+      DateTime.subtract(today, { days: MIN_DATE_TIME_WINDOW_DAYS }),
+    ),
+    max: DateTime.formatIsoDateUtc(
+      DateTime.add(today, { years: MAX_DATE_TIME_WINDOW_YEARS }),
+    ),
   };
 };
 

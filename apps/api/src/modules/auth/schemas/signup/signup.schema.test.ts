@@ -143,10 +143,10 @@ describe('SignupBodySchema', () => {
     FastCheck.assert(
       FastCheck.property(
         differentPasswordsArbitrary,
-        ([password, passwordConfirm]) => {
+        ([generatedPassword, passwordConfirm]) => {
           const result = Schema.decodeResult(SignupRequestBodySchema)({
             ...commonBodyFields,
-            password,
+            password: generatedPassword,
             passwordConfirm,
           });
 

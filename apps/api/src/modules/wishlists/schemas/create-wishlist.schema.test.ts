@@ -23,7 +23,7 @@ const decodeWith = (field: Readonly<Record<string, unknown>>) =>
     yield* TestClock.setTime(now);
 
     return yield* Effect.result(
-      Schema.decodeUnknownEffect(CreateWishlistBodySchema)({
+      Schema.decodeEffect(CreateWishlistBodySchema)({
         ...minimalBody,
         ...field,
       }),

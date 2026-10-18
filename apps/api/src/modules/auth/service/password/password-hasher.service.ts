@@ -115,10 +115,11 @@ export const PasswordHasherLive = Layer.effect(
 
     const verify: PasswordHasherShape['verify'] = (
       password: Redacted.Redacted<string>,
-      hash: string,
+      storedHash: string,
     ) =>
       Effect.gen(function* () {
-        const { salt, derivedKey } = yield* parsePasswordHashStructure(hash);
+        const { salt, derivedKey } =
+          yield* parsePasswordHashStructure(storedHash);
         const createdDerivedKey = yield* admissionSem.withPermitsIfAvailable(1)(
           workSem.withPermits(1)(
             makeDeriveKey(

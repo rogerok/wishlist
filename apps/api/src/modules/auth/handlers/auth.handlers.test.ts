@@ -217,7 +217,7 @@ describe('signup errors handling', () => {
       Effect.gen(function* () {
         const app = yield* Effect.acquireRelease(
           Effect.sync(() => makeApp(failure)),
-          (app) => Effect.promise(() => app.dispose()),
+          (started) => Effect.promise(() => started.dispose()),
         );
 
         const resp = yield* Effect.promise(() =>
@@ -267,7 +267,7 @@ describe('signup errors handling', () => {
         Effect.sync(() =>
           makeApp(failed('internal', 'authService', 'signup', sqlError)),
         ),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
       const request = makeSignupRequest();
       for (const [name, value] of Object.entries(traceHeaders)) {
@@ -293,7 +293,7 @@ describe('signup errors handling', () => {
       const consoleOutput = yield* captureConsole;
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(Effect.die(new Error(sensitiveMarker)))),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
 
       const resp = yield* Effect.promise(() =>
@@ -325,7 +325,7 @@ describe('signup errors handling', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(usersRepositoryError)),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
 
       yield* Effect.promise(() => app.handler(makeSignupRequest()));
@@ -348,7 +348,7 @@ describe('signup errors handling', () => {
       Effect.gen(function* () {
         const app = yield* Effect.acquireRelease(
           Effect.sync(() => makeApp(new UserEmailAlreadyExistsError())),
-          (app) => Effect.promise(() => app.dispose()),
+          (started) => Effect.promise(() => started.dispose()),
         );
 
         const resp = yield* Effect.promise(() =>
@@ -398,7 +398,7 @@ describe('successful signup', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(Effect.succeed(signupResult))),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
 
       const resp = yield* Effect.promise(() =>
@@ -437,7 +437,7 @@ describe('successful signup', () => {
     Effect.gen(function* () {
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(Effect.succeed(signupResult), 'production')),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
 
       const resp = yield* Effect.promise(() =>
@@ -490,7 +490,7 @@ describe('signup request validation', () => {
       });
       const app = yield* Effect.acquireRelease(
         Effect.sync(() => makeApp(signup)),
-        (app) => Effect.promise(() => app.dispose()),
+        (started) => Effect.promise(() => started.dispose()),
       );
       const resp = yield* Effect.promise(() => app.handler(request));
       const json = yield* Effect.promise(() => resp.json());
@@ -536,7 +536,7 @@ describe('signup request validation', () => {
         });
         const app = yield* Effect.acquireRelease(
           Effect.sync(() => makeApp(signup)),
-          (app) => Effect.promise(() => app.dispose()),
+          (started) => Effect.promise(() => started.dispose()),
         );
         const resp = yield* Effect.promise(() => app.handler(request));
         const json = yield* Effect.promise(() => resp.json());

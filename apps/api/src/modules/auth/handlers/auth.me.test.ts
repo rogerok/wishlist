@@ -126,8 +126,8 @@ const expectInvalidSession = (response: Response) =>
   });
 
 describe('GET /api/auth/me with PostgreSQL', () => {
-  layer(servicesLayer, { timeout: '60 seconds' })((it) => {
-    it.effect('rejects a request without a session cookie', () =>
+  layer(servicesLayer, { timeout: '60 seconds' })((itWithDb) => {
+    itWithDb.effect('rejects a request without a session cookie', () =>
       Effect.gen(function* () {
         const app = yield* acquireApp(yield* AuthService);
 
@@ -135,7 +135,7 @@ describe('GET /api/auth/me with PostgreSQL', () => {
       }),
     );
 
-    it.effect('rejects a malformed session cookie', () =>
+    itWithDb.effect('rejects a malformed session cookie', () =>
       Effect.gen(function* () {
         const app = yield* acquireApp(yield* AuthService);
 
@@ -145,7 +145,7 @@ describe('GET /api/auth/me with PostgreSQL', () => {
       }),
     );
 
-    it.effect('rejects a well-formed cookie without a session', () =>
+    itWithDb.effect('rejects a well-formed cookie without a session', () =>
       Effect.gen(function* () {
         const app = yield* acquireApp(yield* AuthService);
 
@@ -155,18 +155,20 @@ describe('GET /api/auth/me with PostgreSQL', () => {
       }),
     );
 
-    it.effect('returns the current user for the cookie issued by signup', () =>
-      Effect.gen(function* () {
-        const db = yield* DB;
-        const app = yield* acquireApp(yield* AuthService);
-        const signup = yield* register(app, db);
+    itWithDb.effect(
+      'returns the current user for the cookie issued by signup',
+      () =>
+        Effect.gen(function* () {
+          const db = yield* DB;
+          const app = yield* acquireApp(yield* AuthService);
+          const signup = yield* register(app, db);
 
-        const response = yield* getMe(app, signup.cookie);
+          const response = yield* getMe(app, signup.cookie);
 
-        expect(response.status).toBe(200);
-        const json: unknown = yield* Effect.promise(() => response.json());
-        expect(json).toEqual(signup.user);
-      }),
+          expect(response.status).toBe(200);
+          const json: unknown = yield* Effect.promise(() => response.json());
+          expect(json).toEqual(signup.user);
+        }),
     );
   });
 });

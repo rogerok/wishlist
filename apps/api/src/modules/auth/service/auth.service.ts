@@ -49,8 +49,7 @@ const unAuthenticatedError = new AuthUnauthenticatedError();
 
 const source = 'authService';
 
-// Отказы, смысл которых известен только сценарию: источник их не
-// классифицирует, это делает AuthService.
+// Отказы, смысл которых известен только AuthService
 const failedIn =
   (operation: AuthOperation, reason: FailureReason) => (cause: unknown) =>
     new OperationFailed({ reason, source, operation, cause });
@@ -109,32 +108,33 @@ export const AuthServiceLive = Layer.effect(
 
         const { user, expiresAt } = yield* db.withTransaction(
           Effect.gen(function* () {
-            const user = yield* usersRepo.create({ email, displayName });
+            const createdUser = yield* usersRepo.create({
+              email,
+              displayName,
+            });
 
-            yield* passwordRepo.create(user.id, passwordHash);
+            yield* passwordRepo.create(createdUser.id, passwordHash);
 
             const now = yield* Clock.currentTimeMillis;
-            const expiresAt = new Date(now + sessionLifetimeMs);
+            const requestedExpiresAt = new Date(now + sessionLifetimeMs);
 
             const session = yield* sessionRepo.create(
-              user.id,
+              createdUser.id,
               digest,
-              expiresAt,
+              requestedExpiresAt,
             );
 
-            return { user, expiresAt: session.expiresAt };
+            return { user: createdUser, expiresAt: session.expiresAt };
           }),
         );
 
         return { user, credential, expiresAt };
       }).pipe(
         Effect.catchTags({
-          // Хэш только что посчитан: неверная длина его частей — ошибка кода.
           PasswordHashIntegrityError: failedIn(
             AuthOperation.signup,
             'internal',
           ),
-          // User создан в этой же транзакции: пароль или digest уже есть — ошибка кода.
           PasswordCredentialsAlreadyExists: failedIn(
             AuthOperation.signup,
             'internal',
@@ -143,7 +143,6 @@ export const AuthServiceLive = Layer.effect(
             AuthOperation.signup,
             'internal',
           ),
-          // BEGIN транзакции; ошибки COMMIT/ROLLBACK Effect делает дефектами.
           SqlError: sqlOperationFailed(source, AuthOperation.signup),
         }),
       );
@@ -182,7 +181,6 @@ export const AuthServiceLive = Layer.effect(
         return { user: user.value, expiresAt: session.expiresAt, credential };
       }).pipe(
         Effect.catchTags({
-          // Хэш прочитан из базы: не разбирается — значит, запись повреждена.
           PasswordHashIntegrityError: failedIn(
             AuthOperation.login,
             'dataIntegrity',
@@ -217,10 +215,7 @@ export const AuthServiceLive = Layer.effect(
           expiresAt: session.value.expiresAt,
           sessionId: session.value.id,
         };
-      }).pipe(
-        // Cookie не разбирается как токен — это не отказ сервера, а нет Session.
-        Effect.catchTag('SchemaError', () => unAuthenticatedError),
-      );
+      }).pipe(Effect.catchTag('SchemaError', () => unAuthenticatedError));
 
     const logout: AuthServiceShape['logout'] = (credential) =>
       Effect.gen(function* () {
