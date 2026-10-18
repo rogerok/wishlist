@@ -1,12 +1,11 @@
 import { Schema } from 'effect';
 
+import type { WishlistId } from '#modules/wishlists/schemas/wishlist.schema.js';
+
 import { domainProblem } from '#infra/errors/http-problem.js';
 import { makeNotFoundBody } from '#infra/errors/problem-bodies.js';
 import { wishlistsCollectionPath } from '#modules/wishlists/api/wishlists.api.constants.js';
-import {
-  WishlistId,
-  WishlistIdSchema,
-} from '#modules/wishlists/schemas/wishlist.schema.js';
+import { WishlistIdSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
 import { WishlistNotFoundError } from '#modules/wishlists/wishlists.errors.js';
 
 export const WishlistByIdInstanceSchema = Schema.TemplateLiteral([

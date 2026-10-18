@@ -124,9 +124,7 @@ const failingDeleteRepo = (failure: OperationFailed) =>
 // Layer.fresh: без него layer() группы вернёт уже собранный AuthService
 // с настоящим репозиторием (вопрос 12 очереди повторения).
 const authWithFailingDelete = (failure: OperationFailed) =>
-  Effect.gen(function* () {
-    return yield* AuthService;
-  }).pipe(
+  Effect.service(AuthService).pipe(
     Effect.provide(
       Layer.fresh(AuthServiceLive).pipe(
         Layer.provide([
