@@ -14,7 +14,6 @@ import {
   TestDatabaseLive,
 } from '#infra/db/test-database.layer.js';
 
-// Что именно отклонил PostgreSQL: код SQLSTATE и имя ограничения либо колонки.
 const rejectionOf = (error: SqlError) => {
   const cause: unknown = Predicate.hasProperty(error.reason, 'cause')
     ? error.reason.cause
@@ -276,23 +275,32 @@ layer(TestDatabaseLive, { timeout: '60 seconds' })(
         }),
     );
 
-    it.effect('indexes wishlists by owner', () =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClient;
+    it.effect(
+      'indexes wishlists by owner in the order of the createdAt sort',
+      () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient;
 
-        const indexes = yield* sql<{ indexdef: string }>`
-          SELECT "indexdef"
+          const indexes = yield* sql<{ indexdef: string; indexname: string }>`
+          SELECT "indexname", "indexdef"
           FROM "pg_indexes"
-          WHERE "schemaname" = 'public' AND "indexname" = 'wishlists_owner_id_idx'
+          WHERE "schemaname" = 'public' AND "tablename" = 'wishlists'
+          ORDER BY "indexname"
         `;
 
-        expect(indexes).toEqual([
-          {
-            indexdef:
-              'CREATE INDEX wishlists_owner_id_idx ON public.wishlists USING btree (owner_id)',
-          },
-        ]);
-      }),
+          expect(indexes).toEqual([
+            {
+              indexname: 'wishlists_owner_id_created_at_id_idx',
+              indexdef:
+                'CREATE INDEX wishlists_owner_id_created_at_id_idx ON public.wishlists USING btree (owner_id, created_at DESC, id DESC)',
+            },
+            {
+              indexname: 'wishlists_pkey',
+              indexdef:
+                'CREATE UNIQUE INDEX wishlists_pkey ON public.wishlists USING btree (id)',
+            },
+          ]);
+        }),
     );
   },
 );
