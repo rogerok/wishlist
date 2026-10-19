@@ -216,6 +216,13 @@ Work:
 - enforce `private`, `unlisted`, and `public` visibility in one authorization policy;
 - rotate/invalidate the Sharing Link on every transition to a less visible mode and through an explicit owner command;
 - keep Sharing Link credentials out of logs, metrics, and error details.
+- list Public Wishlists of a Public Profile through the keyset pagination module
+  ([ADR-0008](../adr/0008-keyset-pagination-with-opaque-cursor.md)); this second consumer moves the module from
+  `apps/api/src/infra/pagination/` into a workspace package (решение владельца 2026-10-18).
+
+Открытый вопрос (2026-10-18): владелец хочет, чтобы список Wishlist конкретного User показывал автору `private` и
+`public`, а остальным — только Public (`unlisted` — никогда). Это отдельный эндпоинт рядом с `GET /api/wishlists` или
+сам Public Profile? Acceptance ниже говорит, что Public Profile содержит только Public Wishlists.
 
 Acceptance:
 
