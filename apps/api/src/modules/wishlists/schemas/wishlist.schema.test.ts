@@ -207,8 +207,7 @@ describe('Wishlist row and response schemas', () => {
   it.effect('Ответ create соответствует записи', () =>
     Effect.gen(function* () {
       // Строка БД → Wishlist.
-      const wishlist =
-        yield* Schema.decodeUnknownEffect(WishlistSchema)(storedRow);
+      const wishlist = yield* Schema.decodeEffect(WishlistSchema)(storedRow);
 
       // Wishlist → JSON ответа: Date кодируется строкой ISO 8601.
       const json = yield* Schema.encodeEffect(WishlistResponseSchema)(wishlist);

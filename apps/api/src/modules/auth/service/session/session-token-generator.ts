@@ -72,11 +72,11 @@ export class SessionTokenGenerator extends Context.Service<
 export const SessionTokenGeneratorLive = Layer.effect(
   SessionTokenGenerator,
   Effect.gen(function* () {
-    const randomBytes = yield* SecureRandomBytes;
+    const secureRandomBytes = yield* SecureRandomBytes;
 
     return {
       generate: Effect.gen(function* () {
-        const random32 = yield* randomBytes.get(32);
+        const random32 = yield* secureRandomBytes.get(32);
         const credential = Redacted.make(Base64Url.encode(random32));
         const digest = createHash('sha256').update(random32).digest();
 

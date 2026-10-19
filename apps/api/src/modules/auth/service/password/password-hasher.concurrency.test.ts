@@ -26,7 +26,7 @@ vi.mock('crypto', async (importOriginal) => {
 
   return {
     ...actual,
-    randomBytes: vi.fn(actual.randomBytes),
+    randomBytes: vi.fn<typeof Crypto.randomBytes>(actual.randomBytes),
     scrypt: scryptMock,
   };
 });
@@ -66,7 +66,7 @@ const controlledScrypt = Effect.acquireRelease(
             callback(null, Buffer.alloc(keyLength));
           },
         );
-        for (const finish of [...pending.values()]) finish(null);
+        for (const finish of pending.values()) finish(null);
       },
     };
   }),
@@ -80,7 +80,6 @@ describe('PasswordHasher concurrency', () => {
   it.effect('limits active derivations to two', () =>
     Effect.gen(function* () {
       const hasher = yield* PasswordHasher;
-      const password = Redacted.make('password');
 
       const twoStarted = yield* Deferred.make<void>();
       const threeStarted = yield* Deferred.make<void>();
@@ -138,11 +137,7 @@ describe('PasswordHasher concurrency', () => {
     () =>
       Effect.gen(function* () {
         const hasher = yield* PasswordHasher;
-        const password = Redacted.make('password');
-        const storedHash = yield* serializePasswordHash(
-          Buffer.alloc(16),
-          Buffer.alloc(32),
-        );
+        const stored = yield* storedHash;
         const twoStarted = yield* Deferred.make<void>();
 
         scryptMock.mockImplementation(() => {
@@ -153,7 +148,7 @@ describe('PasswordHasher concurrency', () => {
 
         const firstFiber = yield* Effect.forkChild(hasher.hash(password));
         const secondFiber = yield* Effect.forkChild(
-          hasher.verify(password, storedHash),
+          hasher.verify(password, stored),
         );
         yield* Deferred.await(twoStarted);
 
@@ -161,7 +156,7 @@ describe('PasswordHasher concurrency', () => {
           startImmediately: true,
         });
         const fourthFiber = yield* Effect.forkChild(
-          hasher.verify(password, storedHash),
+          hasher.verify(password, stored),
           { startImmediately: true },
         );
 
@@ -170,7 +165,7 @@ describe('PasswordHasher concurrency', () => {
           { startImmediately: true },
         );
         const excessVerifyFiber = yield* Effect.forkChild(
-          Effect.result(hasher.verify(password, storedHash)),
+          Effect.result(hasher.verify(password, stored)),
           { startImmediately: true },
         );
 

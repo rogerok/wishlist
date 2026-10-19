@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "cwd": "apps/api",
+      "runtimeExecutable": "/home/vyacheslav/.nvm/versions/node/v26.7.0/bin/node",
+      "runtimeArgs": [
+        "--env-file=/home/vyacheslav/my-projects/wishlist/apps/api/.env.development",
+        "--enable-source-maps",
+        "/home/vyacheslav/my-projects/wishlist/apps/api/dist/infra/bin/server.js"
+      ],
+      "port": 3000
+    }
+  ]
+}

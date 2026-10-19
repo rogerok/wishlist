@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор: create и read Wishlist — где живёт каждая проверка</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Разбор · create/read Wishlist · 5 минут</div>
+    <h1>Каждая проверка Wishlist живёт там, где её нельзя обойти: окно — в decode запроса, доступ — в SQL, лишние ключи — в настройках AppApi</h1>
+    <p class="lede">Агент дописал тесты шага 3.3: HTTP, Schema, service — 395 тестов в полном прогоне. Разберём три решения, которые эти тесты закрепляют и которые больнее всего отменить.</p>
+    <div class="toplinks">
+      <a class="button" href="../../apps/api/src/modules/wishlists/schemas/wishlist.schema.ts">wishlist.schema.ts</a>
+      <a class="button" href="../../apps/api/src/modules/wishlists/repository/wishlists.repository.ts">wishlists.repository.ts</a>
+      <a class="button" href="../../apps/api/src/modules/wishlists/handlers/wishlists.handlers.test.ts">wishlists.handlers.test.ts</a>
+      <a class="button" href="../reference/system-map.html#wishlist">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Где запрос останавливается</h2>
+<pre class="mermaid">flowchart LR
+  P["POST /api/wishlists"] --> A{"SessionAuthentication"}
+  A -->|"нет Session"| E401["401"]
+  A --> D{"decode payload с настройками AppApi"}
+  D -->|"лишний ключ, неверное поле, дата вне окна по Clock"| E400["400"]
+  D --> I["INSERT 4 поля + owner_id из Session"]
+  I --> OK["201"]
+  G["GET /api/wishlists/:id"] --> S{"WHERE id AND (owner = viewer OR public)"}
+  S -->|"строка есть"| R200["200"]
+  S -->|"пусто"| R404["404, одно тело"]
+</pre>
+    </section>
+
+    <section class="card decision" id="d1">
+      <h2>1. Окно даты проверяет decode запроса и читает Clock на каждом запросе</h2>
+      <p><span class="label">Что</span><code>wishlist.schema.ts:39–51</code> и тест <code>wishlists.handlers.test.ts:857–877</code>:</p>
+<pre><code>export const CalendarDateInWindow = CalendarDate.pipe(
+  Schema.decode({
+    decode: SchemaGetter.checkEffect((value: string) =>
+      Effect.gen(function* () {
+        const { min, max } = occasionDateWindow(yield* DateTime.now);
+        return (value &gt;= min &amp;&amp; value &lt;= max) || `Expected a date between ${min} and ${max}`;
+// тест: тот же payload, меняются только часы
+const accepted = yield* postWishlist(app, owner.cookie, body);       // 2026-10-12 → 201
+yield* TestClock.setTime(Date.parse('2026-10-13T12:00:00Z'));
+const rejected = yield* postWishlist(app, owner.cookie, body);       // 2026-10-13 → 400</code></pre>
+      <p><span class="label">Почему</span>Если окно вычислить один раз при старте, сервер, запущенный 12 октября, 20 октября примет <code>2026-10-11</code> с ответом 201 вместо 400. Тест с двумя разными датами при одних часах этого не заметит: при старте и при запросе время одно. Поэтому в тесте меняются только часы. Без Clock в контексте handlers падают ровно 4 теста окна.</p>
+      <p>Сохранённая Schema окна не знает. Иначе Wishlist с <code>2020-02-29</code>, созданный год назад, при чтении дал бы 500 вместо 200 — сценарий «Чтение старой Occasion Date».</p>
+      <p><span class="label">Цена</span>Decode стал эффектом, зависящим от Clock. Тест HTTP обязан донести свои часы до handlers: <code>acquireApp</code> кладёт Clock в их контекст, а слой БД собран на настоящих часах (<code>excludeTestServices</code>), иначе прыжок <code>setTime</code> задевает таймеры пула и тест зависает.</p>
+      <details><summary>Окно вычислили один раз при старте сервера 12 октября. 20 октября клиент отправляет <code>occasionDate: "2026-10-11"</code>. Какой статус он получит и какой тест это поймает?</summary><p>201 вместо 400: окно застыло на 12 октября. Падает тест «окно сдвигается вместе с Clock между запросами»: после сдвига часов он ждёт 400. <a href="#d1">Решение 1</a>.</p></details>
+    </section>
+
+    <section class="card decision" id="d2">
+      <h2>2. Правило доступа — в одном SQL, поэтому скрытый и отсутствующий Wishlist неразличимы</h2>
+      <p><span class="label">Что</span><code>wishlists.repository.ts:75–89</code> и тест <code>wishlists.handlers.test.ts:719–734</code>:</p>
+<pre><code>.selectFrom('wishlists').selectAll()
+.where('id', '=', id)
+.where((eb) => eb.or([eb('ownerId', '=', viewerId), eb('visibility', '=', 'public')]))
+// тест: 404 на чужой Private, затем DELETE этой строки и снова GET
+expect(yield* readJson(missing)).toEqual(hiddenBody);</code></pre>
+      <p><span class="label">Почему</span>Альтернатива — прочитать строку по id, а владельца проверить в service. Тогда чужой Private даёт 403, а пустой id — 404. B перебирает id и по статусу узнаёт, какие Wishlist существуют. Один SQL возвращает пустой результат в обоих случаях, и service строит одно тело 404 с тем же <code>id</code> и <code>instance</code>. Тест удаляет строку и сравнивает тела целиком.</p>
+      <p><span class="label">Цена</span>Ни клиент, ни лог не отличают «нет доступа» от «нет строки»: владелец, отлаживая доступ B, видит только 404. Новое правило доступа (шаг 4, sharing) меняет условие в SQL, а не <code>if</code> в service.</p>
+      <details><summary>Service переделали: SELECT по id, затем «owner ≠ viewer и private → 403». Что узнает B, запросив чужой id, и какой тест упадёт?</summary><p>B узнает, что Wishlist с этим id существует и закрыт: 403 против 404 у пустого id. Падают «Чужой Private Wishlist» и «Одинаковое тело 404 для одного id». <a href="#d2">Решение 2</a>.</p></details>
+    </section>
+
+    <section class="card decision" id="d3">
+      <h2>3. Строгий разбор задают настройки AppApi; Schema сама лишний ключ отбрасывает</h2>
+      <p><span class="label">Что</span><code>infra/api/api.ts:12</code> и <code>create-wishlist.schema.test.ts:108–117</code>:</p>
+<pre><code>// api.ts — действует на все группы, собранные через HttpApiBuilder.group(AppApi, …)
+.annotate(HttpApi.PayloadParseOptions, requestParseOptions)
+// тест Schema — вне HttpApi настройки передаются в decode вручную
+Schema.decodeUnknownEffect(CreateWishlistBodySchema, requestParseOptions)(body)</code></pre>
+      <p><span class="label">Почему</span>Без настроек Schema молча выбрасывает лишний <code>ownerId</code>: <code>POST</code> отвечает 201, и клиент думает, что выбрал владельца. По ADR-0007 такой запрос — 400. Мутации: убрать аннотацию с <code>AppApi</code> — падают 5 HTTP-тестов серверных полей; убрать второй аргумент decode — падают 5 тестов Schema. Аннотация на тестовом <code>HttpApi</code> не действовала вовсе: handlers читают настройки того API, что передан в <code>group</code> (<code>HttpApiBuilder.js:313</code> в effect 4.0.4). Её убрали из шести тестов.</p>
+      <p><span class="label">Цена</span>Тест Schema без второго аргумента выглядит правильным и проходит на допустимых телах — забыть его легко. Настройка одна на весь <code>AppApi</code>: endpoint, которому нужно терпеть лишние ключи, потребует своей аннотации на группе или endpoint.</p>
+      <details><summary>В тесте Schema убрали второй аргумент decode. Что вернёт decode тела с лишним <code>ownerId</code>? Какой статус даст HTTP-запрос с тем же телом?</summary><p>Decode вернёт успех без <code>ownerId</code>: ключ отброшен молча. HTTP по-прежнему даст 400: настройки берутся из аннотации <code>AppApi</code>, а не из теста. <a href="#d3">Решение 3</a>.</p></details>
+    </section>
+
+    <section class="card">
+      <h2>Источники и границы проверки</h2>
+      <p>Контракт тела запроса — <a href="../../docs/adr/0007-request-body-contains-every-field.md">ADR-0007</a>. Сценарии — <a href="../../openspec/specs/wishlists/spec.md">delta-spec add-wishlist-create-read</a>. Выбор настроек разбора — <code>node_modules/.pnpm/effect@4.0.4/…/dist/http-api/HttpApiBuilder.js:313</code>.</p>
+      <p>Что проверено и что нет — в <a href="../STATE.md">STATE.md</a>.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0007-debrief-technical-errors.html">Предыдущий урок: технические ошибки</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

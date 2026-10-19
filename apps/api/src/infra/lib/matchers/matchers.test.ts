@@ -7,15 +7,23 @@ describe('Option matchers', () => {
 
     expect(option).toBeOptionSome({ id: 42 });
     expect(option).not.toBeOptionSome({ id: 43 });
-    expect(() => expect(option).toBeOptionSome({ id: 43 })).toThrow();
-    expect(() => expect(option).toBeOptionNone()).toThrow();
+    expect(() => expect(option).toBeOptionSome({ id: 43 })).toThrow(
+      'Expected Option value to match:',
+    );
+    expect(() => expect(option).toBeOptionNone()).toThrow(
+      'Expected Option.None, but received Option.Some',
+    );
   });
 
   it('distinguishes None from Some and non-Option values', () => {
     const none = Option.none<{ id: number }>();
 
     expect(none).toBeOptionNone();
-    expect(() => expect(none).toBeOptionSome({ id: 42 })).toThrow();
-    expect(() => expect({ _tag: 'None' }).toBeOptionNone()).toThrow();
+    expect(() => expect(none).toBeOptionSome({ id: 42 })).toThrow(
+      'Expected Option.Some, but received Option.None',
+    );
+    expect(() => expect({ _tag: 'None' }).toBeOptionNone()).toThrow(
+      'Expected received value to be an Option',
+    );
   });
 });
