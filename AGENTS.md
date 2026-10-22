@@ -119,6 +119,8 @@ structure for a future request: **goal — context — constraints — done when
 - Do not add a production dependency when the existing stack can solve the task. If a dependency is genuinely necessary,
   explain its cost and the alternative.
 - Do not read, print, or commit secrets. Use `.env.example` and fictitious values in examples.
+- Write commit messages and PR/MR titles and descriptions in English only, even though conversation is in Russian.
+  Keep the Conventional Commits prefix (`feat(scope): ...`, `docs(scope): ...`).
 - Explicitly ask for confirmation before destructive operations involving data, migrations, or the user's environment.
 
 ## Definition of Done and Verification
