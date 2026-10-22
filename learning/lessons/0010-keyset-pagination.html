@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Урок: keyset-пагинация — страница начинается строго после последней строки предыдущей</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Урок · keyset-пагинация · 10 минут</div>
+    <h1>Следующая страница начинается строго после последней показанной строки, а не через N строк</h1>
+    <p class="lede">Разберём четыре шага keyset на списке Session одного User, а потом те же шаги появятся в модуле пагинации с пропусками для тебя.</p>
+    <div class="toplinks">
+      <a class="button" href="../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md">ADR-0008</a>
+      <a class="button" href="../../openspec/changes/add-reusable-keyset-pagination/design.md">design.md</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+    <section class="card">
+      <h2>Данные примера</h2>
+      <p>У User пять Session. <code>s3</code> и <code>s4</code> созданы в одну и ту же миллисекунду — для <code>timestamptz(3)</code> это обычное дело. Сортировка: новые сверху, страница — 2 строки.</p>
+<pre class="mermaid">flowchart LR
+  s5["s5 · 10:00:05"] --> s4["s4 · 10:00:03"]
+  s4 --> s3["s3 · 10:00:03"]
+  s3 --> s2["s2 · 10:00:02"]
+  s2 --> s1["s1 · 10:00:01"]
+  s4 -. "курсор после страницы 1: (10:00:03, s4)" .-> s3
+  s2 -. "курсор после страницы 2: (10:00:02, s2)" .-> s1
+</pre>
+      <p class="diagram-caption">Порядок задаёт пара <code>(created_at, id)</code>. Курсор — это значения пары у последней строки страницы.</p>
+    </section>
+
+    <section class="card">
+      <h2>Разобранный пример: страница Session</h2>
+      <p>Код запускался на PostgreSQL из тестов проекта (<code>TestDatabaseLive</code>), запрос пишется через тот же <code>DB</code>, что в репозиториях.</p>
+<pre><code>const listSessions = (userId: string, cursor: SessionCursor | undefined, limit: number) =>
+  Effect.gen(function* () {
+    const db = yield* DB;
+
+    const rows = yield* db
+      .selectFrom('sessions')
+      .select(['id', 'createdAt'])
+      .where('userId', '=', userId)
+      // 1. Отрезать уже показанное
+      .$if(cursor !== undefined, (query) =>
+        query.where((eb) =>
+          eb(eb.refTuple('createdAt', 'id'), '&lt;', eb.tuple(cursor!.createdAt, cursor!.id)),
+        ),
+      )
+      // 2. Упорядочить тем же ключом, что в WHERE
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
+      // 3. Взять на одну строку больше страницы
+      .limit(limit + 1);
+
+    // 4. Собрать страницу: первые limit строк, курсор — по последней из них
+    const items = rows.slice(0, limit);
+    const last = items.at(-1);
+    const nextCursor = rows.length > limit &amp;&amp; last !== undefined
+      ? { createdAt: last.createdAt, id: last.id }
+      : null;
+
+    return { items, nextCursor };
+  });</code></pre>
+      <ol>
+        <li><span class="subgoal">Отрезать уже показанное.</span> <code>(created_at, id) &lt; (10:00:03, s4)</code> — сравнение строк значений: сначала по <code>created_at</code>, при равенстве по <code>id</code>. Для порядка «новые сверху» «после курсора» значит «меньше». Для порядка по возрастанию знак был бы <code>&gt;</code>.</li>
+        <li><span class="subgoal">Упорядочить тем же ключом.</span> <code>ORDER BY</code> обязан совпадать с <code>WHERE</code> по колонкам и направлению. Иначе «после курсора» в <code>WHERE</code> и «следующие» в выдаче — разные множества строк.</li>
+        <li><span class="subgoal">Взять на одну строку больше.</span> Пришло <code>limit + 1</code> строк — следующая страница точно есть. Пришло меньше — эта страница последняя. <code>COUNT(*)</code> не нужен.</li>
+        <li><span class="subgoal">Собрать страницу.</span> Клиент получает первые <code>limit</code> строк. Курсор строится по последней <em>выданной</em> строке, а лишняя строка только сообщает «есть продолжение».</li>
+      </ol>
+      <p>Вывод запуска, <code>limit = 2</code>:</p>
+<pre><code>страница 1: s5, s4; nextCursor s4
+страница 2: s3, s2; nextCursor s2
+страница 3: s1;     nextCursor null</code></pre>
+      <p>Каждая Session выдана ровно один раз, <code>s3</code> и <code>s4</code> с одинаковым временем разошлись по разным страницам без потерь.</p>
+    </section>
+
+    <section class="card">
+      <h2>Предсказание</h2>
+      <p>Уберём <code>id</code> из ключа: <code>WHERE created_at &lt; курсор.createdAt</code> и <code>ORDER BY created_at DESC</code>. Остальное то же. Что получит клиент на страницах при тех же пяти Session?</p>
+      <details class="quiz"><summary><strong>Сначала ответь в чате, потом открой</strong></summary>
+<pre><code>страница 1: s5, s3; nextCursor s3
+страница 2: s2, s1; nextCursor null</code></pre>
+        <p><code>s4</code> не попала ни на одну страницу. Без <code>id</code> PostgreSQL вправе выдать <code>s3</code> и <code>s4</code> в любом порядке и выбрал <code>s3</code>. Курсор стал <code>10:00:03</code>, а условие <code>created_at &lt; 10:00:03</code> отрезало всё время <code>10:00:03</code> — вместе с ещё не показанной <code>s4</code>. Ошибки нет, строка просто молча пропала. Поэтому последний элемент ключа — уникальный <code>id</code> (тай-брейкер).</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Что из этого станет модулем</h2>
+      <p>У Wishlist две сортировки, а у будущих списков их будет больше. Шаги 1–4 одинаковы для любой сортировки, различается только ключ. Поэтому модуль <code>infra/pagination/keyset.ts</code> получает сортировку как описание:</p>
+      <ul>
+        <li>направление: <code>'asc'</code> или <code>'desc'</code>;</li>
+        <li>ключ над колонками строки — для <code>ORDER BY</code> и левой части <code>WHERE</code>;</li>
+        <li>ключ над значениями курсора — для правой части <code>WHERE</code>;</li>
+        <li>как построить курсор из последнего элемента.</li>
+      </ul>
+      <p>Шаги 1–4 модуль выполняет сам. В следующем шаге ты заполнишь в нём шаг 1 и шаг 4.</p>
+      <details class="quiz"><summary><strong>Сортировка по возрастанию, курсор стоит на строке (2026-12-31, id₇). Какой знак в WHERE и почему?</strong></summary><p><code>&gt;</code>: при порядке по возрастанию следующие строки больше курсора. Знак выводится из направления, а не пишется вручную в каждом списке.</p></details>
+    </section>
+
+    <section class="card">
+      <h2>Источник</h2>
+      <p>Markus Winand, <a href="https://use-the-index-luke.com/no-offset">«We need tool support for keyset pagination»</a> — почему <code>OFFSET</code> медленнее с каждой страницей и как сравнение строк значений использует индекс.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0009-debrief-401-migration-date.html">Предыдущий урок: 401, миграция и даты</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+</body>
+</html>

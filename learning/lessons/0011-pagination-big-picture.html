@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Урок: пагинация целиком — путь одного запроса страницы</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Урок · пагинация целиком · 15 минут</div>
+    <h1>Страница списка — это один SELECT с условием «после курсора», а курсор — это ключ последней показанной строки, упакованный в строку</h1>
+    <p class="lede">Пройдём один запрос <code>GET /api/wishlists</code> от клиента до PostgreSQL и обратно, разложим, какой файл за что отвечает, и составим маршрут, по которому ты напишешь модуль с нуля.</p>
+    <div class="toplinks">
+      <a class="button" href="0010-keyset-pagination.html">Урок 0010: четыре шага keyset</a>
+      <a class="button" href="../../openspec/changes/add-reusable-keyset-pagination/design.md">design.md</a>
+      <a class="button" href="../reference/system-map.html">Карта системы</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+
+    <section class="card">
+      <h2>1. Что видит клиент</h2>
+      <p>У User три Wishlist. Клиент просит страницы по 2. Endpoint появится в задаче 5.2, но форма ответа уже закреплена Schema <code>makePageSchema</code> (<code>infra/pagination/page.ts</code>).</p>
+<pre><code>GET /api/wishlists?limit=2
+→ 200 { "items": [W3, W2], "nextCursor": "eyJzb3J0IjoiY3JlYXRlZEF0IiwiY3JlYXRlZEF0IjoiMjAyNi0xMC0xOVQxMDowMDowMy4wMDBaIiwiaWQiOiI0YzFk…" }
+
+GET /api/wishlists?limit=2&amp;cursor=eyJzb3J0Ijoi…
+→ 200 { "items": [W1], "nextCursor": null }</code></pre>
+      <p>Курсор только выглядит загадочно. Это base64url от JSON. Тот же курсор, раскодированный (вывод запуска <code>makeCursorCodec</code> из проекта):</p>
+<pre><code>{"sort":"createdAt","createdAt":"2026-10-19T10:00:03.000Z","id":"4c1d2e3f-0a1b-4c2d-8e3f-112233445566"}</code></pre>
+      <p>Внутри три вещи: какой сортировкой выдан курсор и значения ключа <code>(createdAt, id)</code> у последней строки страницы, то есть у W2. Клиент не читает и не собирает курсор. Он только возвращает строку, которую получил (ADR-0008: «непрозрачный курсор»).</p>
+      <div class="callout"><code>nextCursor: null</code> — единственный признак последней страницы. Ни <code>total</code>, ни номера страницы в ответе нет.</div>
+    </section>
+
+    <section class="card">
+      <h2>2. Путь одного запроса</h2>
+<pre class="mermaid">sequenceDiagram
+  participant C as Клиент
+  participant H as HttpApi + query Schema
+  participant S as service списка
+  participant R as repository
+  participant K as keyset.ts
+  participant P as PostgreSQL
+  C->>H: GET ?limit=2&cursor=eyJ…
+  Note over H: Session → иначе 401<br/>decode sort, limit, cursor → иначе 400
+  H->>S: viewerId + { sort, limit, cursor: {createdAt: Date, id} }
+  S->>R: страница своих Wishlist
+  R->>K: applyKeyset(запрос WHERE owner_id = viewerId)
+  K-->>R: + WHERE после курсора, ORDER BY, LIMIT 3
+  R->>P: SELECT …
+  P-->>R: до 3 строк
+  R->>K: toPage(строки)
+  K-->>R: { items: первые 2, nextCursor: строка | null }
+  R-->>C: 200 { items, nextCursor }
+</pre>
+      <p class="diagram-caption">Граница HttpApi превращает строку курсора в значения с типами (<code>Date</code>, UUID) или отвечает 400. До SQL доходит только проверенный курсор.</p>
+      <table>
+        <tr><th>Кто</th><th>Отвечает за</th><th>Не знает</th></tr>
+        <tr><td>query Schema</td><td>строку → <code>{ sort, limit, cursor }</code> или 400</td><td>SQL</td></tr>
+        <tr><td>repository</td><td>чьи строки видны: <code>WHERE owner_id = viewerId</code></td><td>как устроен курсор</td></tr>
+        <tr><td><code>keyset.ts</code></td><td>«после курсора», порядок, <code>limit + 1</code>, сборку <code>nextCursor</code></td><td>Wishlist, владельцев, HTTP</td></tr>
+        <tr><td>пресет сортировки</td><td>какой ключ у этой сортировки</td><td>как ключ превращается в страницы</td></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3. Что уходит в PostgreSQL</h2>
+      <p>Вывод <code>.compile()</code> того же запроса с <code>CamelCasePlugin</code>, как в <code>DBLive</code>. Первая страница, курсора нет:</p>
+<pre><code>select "id", "title", "created_at" from "wishlists"
+where "owner_id" = $1
+order by "created_at" desc, "id" desc
+limit $2                                   -- $2 = 3, то есть limit + 1</code></pre>
+      <p>Вторая страница, курсор стоит на W2:</p>
+<pre><code>select "id", "title", "created_at" from "wishlists"
+where "owner_id" = $1
+  and ("created_at", "id") &lt; ($2::timestamptz, $3::uuid)   -- после курсора
+order by "created_at" desc, "id" desc
+limit $4                                   -- $4 = 3</code></pre>
+      <ul>
+        <li><code>where "owner_id" = $1</code> пишет repository. Это область видимости, keyset её не трогает.</li>
+        <li><code>("created_at", "id") &lt; (…)</code> — сравнение строк значений: сначала по <code>created_at</code>, при равенстве по <code>id</code>. Знак <code>&lt;</code> следует из <code>desc</code>, для <code>asc</code> был бы <code>&gt;</code>.</li>
+        <li><code>::timestamptz</code> и <code>::uuid</code> сообщают PostgreSQL тип параметра. Без них вычисляемый ключ <code>occasionDate</code> падает с <code>could not determine data type of parameter</code> (design, решение 5).</li>
+        <li>Индекс <code>(owner_id, created_at DESC, id DESC)</code> из миграции <code>0005</code> совпадает с этим порядком, поэтому PostgreSQL может сразу перейти к курсору, а не читать предыдущие строки.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>4. Зачем модуль, а не одна функция в repository</h2>
+      <p>У Wishlist две сортировки, и они различаются только ключом:</p>
+      <table>
+        <tr><th>sort</th><th>Ключ</th><th>Откуда значения ключа</th></tr>
+        <tr><td><code>createdAt</code></td><td><code>(created_at, id)</code>, desc</td><td>колонки строки</td></tr>
+        <tr><td><code>occasionDate</code></td><td><code>(группа, расстояние в днях, id)</code>, asc</td><td>вычисляются из <code>occasion_date</code> и <code>asOf</code> — «сегодня» на момент первой страницы</td></tr>
+      </table>
+      <p>Шаги «отрезать после курсора, упорядочить, взять <code>limit + 1</code>, собрать курсор» одинаковы. Их пишут один раз в <code>keyset.ts</code>. Сортировка становится описанием (пресетом): направление, ключ над колонками, тот же ключ над значениями курсора, как построить курсор из строки.</p>
+      <p><code>asOf</code> показывает, зачем в описании есть параметры. На первой странице это «сегодня», дальше его берут из курсора. Иначе после полуночи посреди листания Wishlist «на сегодня» переедет из будущих в прошедшие, и строки пропадут или повторятся.</p>
+      <div class="callout warn">Решение ревью 2026-10-19 (design, решение 4): модуль сам владеет <code>ORDER BY</code>, <code>LIMIT</code> и <code>OFFSET</code> и очищает чужие. Ключ пресета не может быть пустым, а длины двух ключей сверяются.</div>
+    </section>
+
+    <section class="card">
+      <h2>5. Проверь себя: порядок обработки запроса страницы</h2>
+      <div class="parsons" data-answer="auth decode scope keyset select page">
+        <p>Собери шаги обработки <code>GET /api/wishlists?limit=2&amp;cursor=…</code> в порядке выполнения. Две строки лишние.</p>
+        <ul>
+          <li data-id="select"><code>PostgreSQL возвращает до limit + 1 строк</code></li>
+          <li data-id="count"><code>SELECT COUNT(*) — узнать, есть ли следующая страница</code></li>
+          <li data-id="decode"><code>query Schema декодирует cursor в { createdAt: Date, id } или отвечает 400</code></li>
+          <li data-id="page"><code>первые limit строк → items, курсор последней из них → nextCursor</code></li>
+          <li data-id="auth"><code>проверить Session, иначе 401</code></li>
+          <li data-id="offset"><code>OFFSET (номер страницы − 1) × limit</code></li>
+          <li data-id="keyset"><code>applyKeyset: WHERE (ключ) &lt; (курсор), ORDER BY ключ, LIMIT limit + 1</code></li>
+          <li data-id="scope"><code>repository: WHERE owner_id = viewerId</code></li>
+        </ul>
+        <p class="parsons-why">Сначала Session, потом разбор query (design, решение 6): без Session ответ 401 при любом query. Область видимости задаёт repository, keyset дописывает своё к его запросу. <code>COUNT</code> не нужен: следующую страницу выдаёт лишняя строка. <code>OFFSET</code> отсутствует по определению keyset.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>6. Что уже есть и что напишешь ты</h2>
+      <table>
+        <tr><th>Файл</th><th>Что делает</th><th>Статус</th></tr>
+        <tr><td><code>infra/pagination/query.ts</code></td><td><code>LimitQueryParam</code>, <code>cursorMatchesSort</code></td><td>готово, ката 2.1</td></tr>
+        <tr><td><code>infra/pagination/cursor.ts</code></td><td>строка ⇄ значения курсора</td><td>готово, ката 2.1</td></tr>
+        <tr><td><code>infra/pagination/page.ts</code></td><td>Schema ответа <code>{ items, nextCursor }</code></td><td>готово, ката 2.2</td></tr>
+        <tr><td><code>infra/schemas/dates.schema.ts</code></td><td><code>PgInstantFromString</code>, <code>PgCalendarDate</code></td><td>готово</td></tr>
+        <tr><td>миграция <code>0005</code></td><td>индекс под порядок <code>createdAt</code></td><td>готово, применена</td></tr>
+        <tr><td><code>infra/pagination/keyset.ts</code> + тест</td><td>шаги keyset над любым пресетом</td><td><strong>ты, с нуля</strong> (4.1)</td></tr>
+        <tr><td>пресет <code>occasionDate</code></td><td>вычисляемый ключ с <code>asOf</code></td><td>ты, 4.2</td></tr>
+        <tr><td>repository, service, endpoint</td><td><code>GET /api/wishlists</code></td><td>ты, 5.1–5.2</td></tr>
+        <tr><td>property-тест обхода</td><td>доказать «без пропусков и повторов»</td><td>ты, 6.1</td></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>7. Маршрут: от конкретного к общему</h2>
+      <p>Модуль не пишется сразу обобщённым. Сначала работающая конкретная функция, потом из неё вынимается общее, и тесты остаются те же.</p>
+      <ol>
+        <li class="subgoal"><strong>Конкретная функция.</strong> Одна страница Wishlist по <code>createdAt</code> без обобщений, как <code>listSessions</code> в уроке 0010, и твой тест на PostgreSQL. Готово, когда тест обходит 5 строк по 2.</li>
+        <li class="subgoal"><strong>Вынуть общее.</strong> Что в функции зависит от сортировки, уходит в описание пресета, остальное становится <code>applyKeyset</code> и <code>toPage</code>. Готово, когда тот же тест зелёный и в общем коде нет слова <code>createdAt</code>.</li>
+        <li class="subgoal"><strong>Защиты из ревью.</strong> Очистка чужих <code>ORDER BY</code> и <code>OFFSET</code>, непустые ключи, сверка длин. Каждое правило начинается с падающего теста.</li>
+        <li class="subgoal"><strong>Вычисляемый ключ</strong> <code>occasionDate</code> (4.2), потом endpoint (5) и property-тест (6.1).</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Источник</h2>
+      <p>Markus Winand, <a href="https://use-the-index-luke.com/no-offset">«We need tool support for keyset pagination»</a> — почему <code>OFFSET</code> дорожает с каждой страницей и как сравнение строк значений идёт по индексу.</p>
+    </section>
+  </main></div>
+  <footer class="shell">
+    <a href="0010-keyset-pagination.html">Предыдущий урок: четыре шага keyset</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@12.1.0/dist/mermaid.min.js"></script>
+  <script src="../assets/diagrams.js"></script>
+  <script src="../assets/parsons.js"></script>
+</body>
+</html>
