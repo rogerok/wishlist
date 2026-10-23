@@ -1,18 +1,15 @@
 import type { SqlError } from 'effect/sql';
 
-import { describe, layer } from '@effect/vitest';
+import { describe, layer, test } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
-import {
-  type Expression,
-  expressionBuilder,
-  type ExpressionBuilder,
-} from 'kysely';
 
 import type { DB as Database } from '#infra/db/generated/database.js';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
+import { KeysetSort, toPage } from '#infra/pagination/keyset.js';
+import { applyKeyset } from '#infra/pagination/keyset.js';
 
 const testLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 
@@ -81,18 +78,13 @@ const acquireFiveWishlists = (email: string) =>
     return ownerId;
   });
 
-type Cursor = {
-  readonly createdAt: Date;
-  readonly id: string;
-};
-
 type PageByCreatedAtParams = {
   cursor: Cursor | undefined;
   limit: number;
   ownerId: string;
-  sort: KeysetSort<Database, 'wishlists', Row, Cursor>;
+  sort: KeysetSort<Database, 'wishlists', Row, Cursor, CreatedAtKey>;
 };
-
+type Cursor = { readonly createdAt: Date; readonly id: string };
 type PageByCreatedAtResult = {
   readonly items: Row[];
   nextCursor: Cursor | null;
@@ -100,20 +92,14 @@ type PageByCreatedAtResult = {
 
 type Row = { readonly createdAt: Date; readonly id: string };
 
-type Direction = 'asc' | 'desc';
+// Типы значений ключа сортировки createdAt, по позициям: created_at, id.
+type CreatedAtKey = readonly [Date, string];
 
-interface KeysetSort<Database, TB extends keyof Database, Row, Cursor> {
-  direction: 'asc' | 'desc';
-  cursorOf: (row: Row) => Cursor;
-  cursorValues: (cursor: Cursor) => ReadonlyArray<unknown>;
-  keyColumns: (
-    eb: ExpressionBuilder<Database, TB>,
-  ) => ReadonlyArray<Expression<unknown>>;
-}
+type Direction = 'asc' | 'desc';
 
 const makeSort = (
   direction: Direction,
-): KeysetSort<Database, 'wishlists', Row, Cursor> => ({
+): KeysetSort<Database, 'wishlists', Row, Cursor, CreatedAtKey> => ({
   direction,
   keyColumns: (eb) => [eb.ref('createdAt'), eb.ref('id')],
   cursorOf: (row) => ({ createdAt: row.createdAt, id: row.id }),
@@ -133,37 +119,13 @@ const pageByCreatedAt = ({
   Effect.gen(function* () {
     const db = yield* DB;
 
-    let query = db
+    let rows = yield* db
       .selectFrom('wishlists')
       .select(['id', 'createdAt'])
-      .where('ownerId', '=', ownerId);
+      .where('ownerId', '=', ownerId)
+      .$call(applyKeyset(sort, { limit, cursor }));
 
-    const key = sort.keyColumns(expressionBuilder(query));
-
-    key.forEach((k) => {
-      query = query.orderBy(k, sort.direction);
-    });
-
-    if (cursor !== undefined) {
-      query = query.where((eb) =>
-        eb(
-          eb.refTuple('createdAt', 'id'),
-          sort.direction === 'desc' ? '<' : '>',
-          eb.tuple(cursor.createdAt, cursor.id),
-        ),
-      );
-    }
-
-    const rows = yield* query.limit(limit + 1);
-    const items = rows.slice(0, limit);
-
-    const last = items.at(-1);
-    const nextCursor =
-      rows.length > limit && last !== undefined
-        ? { createdAt: last.createdAt, id: last.id }
-        : null;
-
-    return { items, nextCursor };
+    return toPage(sort, limit, rows);
   });
 
 const walkAll = (ownerId: string, direction: Direction) =>
@@ -211,5 +173,174 @@ describe('keyset test', () => {
           ]);
         }).pipe(Effect.scoped),
     );
+
+    // Пользователь модуля уже добавил свою сортировку и смещение: порядок и размер выборки задаёт только модуль
+    // (design, решение 4). Его WHERE по владельцу при этом сохраняется.
+    it.effect('ignores ORDER BY and OFFSET set by the caller', () =>
+      Effect.gen(function* () {
+        const db = yield* DB;
+        const ownerId = yield* acquireFiveWishlists(
+          'foreign-order@example.test',
+        );
+        const sort = makeSort('desc');
+
+        const rows = yield* db
+          .selectFrom('wishlists')
+          .select(['id', 'createdAt'])
+          .where('ownerId', '=', ownerId)
+          .orderBy('title', 'asc')
+          .offset(5)
+          .$call(applyKeyset(sort, { cursor: undefined, limit: 2 }));
+        const page = toPage(sort, 2, rows);
+
+        expect(page.items.map((row) => row.id)).toEqual([W5.id, W4.id]);
+      }).pipe(Effect.scoped),
+    );
+
+    // Признак последней страницы — только отсутствие строк после выданных, а не «пришло меньше limit».
+    it.effect('returns a null nextCursor only when no rows remain', () =>
+      Effect.gen(function* () {
+        const ownerId = yield* acquireFiveWishlists('last-page@example.test');
+        const sort = makeSort('desc');
+
+        const exactlyAll = yield* pageByCreatedAt({
+          ownerId,
+          limit: 5,
+          cursor: undefined,
+          sort,
+        });
+        const oneLeft = yield* pageByCreatedAt({
+          ownerId,
+          limit: 4,
+          cursor: undefined,
+          sort,
+        });
+
+        expect(exactlyAll.items).toHaveLength(5);
+        expect(exactlyAll.nextCursor).toBeNull();
+        expect(oneLeft.items).toHaveLength(4);
+        expect(oneLeft.nextCursor).toEqual({
+          createdAt: W2.createdAt,
+          id: W2.id,
+        });
+      }).pipe(Effect.scoped),
+    );
+
+    // Курсор хранит значения ключа, а не номер строки, поэтому следующая страница может быть другого размера.
+    it.effect('continues from the cursor with another limit', () =>
+      Effect.gen(function* () {
+        const ownerId = yield* acquireFiveWishlists('other-limit@example.test');
+        const sort = makeSort('desc');
+
+        const first = yield* pageByCreatedAt({
+          ownerId,
+          limit: 1,
+          cursor: undefined,
+          sort,
+        });
+        const second = yield* pageByCreatedAt({
+          ownerId,
+          limit: 3,
+          cursor: first.nextCursor ?? undefined,
+          sort,
+        });
+
+        expect(first.items.map((row) => row.id)).toEqual([W5.id]);
+        expect(second.items.map((row) => row.id)).toEqual([
+          W4.id,
+          W3.id,
+          W2.id,
+        ]);
+      }).pipe(Effect.scoped),
+    );
+
+    // Курсор — значения, а не ссылка на строку: удаление строки, на которой он стоит, обход не ломает.
+    it.effect('continues after the last row of the page is deleted', () =>
+      Effect.gen(function* () {
+        const sqlClient = yield* SqlClient;
+        const ownerId = yield* acquireFiveWishlists('deleted-row@example.test');
+        const sort = makeSort('desc');
+
+        const first = yield* pageByCreatedAt({
+          ownerId,
+          limit: 2,
+          cursor: undefined,
+          sort,
+        });
+        yield* sqlClient`DELETE FROM "public"."wishlists" WHERE "id" = ${W4.id}`;
+        const second = yield* pageByCreatedAt({
+          ownerId,
+          limit: 2,
+          cursor: first.nextCursor ?? undefined,
+          sort,
+        });
+
+        expect(first.items.map((row) => row.id)).toEqual([W5.id, W4.id]);
+        expect(second.items.map((row) => row.id)).toEqual([W3.id, W2.id]);
+      }).pipe(Effect.scoped),
+    );
+  });
+});
+
+describe('KeysetSort', () => {
+  // Проверки выполняются в check-types: если ошибка типа исчезнет,
+  // директива ts-expect-error над ней сама станет ошибкой (design, решение 4).
+  type CreatedAtSort = KeysetSort<
+    Database,
+    'wishlists',
+    Row,
+    Cursor,
+    CreatedAtKey
+  >;
+
+  test('rejects an empty key at compile time', () => {
+    const emptyKey: CreatedAtSort = {
+      direction: 'desc',
+      // @ts-expect-error ключ строки должен содержать хотя бы одно выражение
+      keyColumns: () => [],
+      // @ts-expect-error ключ курсора должен содержать хотя бы одно значение
+      cursorValues: () => [],
+      cursorOf: (row) => row,
+    };
+
+    expect(emptyKey.direction).toBe('desc');
+  });
+
+  test('rejects a key type without components', () => {
+    type EmptyKey = readonly [];
+    const sort: KeysetSort<
+      Database,
+      'wishlists',
+      Row,
+      Cursor,
+      // @ts-expect-error Key должен содержать хотя бы один компонент
+      EmptyKey
+    > | null = null;
+
+    expect(sort).toBeNull();
+  });
+
+  test('rejects cursor values of another length at compile time', () => {
+    const shorter: CreatedAtSort = {
+      direction: 'desc',
+      keyColumns: (eb) => [eb.ref('createdAt'), eb.ref('id')],
+      // @ts-expect-error значений курсора меньше, чем колонок ключа
+      cursorValues: (cursor) => [cursor.createdAt],
+      cursorOf: (row) => row,
+    };
+
+    expect(shorter.direction).toBe('desc');
+  });
+
+  test('rejects swapped key columns of different types at compile time', () => {
+    const swapped: CreatedAtSort = {
+      direction: 'desc',
+      // @ts-expect-error id (string) стоит на месте created_at (Date)
+      keyColumns: (eb) => [eb.ref('id'), eb.ref('createdAt')],
+      cursorValues: (cursor) => [cursor.createdAt, cursor.id],
+      cursorOf: (row) => row,
+    };
+
+    expect(swapped.direction).toBe('desc');
   });
 });
