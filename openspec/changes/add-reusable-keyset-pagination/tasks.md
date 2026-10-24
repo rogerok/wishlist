@@ -63,6 +63,13 @@
       а также: запрос потребителя с `orderBy('title')` и `offset(5)` даёт те же страницы, что и без них; при
       `direction: 'asc'` страницы идут по возрастанию; ключи разной длины и переставленные колонки разных типов не компилируются. Доказательство:
       `pnpm --filter @wishlist/api test src/infra/pagination/keyset.test.ts` проходит.
+- [x] 4.1a Заменить кортеж `Key` и два списка `keyColumns`/`cursorValues` одним списком компонентов `key` (design,
+      решение 4, 2026-10-23). Компонент создаёт `keyPart`: общий параметр типа для `column` и `value`, ограничение
+      `NonNullable<unknown>`, метка. `applyKeyset` строит обе стороны сравнения из `key`; комментарий-контракт к
+      `KeysetSort` описывает новый вид. Тесты типов через `@ts-expect-error`: пустой `key`, разные типы `column` и
+      `value` в одном компоненте, колонка с `NULL`, компонент объектом без `keyPart`. Доказательство:
+      `pnpm --filter @wishlist/api test src/infra/pagination/keyset.test.ts` и `pnpm --filter @wishlist/api check-types`
+      проходят.
 - [ ] 4.2 Добавить вычисляемый ключ с параметром: выражения ключа применяются и к колонкам, и к параметрам курсора,
       каждый параметр явно приведён к типу (`::date`, `::uuid`, design, решение 5); параметр первой страницы вычисляет
       `Effect` пресета. В `keyset.test.ts` под `TestClock` проверить для ключа
