@@ -9,56 +9,70 @@ import {
   type SqlBool,
 } from 'kysely';
 
+// Свойство с этим символом ставит только `keyPart`. Символ не экспортируется, и объект, написанный вручную, к `KeyPart`
+// не подойдёт.
+const keyPartTag = Symbol('KeyPart');
+
+/** Колонка строки и значение курсора, которые WHERE сравнит друг с другом. Создай через `keyPart`. */
+export type KeyPart<DB, TB extends keyof DB, Cursor> = {
+  readonly [keyPartTag]: true;
+  /** Левая часть сравнения и ORDER BY, например `eb.ref('createdAt')`. */
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
+  /** Правая часть сравнения, например `cursor.createdAt`. */
+  value: (cursor: Cursor) => unknown;
+};
+
 /**
- * Сортировка постраничного списка (ADR-0008, design, решение 4). Ключ задаётся дважды: над колонками строки
- * (`keyColumns`) и над значениями курсора (`cursorValues`). Пресет обязан соблюдать контракт:
+ * Проверяет, что `column` и `value` дают один тип `T`: пара `eb.ref('createdAt')` и `cursor.id` не скомпилируется.
+ * `T` не может включать `null`, поэтому не пройдёт и `eb.ref('occasionDate')`. `DB`, `TB` и `Cursor` TypeScript
+ * берёт из места вызова, например из поля `key` пресета.
+ */
+export const keyPart = <
+  DB,
+  TB extends keyof DB,
+  Cursor,
+  T extends NonNullable<unknown>,
+>(part: {
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<T>;
+  value: (cursor: Cursor) => T;
+}): KeyPart<DB, TB, Cursor> => ({
+  ...part,
+  [keyPartTag]: true,
+});
+
+/**
+ * Сортировка постраничного списка (ADR-0008, design, решение 4). Пресет обязан соблюдать контракт:
  *
- * 1. одинаковое число компонентов в обоих ключах и одинаковый их порядок;
- * 2. совместимые SQL-типы компонентов на одной позиции;
+ * 1. обе стороны сравнения в WHERE содержат одинаковое число компонентов в одном порядке;
+ * 2. у `column` и `value` одного компонента совместимые SQL-типы;
  * 3. ни один компонент итогового ключа не равен SQL NULL: сравнение кортежей с NULL даёт «неизвестно», и WHERE
  *    молча отбрасывает строку;
- * 4. полный ключ уникален среди строк результата; последний компонент — уникальный id.
+ * 4. полный ключ уникален среди строк результата, последний компонент: уникальный id.
  *
- * Пункты 1–2 проверяет компилятор через `Key`. Перестановку компонентов одного типа и пункты 3–4 ловит только обход
- * на PostgreSQL.
+ * Пункт 1 соблюдается сам: `applyKeyset` строит обе стороны из одного списка `key`. Пункт 2 и колонку с NULL
+ * проверяет `check-types` через `keyPart`. Остальное ловит только обход на PostgreSQL: пару `eb.ref('title')` и
+ * `cursor.id` (обе `string`), NULL из ``sql<number>`…` `` и нарушение пункта 4.
  *
  * @typeParam DB - схема БД запроса.
  * @typeParam TB - таблица запроса.
  * @typeParam Row - строка, которую выбрал пользователь модуля.
  * @typeParam Cursor - значения ключа последней показанной строки.
- * @typeParam Key - кортеж типов значений ключа, например `readonly [Date, string]`.
  */
-export interface KeysetSort<
-  DB,
-  TB extends keyof DB,
-  Row,
-  Cursor,
-  Key extends Array.NonEmptyReadonlyArray<unknown>,
-> {
+export interface KeysetSort<DB, TB extends keyof DB, Row, Cursor> {
   /** Одно на весь ключ: сравнение кортежей совпадает с ORDER BY только при общем направлении. */
   direction: 'asc' | 'desc';
+  /** Компоненты в порядке сортировки, последний: id. `key: []` не скомпилируется. */
+  key: Array.NonEmptyReadonlyArray<KeyPart<DB, TB, Cursor>>;
   /** Курсор по последней строке страницы: что запомнить, чтобы следующая страница началась строго после неё. */
   cursorOf: (row: Row) => Cursor;
-  /** Значения ключа из курсора — правая часть сравнения в WHERE. */
-  cursorValues: (cursor: Cursor) => Key;
-  /** Выражения ключа над строкой — ORDER BY и левая часть сравнения в WHERE. */
-  keyColumns: (eb: ExpressionBuilder<DB, TB>) => {
-    readonly [K in keyof Key]: Expression<Key[K]>;
-  };
 }
 
 /**
  * Собирает страницу из строк, которые вернул запрос после `applyKeyset`: первые `limit` строк и курсор по последней
  * из них. `nextCursor` равен `null`, только если лишней (`limit + 1`-й) строки нет.
  */
-export const toPage = <
-  DB,
-  TB extends keyof DB,
-  Row,
-  Cursor,
-  Key extends Array.NonEmptyReadonlyArray<unknown>,
->(
-  sort: KeysetSort<DB, TB, Row, Cursor, Key>,
+export const toPage = <DB, TB extends keyof DB, Row, Cursor>(
+  sort: KeysetSort<DB, TB, Row, Cursor>,
   limit: number,
   rows: ReadonlyArray<Row>,
 ) => {
@@ -78,26 +92,23 @@ export const toPage = <
  * выполняется; функция встраивается в цепочку через `$call`.
  */
 export const applyKeyset =
-  <
-    DB,
-    TB extends keyof DB,
-    Row,
-    Cursor,
-    Key extends Array.NonEmptyReadonlyArray<unknown>,
-  >(
-    sort: KeysetSort<DB, TB, Row, Cursor, Key>,
+  <DB, TB extends keyof DB, Row, Cursor>(
+    sort: KeysetSort<DB, TB, Row, Cursor>,
     page: { readonly cursor: Cursor | undefined; readonly limit: number },
   ) =>
   <O>(query: SelectQueryBuilder<DB, TB, O>): SelectQueryBuilder<DB, TB, O> => {
+    const eb = expressionBuilder(query);
+
     let result = query.clearOrderBy().clearOffset().clearLimit();
-    const key = sort.keyColumns(expressionBuilder(query));
+    const key = sort.key.map((part) => part.column(eb));
     key.forEach((k) => {
       result = result.orderBy(k, sort.direction);
     });
     const sign = sort.direction === 'desc' ? '<' : '>';
 
     if (page.cursor !== undefined) {
-      const cursorValues = sort.cursorValues(page.cursor);
+      const cursor = page.cursor;
+      const cursorValues = sort.key.map((part) => part.value(cursor));
 
       result = result.where(
         sql<SqlBool>`(${sql.join(key)}) ${sql.raw(sign)} (${sql.join(cursorValues)})`,

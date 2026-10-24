@@ -5,11 +5,11 @@ import { Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
 
 import type { DB as Database } from '#infra/db/generated/database.js';
+import type { KeyPart, KeysetSort } from '#infra/pagination/keyset.js';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
-import { KeysetSort, toPage } from '#infra/pagination/keyset.js';
-import { applyKeyset } from '#infra/pagination/keyset.js';
+import { applyKeyset, keyPart, toPage } from '#infra/pagination/keyset.js';
 
 const testLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 
@@ -36,27 +36,28 @@ const acquireUser = (email: string) =>
       ),
   );
 
-// Пять Wishlist одного владельца. W3 и W4 созданы в одну миллисекунду — порядок между ними решает id.
+// Пять Wishlist одного владельца. W3 и W4 созданы в одну миллисекунду, и порядок между ними решает id.
 // Порядок «новые сверху» (`created_at desc, id desc`): W5, W4, W3, W2, W1.
-// При limit = 2 граница первой страницы проходит ровно между W4 и W3 с одинаковым временем.
+// При limit = 2 граница первой страницы проходит между W4 и W3 с одинаковым временем.
+// id идут против времени: если пресет отсортирует по id раньше, чем по created_at, тесты обхода упадут.
 const W1 = {
-  id: '00000000-0000-4000-8000-000000000001',
+  id: '00000000-0000-4000-8000-000000000005',
   createdAt: new Date('2026-10-19T10:00:01.000Z'),
 };
 const W2 = {
-  id: '00000000-0000-4000-8000-000000000002',
+  id: '00000000-0000-4000-8000-000000000004',
   createdAt: new Date('2026-10-19T10:00:02.000Z'),
 };
 const W3 = {
-  id: '00000000-0000-4000-8000-000000000003',
+  id: '00000000-0000-4000-8000-000000000002',
   createdAt: new Date('2026-10-19T10:00:03.000Z'),
 };
 const W4 = {
-  id: '00000000-0000-4000-8000-000000000004',
+  id: '00000000-0000-4000-8000-000000000003',
   createdAt: new Date('2026-10-19T10:00:03.000Z'),
 };
 const W5 = {
-  id: '00000000-0000-4000-8000-000000000005',
+  id: '00000000-0000-4000-8000-000000000001',
   createdAt: new Date('2026-10-19T10:00:05.000Z'),
 };
 
@@ -82,7 +83,7 @@ type PageByCreatedAtParams = {
   cursor: Cursor | undefined;
   limit: number;
   ownerId: string;
-  sort: KeysetSort<Database, 'wishlists', Row, Cursor, CreatedAtKey>;
+  sort: KeysetSort<Database, 'wishlists', Row, Cursor>;
 };
 type Cursor = { readonly createdAt: Date; readonly id: string };
 type PageByCreatedAtResult = {
@@ -92,18 +93,20 @@ type PageByCreatedAtResult = {
 
 type Row = { readonly createdAt: Date; readonly id: string };
 
-// Типы значений ключа сортировки createdAt, по позициям: created_at, id.
-type CreatedAtKey = readonly [Date, string];
-
 type Direction = 'asc' | 'desc';
 
 const makeSort = (
   direction: Direction,
-): KeysetSort<Database, 'wishlists', Row, Cursor, CreatedAtKey> => ({
+): KeysetSort<Database, 'wishlists', Row, Cursor> => ({
   direction,
-  keyColumns: (eb) => [eb.ref('createdAt'), eb.ref('id')],
+  key: [
+    keyPart({
+      column: (eb) => eb.ref('createdAt'),
+      value: (cursor) => cursor.createdAt,
+    }),
+    keyPart({ column: (eb) => eb.ref('id'), value: (cursor) => cursor.id }),
+  ],
   cursorOf: (row) => ({ createdAt: row.createdAt, id: row.id }),
-  cursorValues: (cursor) => [cursor.createdAt, cursor.id],
 });
 
 const pageByCreatedAt = ({
@@ -285,62 +288,58 @@ describe('keyset test', () => {
 describe('KeysetSort', () => {
   // Проверки выполняются в check-types: если ошибка типа исчезнет,
   // директива ts-expect-error над ней сама станет ошибкой (design, решение 4).
-  type CreatedAtSort = KeysetSort<
-    Database,
-    'wishlists',
-    Row,
-    Cursor,
-    CreatedAtKey
-  >;
-
   test('rejects an empty key at compile time', () => {
-    const emptyKey: CreatedAtSort = {
+    const emptyKey: KeysetSort<Database, 'wishlists', Row, Cursor> = {
       direction: 'desc',
-      // @ts-expect-error ключ строки должен содержать хотя бы одно выражение
-      keyColumns: () => [],
-      // @ts-expect-error ключ курсора должен содержать хотя бы одно значение
-      cursorValues: () => [],
+      // @ts-expect-error ключ должен содержать хотя бы один компонент
+      key: [],
       cursorOf: (row) => row,
     };
 
     expect(emptyKey.direction).toBe('desc');
   });
+});
 
-  test('rejects a key type without components', () => {
-    type EmptyKey = readonly [];
-    const sort: KeysetSort<
-      Database,
-      'wishlists',
-      Row,
-      Cursor,
-      // @ts-expect-error Key должен содержать хотя бы один компонент
-      EmptyKey
-    > | null = null;
+describe('keyPart', () => {
+  // Таблицу и курсор keyPart узнаёт из типа переменной: без него eb.ref не знает колонок.
+  test('accepts a column and a cursor value of the same type', () => {
+    const createdAt: KeyPart<Database, 'wishlists', Cursor> = keyPart({
+      column: (eb) => eb.ref('createdAt'),
+      value: (cursor) => cursor.createdAt,
+    });
 
-    expect(sort).toBeNull();
+    expect(createdAt.value(W1)).toEqual(W1.createdAt);
   });
 
-  test('rejects cursor values of another length at compile time', () => {
-    const shorter: CreatedAtSort = {
-      direction: 'desc',
-      keyColumns: (eb) => [eb.ref('createdAt'), eb.ref('id')],
-      // @ts-expect-error значений курсора меньше, чем колонок ключа
-      cursorValues: (cursor) => [cursor.createdAt],
-      cursorOf: (row) => row,
-    };
+  test('rejects a column and a cursor value of different types at compile time', () => {
+    const wrong: KeyPart<Database, 'wishlists', Cursor> = keyPart({
+      column: (eb) => eb.ref('createdAt'),
+      // @ts-expect-error id (string) стоит в паре с created_at (Date)
+      value: (cursor) => cursor.id,
+    });
 
-    expect(shorter.direction).toBe('desc');
+    expect(wrong.value(W1)).toBe(W1.id);
   });
 
-  test('rejects swapped key columns of different types at compile time', () => {
-    const swapped: CreatedAtSort = {
-      direction: 'desc',
-      // @ts-expect-error id (string) стоит на месте created_at (Date)
-      keyColumns: (eb) => [eb.ref('id'), eb.ref('createdAt')],
-      cursorValues: (cursor) => [cursor.createdAt, cursor.id],
-      cursorOf: (row) => row,
+  // NULL в ключе: сравнение кортежей даёт «неизвестно», и WHERE молча отбрасывает строку (design, решение 4).
+  test('rejects a column that may be NULL at compile time', () => {
+    const nullable: KeyPart<Database, 'wishlists', Cursor> = keyPart({
+      // @ts-expect-error occasion_date может быть NULL
+      column: (eb) => eb.ref('occasionDate'),
+      value: (cursor) => cursor.id,
+    });
+
+    expect(nullable.value(W1)).toBe(W1.id);
+  });
+
+  // Объект без keyPart не проходит проверку пары: здесь created_at (Date) стоит в паре с id (string).
+  test('rejects a key part written without keyPart at compile time', () => {
+    // @ts-expect-error компонент создаётся только через keyPart
+    const raw: KeyPart<Database, 'wishlists', Cursor> = {
+      column: (eb) => eb.ref('createdAt'),
+      value: (cursor) => cursor.id,
     };
 
-    expect(swapped.direction).toBe('desc');
+    expect(raw.value(W1)).toBe(W1.id);
   });
 });
