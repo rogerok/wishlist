@@ -20,6 +20,9 @@ The current primary stack is:
 - **Backend:** Read and follow `.agents/skills/backend-mentoring/SKILL.md` for every backend-related request and
   whenever the user resumes the plan («продолжаем», «что дальше»). Its default-on, per-session opt-out and per-task
   mode rules (who writes the code) are authoritative.
+- **Prose:** Read and follow `.agents/skills/stop-slop/SKILL.md` before writing any text: chat replies, code comments,
+  docs, lessons, `learning/` files, commit and PR text. Apply it to Russian as well: join clauses with a colon, a comma,
+  or a new sentence where English would take an em dash.
 
 Code and configuration are the source of truth. Project plans in the repository root provide context, but if they
 disagree with the working code, the agent must point out the discrepancy instead of silently choosing one version.
