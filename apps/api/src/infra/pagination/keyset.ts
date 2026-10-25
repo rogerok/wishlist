@@ -12,33 +12,74 @@ import {
 // Свойство с этим символом ставит только `keyPart`. Символ не экспортируется, и объект, написанный вручную, к `KeyPart`
 // не подойдёт.
 const keyPartTag = Symbol('KeyPart');
+// SQL-тип, к которому модуль приводит значение курсора, и тип этого значения в JS. Новый тип добавляется строкой здесь
+type KeyCastTypes = { date: string; timestamptz: Date; uuid: string };
+type KeyCastType = keyof KeyCastTypes;
 
-/** Колонка строки и значение курсора, которые WHERE сравнит друг с другом. Создай через `keyPart`. */
+/** Обе стороны сравнения для одного компонента ключа. Создай через `keyPart`. */
 export type KeyPart<DB, TB extends keyof DB, Cursor> = {
   readonly [keyPartTag]: true;
-  /** Левая часть сравнения и ORDER BY, например `eb.ref('createdAt')`. */
-  column: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
-  /** Правая часть сравнения, например `cursor.createdAt`. */
-  value: (cursor: Cursor) => unknown;
+  /** Левая сторона сравнения и ORDER BY, например `"created_at"`. */
+  left: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
+  /** Правая сторона сравнения из значения курсора, например `cast($1 as timestamptz)`. */
+  right: (eb: ExpressionBuilder<DB, TB>, cursor: Cursor) => Expression<unknown>;
 };
 
 /**
- * Проверяет, что `column` и `value` дают один тип `T`: пара `eb.ref('createdAt')` и `cursor.id` не скомпилируется.
- * `T` не может включать `null`, поэтому не пройдёт и `eb.ref('occasionDate')`. `DB`, `TB` и `Cursor` TypeScript
- * берёт из места вызова, например из поля `key` пресета.
+ * Компонент ключа из колонки строки и значения курсора. `keyPart` строит обе стороны сравнения одинаково: левую как
+ * `rule(column)`, правую как `rule(cast($n as sqlType))`, поэтому стороны не могут разойтись
+ *
+ * Эта перегрузка без `rule`, для колонок без NULL (`createdAt`, `id`). TypeScript выводит `S` из `sqlType` и требует
+ * от `column` и `value` тип `KeyCastTypes[S]`. Не скомпилируются `sqlType: 'date'` рядом с `eb.ref('createdAt')`
+ * (`Date`), пара `eb.ref('createdAt')` с `cursor.id` и колонка `eb.ref('occasionDate')`: в `KeyCastTypes` нет `null`.
+ * `DB`, `TB` и `Cursor` TypeScript берёт из места вызова, например из поля `key` пресета.
  */
-export const keyPart = <
+export function keyPart<
   DB,
   TB extends keyof DB,
   Cursor,
-  T extends NonNullable<unknown>,
+  S extends KeyCastType,
 >(part: {
-  column: (eb: ExpressionBuilder<DB, TB>) => Expression<T>;
-  value: (cursor: Cursor) => T;
-}): KeyPart<DB, TB, Cursor> => ({
-  ...part,
-  [keyPartTag]: true,
-});
+  sqlType: S;
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S]>;
+  value: (cursor: Cursor) => KeyCastTypes[S];
+}): KeyPart<DB, TB, Cursor>;
+
+/**
+ * Перегрузка с `rule`, для вычисляемого ключа (`occasionDate`). Колонка и значение курсора могут быть NULL, а
+ * результат `rule` нет: `rule: (d) => d` для `eb.ref('occasionDate')` не скомпилируется. `rule` получает колонку для
+ * левой стороны и `cast($n as sqlType)` для правой.
+ */
+export function keyPart<
+  DB,
+  TB extends keyof DB,
+  Cursor,
+  S extends KeyCastType,
+  R extends NonNullable<unknown>,
+>(part: {
+  sqlType: S;
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S] | null>;
+  rule: (input: Expression<KeyCastTypes[S] | null>) => Expression<R>;
+  value: (cursor: Cursor) => KeyCastTypes[S] | null;
+}): KeyPart<DB, TB, Cursor>;
+
+// Реализацию снаружи не видно: вызвать `keyPart` можно только через перегрузки выше, и типы проверяют они. Здесь типы
+// `unknown`, а без `rule` компонентом служит сама колонка.
+export function keyPart<DB, TB extends keyof DB, Cursor>(part: {
+  sqlType: KeyCastType;
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
+  rule?: (input: Expression<unknown>) => Expression<unknown>;
+  value: (cursor: Cursor) => unknown;
+}): KeyPart<DB, TB, Cursor> {
+  const rule = part.rule ?? ((input) => input);
+
+  return {
+    [keyPartTag]: true,
+    left: (eb) => rule(part.column(eb)),
+    right: (eb, cursor) =>
+      rule(eb.cast(eb.val(part.value(cursor)), part.sqlType)),
+  };
+}
 
 /**
  * Сортировка постраничного списка (ADR-0008, design, решение 4). Пресет обязан соблюдать контракт:
@@ -49,9 +90,10 @@ export const keyPart = <
  *    молча отбрасывает строку;
  * 4. полный ключ уникален среди строк результата, последний компонент: уникальный id.
  *
- * Пункт 1 соблюдается сам: `applyKeyset` строит обе стороны из одного списка `key`. Пункт 2 и колонку с NULL
- * проверяет `check-types` через `keyPart`. Остальное ловит только обход на PostgreSQL: пару `eb.ref('title')` и
- * `cursor.id` (обе `string`), NULL из ``sql<number>`…` `` и нарушение пункта 4.
+ * Пункт 1 соблюдается сам: `applyKeyset` берёт обе стороны из одного списка `key`, а `keyPart` строит стороны
+ * компонента из одного правила. Пункт 2 и колонку с NULL проверяет `check-types` через `keyPart`. Остальное ловит
+ * только обход на PostgreSQL: пару `eb.ref('title')` и `cursor.id` (обе `string`), NULL из ``sql<number>`…` `` и
+ * нарушение пункта 4.
  *
  * @typeParam DB - схема БД запроса.
  * @typeParam TB - таблица запроса.
@@ -100,7 +142,7 @@ export const applyKeyset =
     const eb = expressionBuilder(query);
 
     let result = query.clearOrderBy().clearOffset().clearLimit();
-    const key = sort.key.map((part) => part.column(eb));
+    const key = sort.key.map((part) => part.left(eb));
     key.forEach((k) => {
       result = result.orderBy(k, sort.direction);
     });
@@ -108,7 +150,7 @@ export const applyKeyset =
 
     if (page.cursor !== undefined) {
       const cursor = page.cursor;
-      const cursorValues = sort.key.map((part) => part.value(cursor));
+      const cursorValues = sort.key.map((part) => part.right(eb, cursor));
 
       result = result.where(
         sql<SqlBool>`(${sql.join(key)}) ${sql.raw(sign)} (${sql.join(cursorValues)})`,
