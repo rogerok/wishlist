@@ -20,7 +20,7 @@ import type { KeyPart, KeysetSort } from '#infra/pagination/keyset.js';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
-import { applyKeyset, keyPart, toPage } from '#infra/pagination/keyset.js';
+import { keyPart, prepareKeyset } from '#infra/pagination/keyset.js';
 
 const testLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 
@@ -137,14 +137,15 @@ const pageByCreatedAt = ({
 > =>
   Effect.gen(function* () {
     const db = yield* DB;
+    const keyset = yield* prepareKeyset(sort, { cursor, limit });
 
     let rows = yield* db
       .selectFrom('wishlists')
       .select(['id', 'createdAt'])
       .where('ownerId', '=', ownerId)
-      .$call(applyKeyset(sort, { limit, cursor }));
+      .$call(keyset.apply);
 
-    return toPage(sort, limit, rows);
+    return keyset.toPage(rows);
   });
 
 const walkAll = (ownerId: string, direction: Direction) =>
@@ -237,6 +238,10 @@ describe('keyset test', () => {
           'foreign-order@example.test',
         );
         const sort = makeSort('desc');
+        const keyset = yield* prepareKeyset(sort, {
+          cursor: undefined,
+          limit: 2,
+        });
 
         const rows = yield* db
           .selectFrom('wishlists')
@@ -244,8 +249,8 @@ describe('keyset test', () => {
           .where('ownerId', '=', ownerId)
           .orderBy('title', 'asc')
           .offset(5)
-          .$call(applyKeyset(sort, { cursor: undefined, limit: 2 }));
-        const page = toPage(sort, 2, rows);
+          .$call(keyset.apply);
+        const page = keyset.toPage(rows);
 
         expect(page.items.map((row) => row.id)).toEqual([W5.id, W4.id]);
       }).pipe(Effect.scoped),
@@ -355,12 +360,14 @@ describe('keyset test', () => {
         const ids: string[] = [];
 
         for (let i = 1; i <= 10; i++) {
+          // Внутри цикла: keyset запоминает cursor этой итерации.
+          const keyset = yield* prepareKeyset(datedFirst, { cursor, limit: 1 });
           const rows = yield* db
             .selectFrom('wishlists')
             .select(['id', 'occasionDate'])
             .where('ownerId', '=', ownerId)
-            .$call(applyKeyset(datedFirst, { cursor, limit: 1 }));
-          const page = toPage(datedFirst, 1, rows);
+            .$call(keyset.apply);
+          const page = keyset.toPage(rows);
 
           ids.push(...page.items.map((row) => row.id));
 

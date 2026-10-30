@@ -1,6 +1,7 @@
 import type { Array } from 'effect';
 import type { SelectQueryBuilder } from 'kysely';
 
+import { Effect } from 'effect';
 import {
   type Expression,
   expressionBuilder,
@@ -15,6 +16,14 @@ const keyPartTag = Symbol('KeyPart');
 // SQL-тип, к которому модуль приводит значение курсора, и тип этого значения в JS. Новый тип добавляется строкой здесь
 type KeyCastTypes = { date: string; timestamptz: Date; uuid: string };
 type KeyCastType = keyof KeyCastTypes;
+
+type ParamSpec = Record<string, KeyCastType>;
+type ParamValues<Spec extends ParamSpec> = {
+  [K in keyof Spec]: KeyCastTypes[Spec[K]];
+};
+type ParamExpression<Spec extends ParamSpec> = {
+  [K in keyof Spec]: Expression<KeyCastTypes[Spec[K]]>;
+};
 
 /** Обе стороны сравнения для одного компонента ключа. Создай через `keyPart`. */
 export type KeyPart<DB, TB extends keyof DB, Cursor> = {
@@ -113,7 +122,7 @@ export interface KeysetSort<DB, TB extends keyof DB, Row, Cursor> {
  * Собирает страницу из строк, которые вернул запрос после `applyKeyset`: первые `limit` строк и курсор по последней
  * из них. `nextCursor` равен `null`, только если лишней (`limit + 1`-й) строки нет.
  */
-export const toPage = <DB, TB extends keyof DB, Row, Cursor>(
+const toPage = <DB, TB extends keyof DB, Row, Cursor>(
   sort: KeysetSort<DB, TB, Row, Cursor>,
   limit: number,
   rows: ReadonlyArray<Row>,
@@ -133,7 +142,7 @@ export const toPage = <DB, TB extends keyof DB, Row, Cursor>(
  * после курсора» и берёт `limit + 1` строк. WHERE пользователя — область видимости — сохраняется. Запрос не
  * выполняется; функция встраивается в цепочку через `$call`.
  */
-export const applyKeyset =
+const applyKeyset =
   <DB, TB extends keyof DB, Row, Cursor>(
     sort: KeysetSort<DB, TB, Row, Cursor>,
     page: { readonly cursor: Cursor | undefined; readonly limit: number },
@@ -159,3 +168,16 @@ export const applyKeyset =
 
     return result.limit(page.limit + 1);
   };
+
+export const prepareKeyset = <DB, TB extends keyof DB, Row, Cursor>(
+  sort: KeysetSort<DB, TB, Row, Cursor>,
+  page: { readonly cursor: Cursor | undefined; readonly limit: number },
+) =>
+  Effect.gen(function* () {
+    const apply = applyKeyset(sort, page);
+
+    return {
+      apply,
+      toPage: (rows: ReadonlyArray<Row>) => toPage(sort, page.limit, rows),
+    };
+  });
