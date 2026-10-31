@@ -10,6 +10,7 @@ import { wishlistsGroup } from '#modules/wishlists/api/wishlists.api.js';
 
 export const AppApi = HttpApi.make('app')
   .annotate(HttpApi.PayloadParseOptions, requestParseOptions)
+  .annotate(HttpApi.QueryParseOptions, requestParseOptions)
   .add(healthGroup)
   .add(usersGroup)
   .add(authGroup)

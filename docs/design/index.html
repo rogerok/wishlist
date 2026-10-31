@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Интерактивный дизайн Wishlist. Демонстрационные данные; без подключения к API.">
+  <title>Wishlist — желания, которыми хочется делиться</title>
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="styles.css?v=quiet-gifts-4">
+  <script src="prototype.js?v=quiet-gifts-4" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому</a>
+  <header class="prototype-bar" aria-label="Управление прототипом">
+    <span><b>Дизайн-прототип</b><span class="bar-detail"> · данные вымышлены · API не подключён</span></span>
+    <div class="prototype-tools">
+      <label for="scene" class="sr-only">Открыть экран прототипа</label>
+      <select id="scene">
+        <option value="home">Мои вишлисты</option>
+        <option value="wishlist">Вишлист · владелец</option>
+        <option value="visitor">Вишлист · посетитель</option>
+        <option value="guest">Вишлист · гость</option>
+        <option value="profile">Публичный профиль</option>
+        <option value="account">Аккаунт</option>
+        <option value="login">Вход</option>
+        <option value="signup">Регистрация</option>
+        <option value="states">Состояния и компоненты</option>
+      </select>
+      <label class="theme-control" for="theme"><span class="sr-only">Тема</span>
+        <select id="theme">
+          <option value="system">По системе</option>
+          <option value="light">Светлая</option>
+          <option value="dark">Тёмная</option>
+        </select>
+      </label>
+      <a href="HANDOFF.md" class="handoff-link">Спецификация ↗</a>
+    </div>
+  </header>
+  <div id="app"></div>
+  <dialog id="modal" aria-labelledby="dialog-title"></dialog>
+  <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+  <noscript>Для переходов между экранами прототипа включите JavaScript. Описание дизайна находится в HANDOFF.md.</noscript>
+</body>
+</html>

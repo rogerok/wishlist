@@ -20,6 +20,9 @@ The current primary stack is:
 - **Backend:** Read and follow `.agents/skills/backend-mentoring/SKILL.md` for every backend-related request and
   whenever the user resumes the plan («продолжаем», «что дальше»). Its default-on, per-session opt-out and per-task
   mode rules (who writes the code) are authoritative.
+- **Prose:** Read and follow `.agents/skills/stop-slop/SKILL.md` before writing any text: chat replies, code comments,
+  docs, lessons, `learning/` files, commit and PR text. Apply it to Russian as well: join clauses with a colon, a comma,
+  or a new sentence where English would take an em dash.
 
 Code and configuration are the source of truth. Project plans in the repository root provide context, but if they
 disagree with the working code, the agent must point out the discrepancy instead of silently choosing one version.
@@ -31,8 +34,8 @@ demonstrated by the user's code and reasoning. Do not turn learning into endless
 with a lecture.
 
 Communicate in Russian. Write ordinary prose in natural Russian, preserving the subject, behavior, and consequence of
-each sentence. When introducing a technical term, retain its standard English name alongside the Russian meaning at first
-use. Prefer `Russian meaning (English term)` when the Russian wording reads naturally; use
+each sentence. When introducing a technical term, retain its standard English name alongside the Russian meaning at
+first use. Prefer `Russian meaning (English term)` when the Russian wording reads naturally; use
 `English term — Russian explanation` when English is the usual name in the relevant ecosystem or an exact code or API
 name. Then use the clearer form consistently. Infer familiarity from the user's demonstrated code and reasoning; when
 the concept may be unfamiliar, explain what it means or does in one plain sentence. Rewrite mixed-language phrasing when
@@ -73,8 +76,8 @@ not hide critical information merely to maintain a “curiosity loop.”
 
 Outside active backend mentoring, for requests such as “do,” “fix,” “add,” “create,” or “implement,” complete the task
 to a working and verified result. Do not interrupt implementation to test the user's knowledge, and do not leave
-mandatory blanks for the user to fill in. Before a non-trivial change, briefly state the plan; afterward, explain the key
-decisions and invariants.
+mandatory blanks for the user to fill in. Before a non-trivial change, briefly state the plan; afterward, explain the
+key decisions and invariants.
 
 If the user says “do it yourself,” “no questions,” or indicates urgency, provide the direct solution. For backend work,
 backend mentoring handles this as its routine mode, followed by a debrief.
@@ -119,6 +122,8 @@ structure for a future request: **goal — context — constraints — done when
 - Do not add a production dependency when the existing stack can solve the task. If a dependency is genuinely necessary,
   explain its cost and the alternative.
 - Do not read, print, or commit secrets. Use `.env.example` and fictitious values in examples.
+- Write commit messages and PR/MR titles and descriptions in English only, even though conversation is in Russian.
+  Keep the Conventional Commits prefix (`feat(scope): ...`, `docs(scope): ...`).
 - Explicitly ask for confirmation before destructive operations involving data, migrations, or the user's environment.
 
 ## Definition of Done and Verification
@@ -142,8 +147,8 @@ Use property-based testing with FastCheck when the contract is an invariant over
 can expose behavior that a small explicit table cannot. Use the installed `effect/testing` integration and follow the
 nearest Vitest style. Keep generators simpler than the behavior under test and make every generated value satisfy
 unrelated preconditions, so a failure isolates the intended property; assert the exact invariant or failure cause, not
-only a generic failure. Prefer example-based or table-driven tests for fixed HTTP status/error contracts, finite boundary
-matrices, and other small known case sets. Do not use FastCheck when generator, shrinking, or setup overhead exceeds the
+only a generic failure. Prefer example-based or table-driven tests for fixed HTTP status/error contracts, finite
+boundary matrices, and other small known case sets. Do not use FastCheck when generator, shrinking, or setup overhead exceeds the
 additional confidence or merely retests library behavior.
 
 Implementation work is complete when:
@@ -175,3 +180,9 @@ Issues are tracked in GitHub Issues for `rogerok/wishlist`. See `docs/agents/iss
 ### Domain docs
 
 This repository uses a single-context domain documentation layout. See `docs/agents/domain.md`.
+
+## Mentoring mode
+
+- When I'm in mentor mode or a task is marked `TODO(you)`, do NOT write the implementation for me. Guide, ask questions,
+  review my code, and write tests or specs only if I ask.
+- If you're unsure whether I want you to write the code or just guide me, ask first.

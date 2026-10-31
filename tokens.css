@@ -1,0 +1,86 @@
+/* Hallmark · macrostructure: Compact collection · genre: personal application
+ * theme: С любовью · gift-red, near-white and berry-ink; Golos Text; quiet gift actions
+ * Hallmark · pre-emit critique: P4 H5 E4 S4 R5 V4 · self-assessment
+ * contrast: measured text minimum 5.02:1 light / 7.24:1 dark
+ */
+:root {
+  color-scheme: light;
+  --color-paper: oklch(99% 0.005 55);
+  --color-surface: oklch(99.5% 0.005 55);
+  --color-paper-2: oklch(96.5% 0.008 35);
+  --color-paper-3: oklch(93% 0.012 15);
+  --color-ink: oklch(25% 0.015 350);
+  --color-muted: oklch(47% 0.015 350);
+  --color-rule: oklch(88% 0.01 350);
+  --color-control: oklch(60% 0.018 350);
+  --color-accent: oklch(56% 0.205 20);
+  --color-accent-hover: oklch(49% 0.19 20);
+  --color-accent-ink: var(--color-paper);
+  --color-focus: oklch(48% 0.09 240);
+  --color-error: oklch(44% 0.17 12);
+  --color-error-hover: oklch(38% 0.15 12);
+  --color-error-ink: var(--color-paper);
+  --color-error-paper: oklch(96% 0.02 15);
+  --color-success: oklch(43% 0.065 165);
+  --color-success-paper: oklch(97% 0.014 160);
+  --color-warning: oklch(45% 0.08 75);
+  --color-warning-paper: oklch(97% 0.03 85);
+  --color-overlay: oklch(16% 0.02 12 / 0.44);
+  --color-shadow: oklch(20% 0.01 12 / 0.12);
+  --color-transparent: transparent;
+  --font-body: 'Wishlist Golos', 'Segoe UI', sans-serif;
+  --font-display: var(--font-body);
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.953rem;
+  --text-2xl: 2.441rem;
+  --text-display: clamp(1.75rem, 2.5vw, 2rem);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 180ms;
+  --radius-card: 8px;
+  --radius-input: 8px;
+  --radius-pill: 999px;
+  --z-sticky: 200;
+  --z-modal: 400;
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-paper: oklch(20% 0.012 335);
+  --color-surface: oklch(25% 0.014 335);
+  --color-paper-2: oklch(27% 0.014 335);
+  --color-paper-3: oklch(32% 0.018 335);
+  --color-ink: oklch(96% 0.008 10);
+  --color-muted: oklch(77% 0.018 335);
+  --color-rule: oklch(37% 0.016 335);
+  --color-control: oklch(61% 0.025 335);
+  --color-accent: oklch(77% 0.145 12);
+  --color-accent-hover: oklch(83% 0.105 12);
+  --color-accent-ink: oklch(23% 0.045 12);
+  --color-focus: oklch(80% 0.08 235);
+  --color-error: oklch(82% 0.095 8);
+  --color-error-hover: oklch(88% 0.07 8);
+  --color-error-ink: oklch(23% 0.06 8);
+  --color-error-paper: oklch(31% 0.045 5);
+  --color-success: oklch(82% 0.075 165);
+  --color-success-paper: oklch(29% 0.035 165);
+  --color-warning: oklch(85% 0.09 85);
+  --color-warning-paper: oklch(29% 0.035 75);
+  --color-overlay: oklch(10% 0.02 350 / 0.72);
+  --color-shadow: oklch(8% 0.008 350 / 0.4);
+}

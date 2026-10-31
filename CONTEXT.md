@@ -42,6 +42,12 @@ _Avoid_: Open Wishlist
 An optional, non-recurring calendar date associated with one Wishlist rather than with its owner. _Avoid_: Birthday,
 event timestamp
 
+**Upcoming Occasion Date**:
+An Occasion Date that falls today or later. _Avoid_: Future date, active Wishlist
+
+**Past Occasion Date**:
+An Occasion Date that fell before today. _Avoid_: Expired Wishlist, archived Wishlist
+
 **Guest**:
 A person who is not registered as a User and whose email address has been verified for access to one Wishlist. _Avoid_:
 Friend, anonymous User

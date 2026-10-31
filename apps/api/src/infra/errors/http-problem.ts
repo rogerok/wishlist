@@ -17,11 +17,11 @@ type DomainProblemOptions<
 > = {
   // Тело ответа problem+json (RFC 9457).
   readonly body: Body;
-  readonly error: DomainError;
-  readonly status: number;
   // Нужен для клиента HttpApi; сервер только кодирует.
   readonly decode: (body: Body['Type']) => InstanceType<DomainError>;
   readonly encode: (error: InstanceType<DomainError>) => Body['Type'];
+  readonly error: DomainError;
+  readonly status: number;
 };
 
 // Схема ответа для доменной ошибки: Type — доменный класс, Encoded — тело.

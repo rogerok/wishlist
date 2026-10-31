@@ -305,7 +305,7 @@
     "perfectionist/sort-interfaces": [
       "warn",
       {
-        "groups": ["required-property", "optional-property"],
+        "groups": ["required-member", "optional-member"],
         "order": "asc"
       }
     ],
@@ -314,7 +314,7 @@
     "perfectionist/sort-object-types": [
       "warn",
       {
-        "groups": ["required-property", "optional-property"],
+        "groups": ["required-member", "optional-member"],
         "order": "asc"
       }
     ],
@@ -412,7 +412,7 @@
             ]
           },
           {
-            "groups": ["required-property", "optional-property"],
+            "groups": ["required-member", "optional-member"],
             "order": "asc"
           }
         ]

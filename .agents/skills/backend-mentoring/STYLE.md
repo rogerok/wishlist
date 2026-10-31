@@ -12,7 +12,7 @@ Applies to everything the agent writes for the user: chat, lessons, debriefs, `S
 - **Numbers over adjectives**: «~128 MiB на операцию», «503», «2 строки в БД».
 - **Status once.** Verified and unverified facts live in `learning/STATE.md`. Other documents link there. Inside one document, uncertainties collect in a single «Не проверено» list at the end, one line each: what, and what it threatens.
 - **Show, then interpret.** When structure carries the meaning, a code block, diagram, or table comes before the paragraph about it, and labels sit on the diagram itself.
-- **Length budget**: chat answer — one screen unless the user asked for depth; debrief — 5 minutes; lesson — 10 minutes; `STATE.md` — 40 lines; kata `README.md` — 10 lines.
+- **Length budget**: chat answer — about 15 lines of prose besides code, in the order result → step → done-criterion, one line per finding; explaining a new concept may take one screen, more goes to an HTML lesson; debrief — 5 minutes; lesson — 10 minutes; `STATE.md` — 40 lines; kata `README.md` — 10 lines.
 
 ## Before → after
 
