@@ -424,11 +424,11 @@ describe('keyPart', () => {
       value: (cursor) => cursor.createdAt,
     });
 
-    expect(toSql(createdAt.left(offlineEb))).toMatchObject({
+    expect(toSql(createdAt.left(offlineEb, {}))).toMatchObject({
       sql: '"created_at"',
       parameters: [],
     });
-    expect(toSql(createdAt.right(offlineEb, W1))).toMatchObject({
+    expect(toSql(createdAt.right(offlineEb, W1, {}))).toMatchObject({
       sql: 'cast($1 as timestamptz)',
       parameters: [W1.createdAt],
     });
@@ -443,11 +443,11 @@ describe('keyPart', () => {
         kyselySql<number>`CASE WHEN ${date} IS NULL THEN 1 ELSE 0 END`,
     });
 
-    expect(toSql(occasionDate.left(offlineEb))).toMatchObject({
+    expect(toSql(occasionDate.left(offlineEb, {}))).toMatchObject({
       sql: 'CASE WHEN "occasion_date" IS NULL THEN 1 ELSE 0 END',
       parameters: [],
     });
-    expect(toSql(occasionDate.right(offlineEb, N1))).toMatchObject({
+    expect(toSql(occasionDate.right(offlineEb, N1, {}))).toMatchObject({
       sql: 'CASE WHEN cast($1 as date) IS NULL THEN 1 ELSE 0 END',
       parameters: [null],
     });
@@ -514,5 +514,121 @@ describe('keyPart', () => {
     };
 
     expect(raw).toBeDefined();
+  });
+});
+
+// Параметр ключа на примере `asOf`, сегодняшней даты. Пресет объявляет только имя и SQL-тип параметра
+// (`{ asOf: 'date' }`), а `cast($n as date)` строит модуль. Запрос собирается через offlineDb и не выполняется.
+describe('key params', () => {
+  type AsOfCursor = { readonly asOf: string } & DatedRow;
+
+  // На первой странице `asOf` даёт `first` (позже здесь будет Clock), на следующих курсор.
+  const upcomingFirst: KeysetSort<
+    Database,
+    'wishlists',
+    DatedRow,
+    AsOfCursor,
+    { asOf: 'date' }
+  > = {
+    direction: 'asc',
+    key: [
+      keyPart({
+        sqlType: 'date',
+        column: (eb) => eb.ref('occasionDate'),
+        value: (cursor) => cursor.occasionDate,
+        // asOf уже имеет вид cast($n as date): приводить его к типу здесь не нужно.
+        rule: (date, { asOf }) =>
+          kyselySql<number>`CASE WHEN ${date} >= ${asOf} THEN 0 ELSE 1 END`,
+      }),
+      keyPart({
+        sqlType: 'uuid',
+        column: (eb) => eb.ref('id'),
+        value: (cursor) => cursor.id,
+      }),
+    ],
+    cursorOf: (row, { asOf }) => ({ ...row, asOf }),
+    params: {
+      first: Effect.succeed({ asOf: '2026-10-18' }),
+      types: { asOf: 'date' },
+      fromCursor: (cursor) => ({ asOf: cursor.asOf }),
+    },
+  };
+
+  const compilePage = (cursor: AsOfCursor | undefined) => {
+    const keyset = Effect.runSync(
+      prepareKeyset(upcomingFirst, { cursor, limit: 2 }),
+    );
+
+    return offlineDb
+      .selectFrom('wishlists')
+      .select(['id', 'occasionDate'])
+      .$call(keyset.apply)
+      .compile();
+  };
+
+  test('takes asOf from first on the first page and casts it in SQL', () => {
+    expect(compilePage(undefined)).toMatchObject({
+      sql:
+        'select "id", "occasion_date" from "wishlists" ' +
+        'order by CASE WHEN "occasion_date" >= cast($1 as date) THEN 0 ELSE 1 END asc, "id" asc ' +
+        'limit $2',
+      parameters: ['2026-10-18', 3],
+    });
+  });
+
+  // Курсор хранит asOf первой страницы. Если бы модуль взял его из first, в параметрах был бы '2026-10-18'.
+  test('takes asOf from the cursor on the next pages', () => {
+    const cursor: AsOfCursor = { ...D2, asOf: '2026-10-17' };
+
+    expect(compilePage(cursor)).toMatchObject({
+      parameters: [
+        '2026-10-17', // asOf слева в WHERE
+        D2.occasionDate, // occasionDate из курсора справа
+        '2026-10-17', // asOf справа
+        D2.id, // id из курсора
+        '2026-10-17', // asOf в ORDER BY
+        3, // limit 2 + 1
+      ],
+    });
+  });
+
+  test('passes the param values to cursorOf', () => {
+    const keyset = Effect.runSync(
+      prepareKeyset(upcomingFirst, { cursor: undefined, limit: 1 }),
+    );
+    const page = keyset.toPage([D1, D2]);
+
+    expect(page.nextCursor).toEqual({ ...D1, asOf: '2026-10-18' });
+  });
+
+  // Дальше проверки выполняет check-types.
+  test('rejects a rule that reads asOf in a sort without params at compile time', () => {
+    const noAsOf: KeyPart<Database, 'wishlists', DatedRow> = keyPart({
+      sqlType: 'date',
+      column: (eb) => eb.ref('occasionDate'),
+      value: (cursor) => cursor.occasionDate,
+      // @ts-expect-error у пресета без параметров нет asOf
+      rule: (date, { asOf }) =>
+        kyselySql<number>`CASE WHEN ${date} >= ${asOf} THEN 0 ELSE 1 END`,
+    });
+
+    expect(noAsOf).toBeDefined();
+  });
+
+  test('rejects a first value of the wrong type at compile time', () => {
+    const wrongFirst: KeysetSort<
+      Database,
+      'wishlists',
+      DatedRow,
+      AsOfCursor,
+      { asOf: 'date' }
+    >['params'] = {
+      // @ts-expect-error asOf: 'date' ждёт строку '2026-10-18', а не Date
+      first: Effect.succeed({ asOf: new Date('2026-10-18') }),
+      types: { asOf: 'date' },
+      fromCursor: (cursor) => ({ asOf: cursor.asOf }),
+    };
+
+    expect(wrongFirst).toBeDefined();
   });
 });

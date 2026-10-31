@@ -39,17 +39,30 @@ type ParamExpression<Spec extends ParamSpec> = {
 };
 type Params<Cursor, Spec extends ParamSpec> = {
   first: Effect.Effect<ParamValues<Spec>>;
-  types: Spec;
   fromCursor: (cursor: Cursor) => ParamValues<Spec>;
+  types: Spec;
 };
 
 /** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */
-export type KeyPart<DB, TB extends keyof DB, Cursor> = {
+export type KeyPart<
+  DB,
+  TB extends keyof DB,
+  Cursor,
+  Spec extends ParamSpec = Record<never, never>,
+> = {
   readonly [keyPartTag]: true;
   /** Левая сторона: значение из строки таблицы, например `created_at`. Её же модуль ставит в ORDER BY. */
-  left: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
+  left: (
+    eb: ExpressionBuilder<DB, TB>,
+    params: Record<string, Expression<unknown>>,
+  ) => Expression<unknown>;
   /** Правая сторона: значение из курсора, например `cast($2 as timestamptz)`. */
-  right: (eb: ExpressionBuilder<DB, TB>, cursor: Cursor) => Expression<unknown>;
+  right: (
+    eb: ExpressionBuilder<DB, TB>,
+    cursor: Cursor,
+    params: Record<string, Expression<unknown>>,
+  ) => Expression<unknown>;
+  readonly spec?: Spec;
 };
 
 /**
@@ -69,12 +82,16 @@ export function keyPart<
   Cursor,
   S extends KeyCastType,
   R extends NonNullable<unknown>,
+  Spec extends ParamSpec,
 >(part: {
-  sqlType: S;
   column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S] | null>;
-  rule: (input: Expression<KeyCastTypes[S] | null>) => Expression<R>;
+  rule: (
+    input: Expression<KeyCastTypes[S] | null>,
+    params: ParamExpression<Spec>,
+  ) => Expression<R>;
+  sqlType: S;
   value: (cursor: Cursor) => KeyCastTypes[S] | null;
-}): KeyPart<DB, TB, Cursor>;
+}): KeyPart<DB, TB, Cursor, Spec>;
 
 /**
  * Элемент ключа из колонки. Пример для `created_at`:
@@ -97,27 +114,36 @@ export function keyPart<
   TB extends keyof DB,
   Cursor,
   S extends KeyCastType,
+  Spec extends ParamSpec,
 >(part: {
-  sqlType: S;
   column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S]>;
+  sqlType: S;
   value: (cursor: Cursor) => KeyCastTypes[S];
-}): KeyPart<DB, TB, Cursor>;
+}): KeyPart<DB, TB, Cursor, Spec>;
 
 // Тело общее для обеих перегрузок. Типы здесь `unknown`, а проверяют их перегрузки выше: снаружи эта сигнатура не
 // видна. Без `rule` формула возвращает колонку как есть.
-export function keyPart<DB, TB extends keyof DB, Cursor>(part: {
-  sqlType: KeyCastType;
+export function keyPart<
+  DB,
+  TB extends keyof DB,
+  Cursor,
+  Spec extends ParamSpec,
+>(part: {
   column: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
-  rule?: (input: Expression<unknown>) => Expression<unknown>;
+  sqlType: KeyCastType;
   value: (cursor: Cursor) => unknown;
-}): KeyPart<DB, TB, Cursor> {
+  rule?: (
+    input: Expression<unknown>,
+    params: Record<string, Expression<unknown>>,
+  ) => Expression<unknown>;
+}): KeyPart<DB, TB, Cursor, Spec> {
   const rule = part.rule ?? ((input) => input);
 
   return {
     [keyPartTag]: true,
-    left: (eb) => rule(part.column(eb)),
-    right: (eb, cursor) =>
-      rule(eb.cast(eb.val(part.value(cursor)), part.sqlType)),
+    left: (eb, params) => rule(part.column(eb), params),
+    right: (eb, cursor, params) =>
+      rule(eb.cast(eb.val(part.value(cursor)), part.sqlType), params),
   };
 }
 
@@ -147,13 +173,13 @@ export interface KeysetSort<
   Cursor,
   Spec extends ParamSpec = Record<never, never>,
 > {
+  /** Что запомнить о последней строке страницы, чтобы следующая страница началась строго после неё. */
+  cursorOf: (row: Row, params: ParamValues<Spec>) => Cursor;
   /** Одно на весь ключ: `(a, b) < (x, y)` совпадает с ORDER BY, только если `a` и `b` идут в одну сторону. */
   direction: 'asc' | 'desc';
   /** Элементы пары в порядке сортировки, последний `id`. `key: []` не скомпилируется. */
-  key: Array.NonEmptyReadonlyArray<KeyPart<DB, TB, Cursor>>;
+  key: Array.NonEmptyReadonlyArray<KeyPart<DB, TB, Cursor, Spec>>;
   params: Params<Cursor, Spec>;
-  /** Что запомнить о последней строке страницы, чтобы следующая страница началась строго после неё. */
-  cursorOf: (row: Row, params: ParamValues<Spec>) => Cursor;
 }
 
 export const NO_PARAMS = {
@@ -193,12 +219,21 @@ const applyKeyset =
   <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
     sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
     page: { readonly cursor: Cursor | undefined; readonly limit: number },
+    values: ParamValues<Spec>,
   ) =>
   <O>(query: SelectQueryBuilder<DB, TB, O>): SelectQueryBuilder<DB, TB, O> => {
     const eb = expressionBuilder(query);
 
     let result = query.clearOrderBy().clearOffset().clearLimit();
-    const key = sort.key.map((part) => part.left(eb));
+
+    const params = Object.fromEntries(
+      Object.entries(sort.params.types).map(([name, type]) => [
+        name,
+        eb.cast(eb.val(values[name]), type),
+      ]),
+    );
+
+    const key = sort.key.map((part) => part.left(eb, params));
     key.forEach((k) => {
       result = result.orderBy(k, sort.direction);
     });
@@ -206,7 +241,9 @@ const applyKeyset =
 
     if (page.cursor !== undefined) {
       const cursor = page.cursor;
-      const cursorValues = sort.key.map((part) => part.right(eb, cursor));
+      const cursorValues = sort.key.map((part) =>
+        part.right(eb, cursor, params),
+      );
 
       result = result.where(
         sql<SqlBool>`(${sql.join(key)}) ${sql.raw(sign)} (${sql.join(cursorValues)})`,
@@ -239,11 +276,12 @@ export const prepareKeyset = <
   page: { readonly cursor: Cursor | undefined; readonly limit: number },
 ) =>
   Effect.gen(function* () {
-    const apply = applyKeyset(sort, page);
     const values =
       page.cursor === undefined
         ? yield* sort.params.first
         : sort.params.fromCursor(page.cursor);
+
+    const apply = applyKeyset(sort, page, values);
 
     return {
       apply,
