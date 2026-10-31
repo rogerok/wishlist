@@ -2,8 +2,9 @@ import type { SqlError } from 'effect/sql';
 import type { Expression } from 'kysely';
 
 import { describe, layer, test } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { DateTime, Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
+import * as TestClock from 'effect/testing/TestClock';
 import {
   CamelCasePlugin,
   DummyDriver,
@@ -21,6 +22,8 @@ import type { KeyPart, KeysetSort } from '#infra/pagination/keyset.js';
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import { keyPart, NO_PARAMS, prepareKeyset } from '#infra/pagination/keyset.js';
+
+type AsOfCursor = { readonly asOf: string } & DatedRow;
 
 const testLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 
@@ -198,6 +201,51 @@ const datedFirst: KeysetSort<Database, 'wishlists', DatedRow, DatedRow> = {
   params: NO_PARAMS,
 };
 
+// Сортировка occasionDate (design, решение 5): сначала будущие даты от ближайшей, потом прошедшие от недавней, потом
+// Wishlist без даты. asOf — сегодняшняя дата UTC на первой странице; дальше её приносит курсор.
+const occasionDate: KeysetSort<
+  Database,
+  'wishlists',
+  DatedRow,
+  AsOfCursor,
+  { asOf: 'date' }
+> = {
+  direction: 'asc',
+  key: [
+    keyPart({
+      sqlType: 'date',
+      column: (eb) => eb.ref('occasionDate'),
+      rule: (date, { asOf }) =>
+        kyselySql<number>`CASE WHEN ${date} IS NULL THEN 2 WHEN ${date} >= ${asOf} THEN 0 ELSE 1 END`,
+      value: (cursor) => cursor.occasionDate,
+    }),
+    keyPart({
+      sqlType: 'date',
+      column: (eb) => eb.ref('occasionDate'),
+      value: (cursor) => cursor.occasionDate,
+      rule: (date, { asOf }) =>
+        kyselySql<number>`CASE WHEN ${date} IS NULL THEN 0 WHEN ${date} >= ${asOf} THEN ${date} - ${asOf} ELSE ${asOf} - ${date} END`,
+    }),
+    keyPart({
+      sqlType: 'uuid',
+      column: (eb) => eb.ref('id'),
+      value: (cursor) => cursor.id,
+    }),
+  ],
+  params: {
+    first: Effect.gen(function* () {
+      const now = yield* DateTime.now;
+      const today = DateTime.startOf(now, 'day');
+      const first = DateTime.formatIsoDateUtc(today);
+
+      return { asOf: first };
+    }),
+    types: { asOf: 'date' },
+    fromCursor: (cursor) => ({ asOf: cursor.asOf }),
+  },
+  cursorOf: (row, { asOf }) => ({ ...row, asOf }),
+};
+
 // id N1 стоит между D1 и D2: если правило не сработает и порядок решит id, N1 окажется в середине.
 const D1 = {
   id: '00000000-0000-4000-8000-000000000011',
@@ -208,6 +256,99 @@ const D2 = {
   id: '00000000-0000-4000-8000-000000000013',
   occasionDate: '2026-01-01',
 };
+
+// Сценарий «Все три группы» (specs/wishlists, «Сортировка occasionDate») при asOf = 2026-10-18.
+// id идут против ожидаемого порядка, кроме UL < UH: если правило группы или дней не сработает, порядок решит id,
+// и тест упадёт. В скобках тройка (группа, дни).
+const U1 = {
+  id: '00000000-0000-4000-8000-000000000021',
+  occasionDate: '2026-10-18',
+}; // (0, 0)
+const U2 = {
+  id: '00000000-0000-4000-8000-000000000020',
+  occasionDate: '2026-12-31',
+}; // (0, 74)
+const UL = {
+  id: '00000000-0000-4000-8000-000000000018',
+  occasionDate: '2027-01-15',
+}; // (0, 89)
+const UH = {
+  id: '00000000-0000-4000-8000-000000000019',
+  occasionDate: '2027-01-15',
+}; // (0, 89)
+const P1 = {
+  id: '00000000-0000-4000-8000-000000000017',
+  occasionDate: '2026-10-17',
+}; // (1, 1)
+const P2 = {
+  id: '00000000-0000-4000-8000-000000000016',
+  occasionDate: '2026-05-01',
+}; // (1, 170)
+const N = { id: '00000000-0000-4000-8000-000000000015', occasionDate: null }; // (2, 0)
+
+type DatedWishlist = {
+  readonly id: string;
+  readonly occasionDate: string | null;
+};
+
+// Создаёт User и его Wishlist с occasion_date; возвращает id владельца.
+const acquireDatedWishlists = (
+  email: string,
+  wishlists: ReadonlyArray<DatedWishlist>,
+) =>
+  Effect.gen(function* () {
+    const sqlClient = yield* SqlClient;
+    const ownerId = yield* acquireUser(email);
+
+    yield* Effect.forEach(
+      wishlists,
+      (wishlist) =>
+        sqlClient`
+                INSERT INTO "public"."wishlists" ("id", "owner_id", "title", "occasion_date")
+                VALUES (${wishlist.id}, ${ownerId}, 'Occasion', ${wishlist.occasionDate})
+            `,
+    );
+
+    return ownerId;
+  });
+
+// Одна страница по occasionDate. asOf первой страницы даёт Clock, следующих: курсор.
+const pageByOccasionDate = (
+  ownerId: string,
+  cursor: AsOfCursor | undefined,
+  limit: number,
+) =>
+  Effect.gen(function* () {
+    const db = yield* DB;
+    const keyset = yield* prepareKeyset(occasionDate, { cursor, limit });
+    const rows = yield* db
+      .selectFrom('wishlists')
+      .select(['id', 'occasionDate'])
+      .where('ownerId', '=', ownerId)
+      .$call(keyset.apply);
+
+    return keyset.toPage(rows);
+  });
+
+// Обходит все страницы по limit 2 и возвращает id в порядке выдачи.
+const walkByOccasionDate = (ownerId: string) =>
+  Effect.gen(function* () {
+    let cursor: AsOfCursor | undefined;
+    const ids: string[] = [];
+
+    for (let i = 1; i <= 10; i++) {
+      const page = yield* pageByOccasionDate(ownerId, cursor, 2);
+
+      ids.push(...page.items.map((row) => row.id));
+
+      if (page.nextCursor === null) {
+        break;
+      }
+      cursor = page.nextCursor;
+    }
+
+    return ids;
+  });
 
 describe('keyset test', () => {
   layer(testLayer, { timeout: '60 seconds' })('pageByCreatedAt', (it) => {
@@ -382,6 +523,123 @@ describe('keyset test', () => {
         expect(ids).toEqual([D1.id, D2.id, N1.id]);
       }).pipe(Effect.scoped),
     );
+
+    // limit 2 ставит границы страниц внутри групп и между ними: U2 | UL, UH | P1, P2 | N.
+    it.effect(
+      'walks occasionDate in three groups: upcoming, past, without date',
+      () =>
+        Effect.gen(function* () {
+          const ownerId = yield* acquireDatedWishlists(
+            'three-groups@example.test',
+            [U1, U2, UL, UH, P1, P2, N],
+          );
+          // first возьмёт отсюда asOf = 2026-10-18.
+          yield* TestClock.setTime(Date.parse('2026-10-18T12:00:00Z'));
+
+          expect(yield* walkByOccasionDate(ownerId)).toEqual([
+            U1.id,
+            U2.id,
+            UL.id,
+            UH.id,
+            P1.id,
+            P2.id,
+            N.id,
+          ]);
+        }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    );
+
+    // Сценарий «Несколько Wishlist без Occasion Date»: у NL и NH обе тройки (2, 0), порядок решает id. Граница первой
+    // страницы проходит между NL и NH.
+    it.effect('orders wishlists without a date by id', () =>
+      Effect.gen(function* () {
+        const P = {
+          id: '00000000-0000-4000-8000-000000000033',
+          occasionDate: '2026-09-01',
+        };
+        const NL = {
+          id: '00000000-0000-4000-8000-000000000031',
+          occasionDate: null,
+        };
+        const NH = {
+          id: '00000000-0000-4000-8000-000000000032',
+          occasionDate: null,
+        };
+        const ownerId = yield* acquireDatedWishlists('no-dates@example.test', [
+          P,
+          NL,
+          NH,
+        ]);
+        yield* TestClock.setTime(Date.parse('2026-10-18T12:00:00Z'));
+
+        expect(yield* walkByOccasionDate(ownerId)).toEqual([
+          P.id,
+          NL.id,
+          NH.id,
+        ]);
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    );
+
+    // Сценарий «В Москве уже завтра»: в 23:30 UTC в Москве 19 октября, но asOf считается по UTC, 2026-10-18. T
+    // остаётся будущей (0, 0). По московской дате T стала бы прошедшей и ушла бы после F.
+    it.effect('takes today by UTC, not by local time', () =>
+      Effect.gen(function* () {
+        const T = {
+          id: '00000000-0000-4000-8000-000000000042',
+          occasionDate: '2026-10-18',
+        };
+        const F = {
+          id: '00000000-0000-4000-8000-000000000041',
+          occasionDate: '2026-10-25',
+        };
+        const ownerId = yield* acquireDatedWishlists(
+          'moscow-tomorrow@example.test',
+          [T, F],
+        );
+        yield* TestClock.setTime(Date.parse('2026-10-18T23:30:00Z'));
+
+        expect(yield* walkByOccasionDate(ownerId)).toEqual([T.id, F.id]);
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    );
+
+    // Сценарий «Полночь посреди обхода»: курсор первой страницы хранит asOf = 2026-10-18. Если вторая страница
+    // пересчитает asOf по часам (2026-10-19), X станет прошедшей, тройка курсора (1, 1, X) окажется больше тройки
+    // Y (0, 74, Y), и Y пропадёт без ошибки.
+    it.effect('keeps asOf from the first page after midnight', () =>
+      Effect.gen(function* () {
+        const X = {
+          id: '00000000-0000-4000-8000-000000000053',
+          occasionDate: '2026-10-18',
+        };
+        const Y = {
+          id: '00000000-0000-4000-8000-000000000052',
+          occasionDate: '2026-12-31',
+        };
+        const P = {
+          id: '00000000-0000-4000-8000-000000000051',
+          occasionDate: '2026-09-01',
+        };
+        const ownerId = yield* acquireDatedWishlists('midnight@example.test', [
+          X,
+          Y,
+          P,
+        ]);
+
+        yield* TestClock.setTime(Date.parse('2026-10-18T23:59:00Z'));
+        const first = yield* pageByOccasionDate(ownerId, undefined, 1);
+
+        yield* TestClock.setTime(Date.parse('2026-10-19T00:01:00Z'));
+        const second = yield* pageByOccasionDate(
+          ownerId,
+          first.nextCursor ?? undefined,
+          2,
+        );
+
+        expect(first.items.map((row) => row.id)).toEqual([X.id]);
+        expect(first.nextCursor).toMatchObject({ asOf: '2026-10-18' });
+        expect(second.items.map((row) => row.id)).toEqual([Y.id, P.id]);
+        expect(second.nextCursor).toBeNull();
+      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
+    );
   });
 });
 
@@ -435,7 +693,7 @@ describe('keyPart', () => {
   });
 
   test('builds both sides from one rule', () => {
-    const occasionDate: KeyPart<Database, 'wishlists', DatedRow> = keyPart({
+    const datedPart: KeyPart<Database, 'wishlists', DatedRow> = keyPart({
       sqlType: 'date',
       column: (eb) => eb.ref('occasionDate'),
       value: (cursor) => cursor.occasionDate,
@@ -443,11 +701,11 @@ describe('keyPart', () => {
         kyselySql<number>`CASE WHEN ${date} IS NULL THEN 1 ELSE 0 END`,
     });
 
-    expect(toSql(occasionDate.left(offlineEb, {}))).toMatchObject({
+    expect(toSql(datedPart.left(offlineEb, {}))).toMatchObject({
       sql: 'CASE WHEN "occasion_date" IS NULL THEN 1 ELSE 0 END',
       parameters: [],
     });
-    expect(toSql(occasionDate.right(offlineEb, N1, {}))).toMatchObject({
+    expect(toSql(datedPart.right(offlineEb, N1, {}))).toMatchObject({
       sql: 'CASE WHEN cast($1 as date) IS NULL THEN 1 ELSE 0 END',
       parameters: [null],
     });
@@ -520,8 +778,6 @@ describe('keyPart', () => {
 // Параметр ключа на примере `asOf`, сегодняшней даты. Пресет объявляет только имя и SQL-тип параметра
 // (`{ asOf: 'date' }`), а `cast($n as date)` строит модуль. Запрос собирается через offlineDb и не выполняется.
 describe('key params', () => {
-  type AsOfCursor = { readonly asOf: string } & DatedRow;
-
   // На первой странице `asOf` даёт `first` (позже здесь будет Clock), на следующих курсор.
   const upcomingFirst: KeysetSort<
     Database,
