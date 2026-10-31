@@ -20,7 +20,7 @@ import type { KeyPart, KeysetSort } from '#infra/pagination/keyset.js';
 
 import { DB, DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
-import { keyPart, prepareKeyset } from '#infra/pagination/keyset.js';
+import { keyPart, NO_PARAMS, prepareKeyset } from '#infra/pagination/keyset.js';
 
 const testLayer = DBLive.pipe(Layer.provideMerge(TestDatabaseLive));
 
@@ -123,6 +123,7 @@ const makeSort = (
     }),
   ],
   cursorOf: (row) => ({ createdAt: row.createdAt, id: row.id }),
+  params: NO_PARAMS,
 });
 
 const pageByCreatedAt = ({
@@ -194,6 +195,7 @@ const datedFirst: KeysetSort<Database, 'wishlists', DatedRow, DatedRow> = {
     }),
   ],
   cursorOf: (row) => ({ id: row.id, occasionDate: row.occasionDate }),
+  params: NO_PARAMS,
 };
 
 // id N1 стоит между D1 и D2: если правило не сработает и порядок решит id, N1 окажется в середине.

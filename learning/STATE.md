@@ -11,8 +11,9 @@
 3б.1 `params` и `noParams` в `KeysetSort`, `prepareKeyset` берёт значения → 3б.2 `rule` получает `cast(...)`.
 3б.0 сделан 2026-10-31: перегрузка с `rule` первая, тест SQL пишет `rule` колбэком в вызове, 61 тест и
 `check-types` зелёные.
-Следующее действие: 3б.1, `params` и `noParams` в `KeysetSort`, `prepareKeyset` берёт значения через `yield*` →
-14 тестов `keyset.test.ts` зелёные, предупреждение `require-yield` ушло.
+3б.1 сделан 2026-10-31: `params` в пресете, `NO_PARAMS`, `prepareKeyset` берёт значения из `first` или курсора.
+Следующее действие: 3б.2, `rule` получает `ParamExpression`, `apply` строит `cast($n as …)` для параметров →
+тест SQL правила с `asOf` зелёный, предупреждение о неиспользуемом `ParamExpression` ушло.
 
 ## Проверено
 

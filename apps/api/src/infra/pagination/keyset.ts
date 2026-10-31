@@ -37,6 +37,11 @@ type ParamValues<Spec extends ParamSpec> = {
 type ParamExpression<Spec extends ParamSpec> = {
   [K in keyof Spec]: Expression<KeyCastTypes[Spec[K]]>;
 };
+type Params<Cursor, Spec extends ParamSpec> = {
+  first: Effect.Effect<ParamValues<Spec>>;
+  types: Spec;
+  fromCursor: (cursor: Cursor) => ParamValues<Spec>;
+};
 
 /** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */
 export type KeyPart<DB, TB extends keyof DB, Cursor> = {
@@ -135,23 +140,37 @@ export function keyPart<DB, TB extends keyof DB, Cursor>(part: {
  * @typeParam Row - строка, которую выбирает репозиторий.
  * @typeParam Cursor - что курсор помнит о последней показанной строке, например `{ createdAt, id }`.
  */
-export interface KeysetSort<DB, TB extends keyof DB, Row, Cursor> {
+export interface KeysetSort<
+  DB,
+  TB extends keyof DB,
+  Row,
+  Cursor,
+  Spec extends ParamSpec = Record<never, never>,
+> {
   /** Одно на весь ключ: `(a, b) < (x, y)` совпадает с ORDER BY, только если `a` и `b` идут в одну сторону. */
   direction: 'asc' | 'desc';
   /** Элементы пары в порядке сортировки, последний `id`. `key: []` не скомпилируется. */
   key: Array.NonEmptyReadonlyArray<KeyPart<DB, TB, Cursor>>;
+  params: Params<Cursor, Spec>;
   /** Что запомнить о последней строке страницы, чтобы следующая страница началась строго после неё. */
-  cursorOf: (row: Row) => Cursor;
+  cursorOf: (row: Row, params: ParamValues<Spec>) => Cursor;
 }
+
+export const NO_PARAMS = {
+  types: {},
+  first: Effect.succeed({}),
+  fromCursor: () => ({}),
+} as const;
 
 /**
  * Режет ответ базы на страницу. При `limit = 2` запрос вернул до 3 строк: клиент получает первые 2 и курсор по
  * второй. Третья строка нужна только как признак: если её нет, следующей страницы нет, и `nextCursor` равен `null`.
  */
-const toPage = <DB, TB extends keyof DB, Row, Cursor>(
-  sort: KeysetSort<DB, TB, Row, Cursor>,
+const toPage = <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
+  sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
   limit: number,
   rows: ReadonlyArray<Row>,
+  values: ParamValues<Spec>,
 ) => {
   const items = rows.slice(0, limit);
   const last = items.at(-1);
@@ -159,7 +178,9 @@ const toPage = <DB, TB extends keyof DB, Row, Cursor>(
   return {
     items,
     nextCursor:
-      rows.length > limit && last !== undefined ? sort.cursorOf(last) : null,
+      rows.length > limit && last !== undefined
+        ? sort.cursorOf(last, values)
+        : null,
   };
 };
 
@@ -169,8 +190,8 @@ const toPage = <DB, TB extends keyof DB, Row, Cursor>(
  * тоже нет. Запрос здесь не выполняется: функция встраивается в цепочку Kysely через `$call`.
  */
 const applyKeyset =
-  <DB, TB extends keyof DB, Row, Cursor>(
-    sort: KeysetSort<DB, TB, Row, Cursor>,
+  <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
+    sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
     page: { readonly cursor: Cursor | undefined; readonly limit: number },
   ) =>
   <O>(query: SelectQueryBuilder<DB, TB, O>): SelectQueryBuilder<DB, TB, O> => {
@@ -207,15 +228,26 @@ const applyKeyset =
  * `limit` передаётся один раз, и `apply` с `toPage` не могут получить разные значения. `Effect` нужен для шага 3б:
  * на первой странице здесь появится вычисление `asOf`, сегодняшней даты.
  */
-export const prepareKeyset = <DB, TB extends keyof DB, Row, Cursor>(
-  sort: KeysetSort<DB, TB, Row, Cursor>,
+export const prepareKeyset = <
+  DB,
+  TB extends keyof DB,
+  Row,
+  Cursor,
+  Spec extends ParamSpec,
+>(
+  sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
   page: { readonly cursor: Cursor | undefined; readonly limit: number },
 ) =>
   Effect.gen(function* () {
     const apply = applyKeyset(sort, page);
+    const values =
+      page.cursor === undefined
+        ? yield* sort.params.first
+        : sort.params.fromCursor(page.cursor);
 
     return {
       apply,
-      toPage: (rows: ReadonlyArray<Row>) => toPage(sort, page.limit, rows),
+      toPage: (rows: ReadonlyArray<Row>) =>
+        toPage(sort, page.limit, rows, values),
     };
   });
