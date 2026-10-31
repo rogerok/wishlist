@@ -49,6 +49,8 @@ Two or three options. Each: what it is in one sentence, what it costs, when it w
 - Draw whenever state, flow, or structure is involved: sequence diagram for request flow, state diagram for lifecycle, ER diagram for tables. Put labels on the diagram itself. See [HTML-ARTIFACTS.md](HTML-ARTIFACTS.md).
 - The big picture is `learning/reference/system-map.html`. Point to the task's place on it; update it when layers, modules, or tables change.
 - Topic needs more than one screen → write an HTML lesson instead of a long chat answer.
+- One message, one purpose: a step, a review, a decision card, or one concept. Several pending → send the most urgent, list the rest in one line.
+- Cut the agent's process, not the teaching. How the agent checked something (sketches, hypotheses, dead ends) gets one line in chat, details go to design or `STATE.md`; a plan already in `STATE.md` gets a link. The concrete example, the why, the failing case, and the prediction question stay.
 - Every artifact follows [STYLE.md](STYLE.md): chat, HTML, markdown, `STATE.md`.
 
 ## Questions
