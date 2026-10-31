@@ -76,7 +76,7 @@
       `occasionDate` из design (решение 5) порядок сценариев «Все три группы», «Несколько Wishlist без Occasion Date»,
       «В Москве уже завтра» и «Полночь посреди обхода». Доказательство:
       `pnpm --filter @wishlist/api test src/infra/pagination/keyset.test.ts` проходит.
-- [ ] 4.3 На локальной БД создать 1 000 Wishlist у одного User и по 1 000 ещё у трёх User, выполнить
+- [x] 4.3 На локальной БД создать 1 000 Wishlist у одного User и по 1 000 ещё у трёх User, выполнить
       `ANALYZE wishlists`, затем `EXPLAIN` первой и второй страницы `sort=createdAt`. Записать в design.md, решение 7,
       использует ли план `wishlists_owner_id_created_at_id_idx` с условием по кортежу в `Index Cond`. Без свежей
       статистики и других владельцев план может уйти в Seq Scan, и вывод будет про планировщик, а не про индекс.

@@ -324,6 +324,29 @@ Session» закрепляет этот порядок против будуще
 Миграция только вперёд (решение владельца). Для `occasionDate` отдельный индекс бесполезен: ключ зависит от параметра
 запроса.
 
+Проверка плана (задача 4.3, 2026-10-31, локальный PostgreSQL 16.3): 4 User по 1 000 Wishlist, по две строки на
+одно `created_at`, `ANALYZE wishlists`. Запросы в форме `applyKeyset` через `PREPARE`, `limit 20` → `LIMIT 21`,
+курсор на 500-й строке владельца. Все три плана читают индекс без `Sort`:
+
+```text
+-- страница 1, custom plan
+Limit (actual rows=21)  Buffers: shared hit=3
+  ->  Index Only Scan using wishlists_owner_id_created_at_id_idx on wishlists (actual rows=21)
+        Index Cond: (owner_id = '…'::uuid)
+-- страница 2, custom plan
+Limit (actual rows=21)  Buffers: shared hit=7
+  ->  Index Only Scan using wishlists_owner_id_created_at_id_idx on wishlists (actual rows=21)
+        Index Cond: ((owner_id = '…'::uuid) AND (ROW(created_at, id) < ROW((…)::timestamp with time zone, '…'::uuid)))
+-- страница 2, generic plan (plan_cache_mode = force_generic_plan, как после 5 запусков подготовленного запроса)
+Limit (actual rows=21)  Buffers: shared hit=7
+  ->  Index Only Scan using wishlists_owner_id_created_at_id_idx on wishlists (actual rows=21)
+        Index Cond: ((owner_id = $1) AND (ROW(created_at, id) < ROW(($2)::timestamp with time zone, ($3)::uuid)))
+```
+
+Условие по тройке целиком уходит в `Index Cond`: база встаёт на курсор и читает 21 строку, а не 500. `Index Only
+Scan` получился потому, что запрос выбирал только `id` и `created_at`; репозиторий с другими колонками получит
+`Index Scan` с чтением строк таблицы, условие индекса то же. Временные данные удалены.
+
 ### 8. Возможности Effect в тестах
 
 - **`Stream.paginate`** превращает «запрос страницы по курсору» в поток элементов и собирает полный обход.
