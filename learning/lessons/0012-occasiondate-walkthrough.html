@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Урок: пресет occasionDate и asOf по шагам</title>
+  <link rel="stylesheet" href="../assets/learning.css">
+  <style>
+    .sim-controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin: 12px 0; }
+    .sim-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted, #56636b); }
+    .sim-controls select, .sim-controls input { font: inherit; padding: 6px 8px; border: 1px solid var(--line, #d8dedf); border-radius: 8px; background: var(--panel, #ffffff); color: var(--ink, #182025); }
+    .sim-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+    .sim-buttons button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--accent, #145b5f); background: var(--accent, #145b5f); color: #fff; cursor: pointer; }
+    .sim-buttons button.secondary { background: var(--panel, #ffffff); color: var(--accent, #145b5f); }
+    .sim-buttons button:disabled { opacity: 0.4; cursor: default; }
+    .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 12px 0; }
+    .flow-step { border: 1px solid var(--line, #d8dedf); border-radius: 10px; padding: 10px 12px; background: var(--panel, #ffffff); }
+    .flow-step h4 { margin: 0 0 6px; font-size: 0.85rem; color: var(--muted, #56636b); text-transform: uppercase; letter-spacing: 0.04em; }
+    .flow-step code { white-space: pre-wrap; word-break: break-word; }
+    .flow-step.from-clock { border-color: var(--accent, #145b5f); background: var(--accent-soft, #e4f2f1); }
+    .flow-step.from-cursor { border-color: var(--warn, #8b4a14); background: var(--warn-soft, #fff0dd); }
+    table.rows { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.95rem; }
+    table.rows th, table.rows td { border-bottom: 1px solid var(--line, #d8dedf); padding: 6px 8px; text-align: left; }
+    table.rows th { color: var(--muted, #56636b); font-weight: 600; }
+    tr.item td { background: var(--accent-soft, #e4f2f1); }
+    tr.extra td { background: var(--warn-soft, #fff0dd); }
+    tr.cut td { color: var(--muted, #56636b); text-decoration: line-through; }
+    tr.cursor-row td:first-child::after { content: "  ← курсор"; color: var(--warn, #8b4a14); font-weight: 600; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 0.8rem; }
+    .tag.item { background: var(--accent-soft, #e4f2f1); color: var(--accent, #145b5f); }
+    .tag.extra { background: var(--warn-soft, #fff0dd); color: var(--warn, #8b4a14); }
+    .tag.cut { background: var(--danger-soft, #fde9eb); color: var(--danger, #8f2f37); }
+    .result { font-size: 1.05rem; margin-top: 12px; }
+    .result .ok { color: var(--accent, #145b5f); font-weight: 600; }
+    .result .bad { color: var(--danger, #8f2f37); font-weight: 600; }
+    .objects { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  </style>
+</head>
+<body>
+  <header class="hero shell">
+    <div class="eyebrow">Урок · пресет occasionDate · 15 минут</div>
+    <h1><code>asOf</code> — дата отсчёта: её вычисляют один раз на первой странице и дальше передают в курсоре</h1>
+    <p class="lede">Пройдём обход списка по сортировке <code>occasionDate</code> запрос за запросом и посмотрим, что на каждом шаге делает каждое поле пресета.</p>
+    <div class="toplinks">
+      <a class="button" href="0011-pagination-big-picture.html">Урок 0011: пагинация целиком</a>
+      <a class="button" href="../../openspec/changes/add-reusable-keyset-pagination/design.md">design.md, решение 5</a>
+    </div>
+  </header>
+  <div class="shell"><main>
+
+    <section class="card">
+      <h2>1. Какой порядок нужен</h2>
+      <p>Пользователь хочет видеть сначала ближайшие праздники, потом прошедшие, потом Wishlist без даты. Пусть сегодня <code>2026-10-18</code>:</p>
+      <table class="rows">
+        <tr><th>Wishlist</th><th>дата</th><th>группа</th><th>дней от сегодня</th><th>место</th></tr>
+        <tr><td>U1</td><td>2026-10-18</td><td>0, будущая</td><td>0</td><td>1</td></tr>
+        <tr><td>U2</td><td>2026-12-31</td><td>0, будущая</td><td>74</td><td>2</td></tr>
+        <tr><td>UL, UH</td><td>2027-01-15</td><td>0, будущая</td><td>89</td><td>3, 4 (решает id)</td></tr>
+        <tr><td>P1</td><td>2026-10-17</td><td>1, прошедшая</td><td>1</td><td>5</td></tr>
+        <tr><td>P2</td><td>2026-05-01</td><td>1, прошедшая</td><td>170</td><td>6</td></tr>
+        <tr><td>N</td><td>нет</td><td>2</td><td>0</td><td>7</td></tr>
+      </table>
+      <p>Обе вычисленные колонки зависят от «сегодня». Это «сегодня» и есть <code>asOf</code> (англ. «по состоянию на»).</p>
+    </section>
+
+    <section class="card">
+      <h2>2. Пресет по полям</h2>
+      <p>Пресет из <code>apps/api/src/infra/pagination/keyset.test.ts</code>, сокращённо:</p>
+<pre><code>const occasionDate = {
+  direction: 'asc',
+  key: [
+    keyPart({ /* occasion_date */ rule: (date, { asOf }) => CASE WHEN date IS NULL THEN 2 WHEN date >= asOf THEN 0 ELSE 1 END }), // группа
+    keyPart({ /* occasion_date */ rule: (date, { asOf }) => CASE WHEN date IS NULL THEN 0 WHEN date >= asOf THEN date - asOf ELSE asOf - date END }), // дни
+    keyPart({ /* id */ }),
+  ],
+  params: {
+    first: Effect.gen(…DateTime.now → начало дня → '2026-10-18'),  // ① asOf для первой страницы
+    types: { asOf: 'date' },                                         // ② к какому SQL-типу приводить asOf
+    fromCursor: (cursor) => ({ asOf: cursor.asOf }),                 // ③ asOf для следующих страниц
+  },
+  cursorOf: (row, { asOf }) => ({ ...row, asOf }),                   // ④ что положить в курсор
+};</code></pre>
+      <p>Поля ①–④ отвечают на два вопроса: откуда взять <code>asOf</code> и как он попадёт в SQL.</p>
+      <div class="objects">
+        <div class="flow-step"><h4>① first</h4>Курсора нет, это первая страница. Берём дату из Clock: <code>{ asOf: '2026-10-18' }</code>.</div>
+        <div class="flow-step"><h4>④ cursorOf</h4>Страница готова. Кладём <code>asOf</code> в курсор рядом с датой и id последней строки.</div>
+        <div class="flow-step"><h4>③ fromCursor</h4>Клиент вернул курсор. Достаём из него тот же <code>asOf</code>, Clock не читаем.</div>
+        <div class="flow-step"><h4>② types</h4>Модуль знает значение <code>'2026-10-18'</code>, но SQL нужен тип. <code>types</code> говорит: <code>date</code>. Модуль строит <code>cast($1 as date)</code> и отдаёт его в <code>rule</code>.</div>
+      </div>
+      <p>③ и ④ работают в паре: ④ записывает <code>asOf</code> в курсор, ③ читает его обратно на следующем запросе. Так дата отсчёта переживает переход между страницами, даже если между ними наступила полночь.</p>
+    </section>
+
+    <section class="card">
+      <h2>3. Симулятор обхода</h2>
+      <p>Нажимай «Запросить страницу» и смотри, откуда берётся <code>asOf</code>, какое условие уходит в базу и какие строки получает клиент. Между запросами можно перевести часы.</p>
+      <div class="sim-controls">
+        <label>Данные
+          <select id="dataset">
+            <option value="groups">Все три группы (7 Wishlist)</option>
+            <option value="midnight">Полночь посреди обхода (3 Wishlist)</option>
+          </select>
+        </label>
+        <label>Часы (UTC)
+          <input id="clock" type="datetime-local" step="60">
+        </label>
+        <label>limit
+          <select id="limit"><option>1</option><option selected>2</option><option>3</option></select>
+        </label>
+        <label>Откуда asOf на следующих страницах
+          <select id="mode">
+            <option value="cursor">из курсора (как в модуле)</option>
+            <option value="clock">заново из часов (ошибка)</option>
+          </select>
+        </label>
+      </div>
+      <div class="sim-buttons">
+        <button id="next">Запросить первую страницу</button>
+        <button id="midnight" class="secondary">Перевести часы на 19.10 00:01</button>
+        <button id="reset" class="secondary">Начать заново</button>
+      </div>
+      <div id="out"></div>
+      <div id="result" class="result"></div>
+      <p><span class="tag item">отдано клиенту</span> <span class="tag extra">лишняя строка: признак, что есть продолжение</span> <span class="tag cut">отрезано условием «после курсора»</span></p>
+    </section>
+
+    <section class="card">
+      <h2>4. Проверь себя</h2>
+      <p>Выбери «Полночь посреди обхода», режим «заново из часов», limit 1. Запроси первую страницу в 23:59, переведи часы, поставь limit 2 и запроси вторую.</p>
+      <details>
+        <summary>Какой Wishlist пропадёт и почему ошибки не будет?</summary>
+        <p>Пропадёт Y (<code>2026-12-31</code>). Вторая страница считает <code>asOf = 2026-10-19</code>, и X из курсора становится прошедшим: тройка курсора <code>(1, 1, X)</code>. У Y тройка <code>(0, 74, Y)</code>, она меньше курсора, и WHERE её отрезает. Запрос корректен, база вернёт P без ошибок. В режиме «из курсора» тройка X остаётся <code>(0, 0, X)</code>, и Y приходит.</p>
+      </details>
+    </section>
+
+  </main></div>
+  <footer class="shell">
+    <a href="0011-pagination-big-picture.html">Предыдущий урок: пагинация целиком</a> ·
+    <a href="../reference/system-map.html">Карта системы</a> ·
+    <a href="../STATE.md">Следующий шаг</a>
+    <p>Вопросы — агенту в чате</p>
+  </footer>
+
+  <script>
+    var DATASETS = {
+      groups: {
+        clock: '2026-10-18T12:00',
+        expected: ['U1', 'U2', 'UL', 'UH', 'P1', 'P2', 'N'],
+        rows: [
+          { name: 'U1', id: '07', date: '2026-10-18' },
+          { name: 'U2', id: '06', date: '2026-12-31' },
+          { name: 'UL', id: '04', date: '2027-01-15' },
+          { name: 'UH', id: '05', date: '2027-01-15' },
+          { name: 'P1', id: '03', date: '2026-10-17' },
+          { name: 'P2', id: '02', date: '2026-05-01' },
+          { name: 'N', id: '01', date: null }
+        ]
+      },
+      midnight: {
+        clock: '2026-10-18T23:59',
+        expected: ['X', 'Y', 'P'],
+        rows: [
+          { name: 'X', id: '0a', date: '2026-10-18' },
+          { name: 'Y', id: '0b', date: '2026-12-31' },
+          { name: 'P', id: '0c', date: '2026-09-01' }
+        ]
+      }
+    };
+
+    var state;
+    var $ = function (id) { return document.getElementById(id); };
+
+    function dayNumber(iso) {
+      var p = iso.split('-');
+      return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 86400000;
+    }
+    function group(date, asOf) { return date === null ? 2 : (date >= asOf ? 0 : 1); }
+    function days(date, asOf) {
+      if (date === null) return 0;
+      return Math.abs(dayNumber(date) - dayNumber(asOf));
+    }
+    function tuple(date, id, asOf) { return [group(date, asOf), days(date, asOf), id]; }
+    function compare(a, b) {
+      for (var i = 0; i < 3; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; }
+      return 0;
+    }
+    function fmt(t) { return '(' + t[0] + ', ' + t[1] + ', ' + t[2] + ')'; }
+    function todayFromClock() { return $('clock').value.slice(0, 10); }
+
+    function reset() {
+      var ds = DATASETS[$('dataset').value];
+      state = { cursor: undefined, seen: [], page: 0, done: false };
+      $('clock').value = ds.clock;
+      $('limit').value = $('dataset').value === 'midnight' ? '1' : '2';
+      $('out').innerHTML = '';
+      $('result').innerHTML = '';
+      $('next').disabled = false;
+      $('next').textContent = 'Запросить первую страницу';
+    }
+
+    function requestPage() {
+      if (state.done) return;
+      var ds = DATASETS[$('dataset').value];
+      var limit = +$('limit').value;
+      var cursor = state.cursor;
+      var asOf, source;
+      if (cursor === undefined) {
+        asOf = todayFromClock(); source = 'first';
+      } else if ($('mode').value === 'cursor') {
+        asOf = cursor.asOf; source = 'cursor';
+      } else {
+        asOf = todayFromClock(); source = 'clock-again';
+      }
+
+      var sorted = ds.rows.slice().sort(function (a, b) {
+        return compare(tuple(a.date, a.id, asOf), tuple(b.date, b.id, asOf));
+      });
+      var cursorTuple = cursor ? tuple(cursor.occasionDate, cursor.id, asOf) : null;
+      var after = sorted.filter(function (r) {
+        return cursorTuple === null || compare(tuple(r.date, r.id, asOf), cursorTuple) > 0;
+      });
+      var fetched = after.slice(0, limit + 1);
+      var items = fetched.slice(0, limit);
+      var last = items[items.length - 1];
+      var nextCursor = fetched.length > limit && last ? { asOf: asOf, occasionDate: last.date, id: last.id } : null;
+
+      state.page += 1;
+      var html = '<h3>Запрос ' + state.page + ' · часы ' + $('clock').value.replace('T', ' ') + ' · limit ' + limit + '</h3><div class="flow">';
+      if (source === 'first') {
+        html += '<div class="flow-step from-clock"><h4>1. prepareKeyset</h4>Курсора нет → <code>yield* first</code>.<br>Clock даёт <code>' + todayFromClock() + '</code>.<br><code>values = { asOf: \'' + asOf + '\' }</code></div>';
+      } else if (source === 'cursor') {
+        html += '<div class="flow-step from-cursor"><h4>1. prepareKeyset</h4>Курсор есть → <code>fromCursor(cursor)</code>.<br>Часы показывают ' + todayFromClock() + ', но они не нужны.<br><code>values = { asOf: \'' + asOf + '\' }</code></div>';
+      } else {
+        html += '<div class="flow-step"><h4>1. prepareKeyset (ошибка)</h4>Курсор есть, но asOf снова взят из часов.<br><code>values = { asOf: \'' + asOf + '\' }</code><br>В курсоре было <code>\'' + cursor.asOf + '\'</code>.</div>';
+      }
+      html += '<div class="flow-step"><h4>2. apply: types + values</h4><code>types = { asOf: \'date\' }</code><br><code>values = { asOf: \'' + asOf + '\' }</code><br>→ <code>{ asOf: cast($1 as date) }</code>, $1 = \'' + asOf + '\'</div>';
+      html += '<div class="flow-step"><h4>3. SQL</h4><code>' +
+        (cursorTuple ? 'WHERE (группа, дни, id) &gt; ' + fmt(cursorTuple) + '\n' : 'WHERE только owner_id\n') +
+        'ORDER BY группа, дни, id\nLIMIT ' + (limit + 1) + '</code>' +
+        (cursorTuple ? '<br>Тройку курсора база считает теми же формулами по дате ' + (cursor.occasionDate || 'NULL') + ' и id ' + cursor.id + '.' : '') + '</div>';
+      html += '<div class="flow-step"><h4>4. toPage + cursorOf</h4>Клиенту: <code>' + (items.map(function (r) { return r.name; }).join(', ') || 'пусто') + '</code><br>nextCursor: <code>' +
+        (nextCursor ? '{ asOf: \'' + nextCursor.asOf + '\', occasionDate: ' + (nextCursor.occasionDate ? '\'' + nextCursor.occasionDate + '\'' : 'null') + ', id: \'' + nextCursor.id + '\' }' : 'null') + '</code></div></div>';
+
+      html += '<table class="rows"><tr><th>Wishlist</th><th>id</th><th>дата</th><th>группа</th><th>дни</th><th>тройка при asOf = ' + asOf + '</th><th>в этом запросе</th></tr>';
+      sorted.forEach(function (r) {
+        var t = tuple(r.date, r.id, asOf);
+        var cls = '', mark = '';
+        if (items.indexOf(r) >= 0) { cls = 'item'; mark = 'отдано клиенту'; }
+        else if (fetched.indexOf(r) >= 0) { cls = 'extra'; mark = 'лишняя строка'; }
+        else if (after.indexOf(r) < 0) { cls = 'cut'; mark = 'отрезано'; }
+        if (cursor && cursor.id === r.id) cls += ' cursor-row';
+        html += '<tr class="' + cls + '"><td>' + r.name + '</td><td>' + r.id + '</td><td>' + (r.date || 'NULL') + '</td><td>' + t[0] + '</td><td>' + t[1] + '</td><td>' + fmt(t) + '</td><td>' + mark + '</td></tr>';
+      });
+      html += '</table>';
+
+      var block = document.createElement('div');
+      block.innerHTML = html;
+      $('out').appendChild(block);
+
+      state.seen = state.seen.concat(items.map(function (r) { return r.name; }));
+      state.cursor = nextCursor || undefined;
+      if (nextCursor === null) {
+        state.done = true;
+        $('next').disabled = true;
+        var ok = state.seen.join(',') === ds.expected.join(',');
+        $('result').innerHTML = 'Клиент увидел: <code>' + state.seen.join(', ') + '</code><br>Спека ждёт: <code>' + ds.expected.join(', ') + '</code> → ' +
+          (ok ? '<span class="ok">совпадает</span>' : '<span class="bad">не совпадает: строки потеряны, ошибки нет</span>');
+      } else {
+        $('next').textContent = 'Запросить следующую страницу';
+      }
+    }
+
+    $('next').addEventListener('click', requestPage);
+    $('reset').addEventListener('click', reset);
+    $('dataset').addEventListener('change', reset);
+    $('mode').addEventListener('change', reset);
+    $('midnight').addEventListener('click', function () { $('clock').value = '2026-10-19T00:01'; });
+    reset();
+  </script>
+</body>
+</html>
