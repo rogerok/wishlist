@@ -437,7 +437,8 @@ describe('keyPart', () => {
       sqlType: 'date',
       column: (eb) => eb.ref('occasionDate'),
       value: (cursor) => cursor.occasionDate,
-      rule: hasOccasionDate,
+      rule: (date) =>
+        kyselySql<number>`CASE WHEN ${date} IS NULL THEN 1 ELSE 0 END`,
     });
 
     expect(toSql(occasionDate.left(offlineEb))).toMatchObject({
@@ -478,10 +479,11 @@ describe('keyPart', () => {
 
   // NULL в ключе: сравнение кортежей даёт «неизвестно», и WHERE молча отбрасывает строку (design, решение 4).
   test('rejects a column that may be NULL without a rule at compile time', () => {
-    // @ts-expect-error occasion_date может быть NULL, а rule не передан
     const nullable: KeyPart<Database, 'wishlists', DatedRow> = keyPart({
       sqlType: 'date',
+      // @ts-expect-error occasion_date может быть NULL, а rule не передан
       column: (eb) => eb.ref('occasionDate'),
+      // @ts-expect-error occasion_date может быть NULL, а rule не передан
       value: (cursor) => cursor.occasionDate,
     });
 
@@ -491,9 +493,10 @@ describe('keyPart', () => {
   test('rejects a rule whose result may be NULL at compile time', () => {
     const nullResult: KeyPart<Database, 'wishlists', DatedRow> = keyPart({
       sqlType: 'date',
-      column: (eb) => eb.ref('occasionDate'),
-      value: (cursor) => cursor.occasionDate,
       // @ts-expect-error правило вернуло вход как есть, и NULL остался в ключе
+      column: (eb) => eb.ref('occasionDate'),
+      // @ts-expect-error правило вернуло вход как есть, и NULL остался в ключе
+      value: (cursor) => cursor.occasionDate,
       rule: (date) => date,
     });
 

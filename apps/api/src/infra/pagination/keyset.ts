@@ -1,3 +1,15 @@
+// Keyset-пагинация: следующая страница начинается строго после последней показанной строки. Для сортировки
+// «новые сверху» модуль превращает запрос репозитория во вторую страницу так:
+//
+//   SELECT id, created_at FROM wishlists
+//   WHERE owner_id = $1                                       -- WHERE репозитория остаётся
+//     AND (created_at, id) < ($2::timestamptz, $3::uuid)       -- строго после строки из курсора
+//   ORDER BY created_at DESC, id DESC
+//   LIMIT 3                                                   -- limit 2 + 1: есть ли следующая страница
+//
+// `(a, b) < (x, y)` PostgreSQL сравнивает как слова в словаре: сначала `a` с `x`, при равенстве `b` с `y`. Каждый
+// элемент такой пары описывает один `keyPart`. `id` стоит последним: у двух строк бывает одно время, но не один id.
+
 import type { Array } from 'effect';
 import type { SelectQueryBuilder } from 'kysely';
 
@@ -10,13 +22,14 @@ import {
   type SqlBool,
 } from 'kysely';
 
-// Свойство с этим символом ставит только `keyPart`. Символ не экспортируется, и объект, написанный вручную, к `KeyPart`
-// не подойдёт.
+// Метку ставит только `keyPart`. Символ не экспортируется, поэтому объект, написанный вручную, за `KeyPart` не сойдёт.
 const keyPartTag = Symbol('KeyPart');
-// SQL-тип, к которому модуль приводит значение курсора, и тип этого значения в JS. Новый тип добавляется строкой здесь
+// Какие SQL-типы модуль умеет подставить в `cast($n as …)` и какой тип у значения в JS. Новый тип добавь сюда.
 type KeyCastTypes = { date: string; timestamptz: Date; uuid: string };
 type KeyCastType = keyof KeyCastTypes;
 
+// Параметры вычисляемого ключа для шага 3б. Пресет `occasionDate` объявит `{ asOf: 'date' }`. Тогда в JS
+// `ParamValues` даст `{ asOf: '2026-10-18' }`, а `rule` получит `ParamExpression`: `{ asOf: cast($n as date) }`.
 type ParamSpec = Record<string, KeyCastType>;
 type ParamValues<Spec extends ParamSpec> = {
   [K in keyof Spec]: KeyCastTypes[Spec[K]];
@@ -25,39 +38,25 @@ type ParamExpression<Spec extends ParamSpec> = {
   [K in keyof Spec]: Expression<KeyCastTypes[Spec[K]]>;
 };
 
-/** Обе стороны сравнения для одного компонента ключа. Создай через `keyPart`. */
+/** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */
 export type KeyPart<DB, TB extends keyof DB, Cursor> = {
   readonly [keyPartTag]: true;
-  /** Левая сторона сравнения и ORDER BY, например `"created_at"`. */
+  /** Левая сторона: значение из строки таблицы, например `created_at`. Её же модуль ставит в ORDER BY. */
   left: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
-  /** Правая сторона сравнения из значения курсора, например `cast($1 as timestamptz)`. */
+  /** Правая сторона: значение из курсора, например `cast($2 as timestamptz)`. */
   right: (eb: ExpressionBuilder<DB, TB>, cursor: Cursor) => Expression<unknown>;
 };
 
 /**
- * Компонент ключа из колонки строки и значения курсора. `keyPart` строит обе стороны сравнения одинаково: левую как
- * `rule(column)`, правую как `rule(cast($n as sqlType))`, поэтому стороны не могут разойтись
+ * Элемент ключа, вычисленный по формуле `rule`. Пример: Wishlist с датой идут раньше Wishlist без даты.
  *
- * Эта перегрузка без `rule`, для колонок без NULL (`createdAt`, `id`). TypeScript выводит `S` из `sqlType` и требует
- * от `column` и `value` тип `KeyCastTypes[S]`. Не скомпилируются `sqlType: 'date'` рядом с `eb.ref('createdAt')`
- * (`Date`), пара `eb.ref('createdAt')` с `cursor.id` и колонка `eb.ref('occasionDate')`: в `KeyCastTypes` нет `null`.
- * `DB`, `TB` и `Cursor` TypeScript берёт из места вызова, например из поля `key` пресета.
- */
-export function keyPart<
-  DB,
-  TB extends keyof DB,
-  Cursor,
-  S extends KeyCastType,
->(part: {
-  sqlType: S;
-  column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S]>;
-  value: (cursor: Cursor) => KeyCastTypes[S];
-}): KeyPart<DB, TB, Cursor>;
-
-/**
- * Перегрузка с `rule`, для вычисляемого ключа (`occasionDate`). Колонка и значение курсора могут быть NULL, а
- * результат `rule` нет: `rule: (d) => d` для `eb.ref('occasionDate')` не скомпилируется. `rule` получает колонку для
- * левой стороны и `cast($n as sqlType)` для правой.
+ * ```ts
+ * rule: (date) => sql<number>`CASE WHEN ${date} IS NULL THEN 1 ELSE 0 END`
+ * ```
+ *
+ * `keyPart` применяет одну формулу к обеим сторонам: слева к `occasion_date`, справа к `cast($n as date)` из курсора.
+ * В WHERE сравниваются числа 0 и 1, а не даты, и NULL в сравнение не попадает. Колонка может быть NULL, а результат
+ * `rule` не может: `rule: (date) => date` не скомпилируется.
  */
 export function keyPart<
   DB,
@@ -72,8 +71,35 @@ export function keyPart<
   value: (cursor: Cursor) => KeyCastTypes[S] | null;
 }): KeyPart<DB, TB, Cursor>;
 
-// Реализацию снаружи не видно: вызвать `keyPart` можно только через перегрузки выше, и типы проверяют они. Здесь типы
-// `unknown`, а без `rule` компонентом служит сама колонка.
+/**
+ * Элемент ключа из колонки. Пример для `created_at`:
+ *
+ * ```ts
+ * keyPart({ sqlType: 'timestamptz', column: (eb) => eb.ref('createdAt'), value: (cursor) => cursor.createdAt })
+ * ```
+ *
+ * - `column`: левая сторона, колонка `created_at`;
+ * - `value`: что взять из курсора, например `10:00:03` последней показанной строки;
+ * - `sqlType`: к какому типу привести это значение, `cast($2 as timestamptz)`. Без приведения PostgreSQL не всегда
+ *   понимает тип параметра.
+ *
+ * `sqlType` задаёт тип для `column` и `value`: при `'timestamptz'` обе стороны обязаны быть `Date`. Поэтому пара
+ * `createdAt` и `cursor.id` не скомпилируется. Колонка с NULL (`occasionDate`) здесь тоже не скомпилируется: NULL в
+ * паре ломает сравнение, и PostgreSQL молча выбрасывает строку. Для такой колонки нужен `rule`.
+ */
+export function keyPart<
+  DB,
+  TB extends keyof DB,
+  Cursor,
+  S extends KeyCastType,
+>(part: {
+  sqlType: S;
+  column: (eb: ExpressionBuilder<DB, TB>) => Expression<KeyCastTypes[S]>;
+  value: (cursor: Cursor) => KeyCastTypes[S];
+}): KeyPart<DB, TB, Cursor>;
+
+// Тело общее для обеих перегрузок. Типы здесь `unknown`, а проверяют их перегрузки выше: снаружи эта сигнатура не
+// видна. Без `rule` формула возвращает колонку как есть.
 export function keyPart<DB, TB extends keyof DB, Cursor>(part: {
   sqlType: KeyCastType;
   column: (eb: ExpressionBuilder<DB, TB>) => Expression<unknown>;
@@ -91,36 +117,36 @@ export function keyPart<DB, TB extends keyof DB, Cursor>(part: {
 }
 
 /**
- * Сортировка постраничного списка (ADR-0008, design, решение 4). Пресет обязан соблюдать контракт:
+ * Пресет сортировки, например «новые сверху» (ADR-0008, design, решение 4).
  *
- * 1. обе стороны сравнения в WHERE содержат одинаковое число компонентов в одном порядке;
- * 2. у `column` и `value` одного компонента совместимые SQL-типы;
- * 3. ни один компонент итогового ключа не равен SQL NULL: сравнение кортежей с NULL даёт «неизвестно», и WHERE
- *    молча отбрасывает строку;
- * 4. полный ключ уникален среди строк результата, последний компонент: уникальный id.
+ * Чтобы обход не терял и не повторял строки, нужны четыре условия:
  *
- * Пункт 1 соблюдается сам: `applyKeyset` берёт обе стороны из одного списка `key`, а `keyPart` строит стороны
- * компонента из одного правила. Пункт 2 и колонку с NULL проверяет `check-types` через `keyPart`. Остальное ловит
- * только обход на PostgreSQL: пару `eb.ref('title')` и `cursor.id` (обе `string`), NULL из ``sql<number>`…` `` и
- * нарушение пункта 4.
+ * 1. слева и справа в WHERE одинаковые элементы в одном порядке;
+ * 2. у `column` и `value` одного элемента один SQL-тип;
+ * 3. ни один элемент пары не равен NULL: сравнение с NULL даёт «неизвестно», и WHERE выбрасывает строку;
+ * 4. пара уникальна для каждой строки, поэтому последним идёт `id`.
  *
- * @typeParam DB - схема БД запроса.
+ * Условие 1 модуль обеспечивает сам: обе стороны строятся из одного списка `key`. Условие 2 и колонку с NULL
+ * проверяет `check-types` через `keyPart`. Остальное ловят только тесты обхода на PostgreSQL: пару `title` и
+ * `cursor.id` (обе `string`), NULL из ``sql<number>`…` `` и ключ без `id`.
+ *
+ * @typeParam DB - схема БД.
  * @typeParam TB - таблица запроса.
- * @typeParam Row - строка, которую выбрал пользователь модуля.
- * @typeParam Cursor - значения ключа последней показанной строки.
+ * @typeParam Row - строка, которую выбирает репозиторий.
+ * @typeParam Cursor - что курсор помнит о последней показанной строке, например `{ createdAt, id }`.
  */
 export interface KeysetSort<DB, TB extends keyof DB, Row, Cursor> {
-  /** Одно на весь ключ: сравнение кортежей совпадает с ORDER BY только при общем направлении. */
+  /** Одно на весь ключ: `(a, b) < (x, y)` совпадает с ORDER BY, только если `a` и `b` идут в одну сторону. */
   direction: 'asc' | 'desc';
-  /** Компоненты в порядке сортировки, последний: id. `key: []` не скомпилируется. */
+  /** Элементы пары в порядке сортировки, последний `id`. `key: []` не скомпилируется. */
   key: Array.NonEmptyReadonlyArray<KeyPart<DB, TB, Cursor>>;
-  /** Курсор по последней строке страницы: что запомнить, чтобы следующая страница началась строго после неё. */
+  /** Что запомнить о последней строке страницы, чтобы следующая страница началась строго после неё. */
   cursorOf: (row: Row) => Cursor;
 }
 
 /**
- * Собирает страницу из строк, которые вернул запрос после `applyKeyset`: первые `limit` строк и курсор по последней
- * из них. `nextCursor` равен `null`, только если лишней (`limit + 1`-й) строки нет.
+ * Режет ответ базы на страницу. При `limit = 2` запрос вернул до 3 строк: клиент получает первые 2 и курсор по
+ * второй. Третья строка нужна только как признак: если её нет, следующей страницы нет, и `nextCursor` равен `null`.
  */
 const toPage = <DB, TB extends keyof DB, Row, Cursor>(
   sort: KeysetSort<DB, TB, Row, Cursor>,
@@ -138,9 +164,9 @@ const toPage = <DB, TB extends keyof DB, Row, Cursor>(
 };
 
 /**
- * Достраивает запрос пользователя модуля: заменяет его ORDER BY, LIMIT и OFFSET своими, добавляет условие «строго
- * после курсора» и берёт `limit + 1` строк. WHERE пользователя — область видимости — сохраняется. Запрос не
- * выполняется; функция встраивается в цепочку через `$call`.
+ * Достраивает запрос репозитория до SQL из комментария в начале файла. Свои ORDER BY, LIMIT и OFFSET репозитория
+ * модуль заменяет, а его WHERE (`owner_id = …`) оставляет. На первой странице курсора нет, и условия «после курсора»
+ * тоже нет. Запрос здесь не выполняется: функция встраивается в цепочку Kysely через `$call`.
  */
 const applyKeyset =
   <DB, TB extends keyof DB, Row, Cursor>(
@@ -169,6 +195,18 @@ const applyKeyset =
     return result.limit(page.limit + 1);
   };
 
+/**
+ * Готовит одну страницу. Репозиторий вызывает так:
+ *
+ * ```ts
+ * const keyset = yield* prepareKeyset(sort, { cursor, limit });
+ * const rows = yield* db.selectFrom('wishlists').where(...).$call(keyset.apply);
+ * return keyset.toPage(rows);
+ * ```
+ *
+ * `limit` передаётся один раз, и `apply` с `toPage` не могут получить разные значения. `Effect` нужен для шага 3б:
+ * на первой странице здесь появится вычисление `asOf`, сегодняшней даты.
+ */
 export const prepareKeyset = <DB, TB extends keyof DB, Row, Cursor>(
   sort: KeysetSort<DB, TB, Row, Cursor>,
   page: { readonly cursor: Cursor | undefined; readonly limit: number },
