@@ -72,6 +72,26 @@ const selectWishlists = SqlClient.pipe(
   Effect.orDie,
 );
 
+// Service не даёт задать id и createdAt, поэтому строки для сортировки пишет SQL.
+const insertWishlist = (
+  ownerId: string,
+  {
+    id,
+    createdAt = '2026-10-01T10:00:00.000Z',
+  }: { id: string; createdAt?: string },
+) =>
+  SqlClient.pipe(
+    Effect.flatMap(
+      (sql) => sql`
+        INSERT INTO "public"."wishlists" ("id", "owner_id", "title", "created_at")
+        VALUES (${id}, ${ownerId}, 'Books', ${createdAt})
+      `,
+    ),
+    Effect.orDie,
+  );
+
+const firstPage = { sort: 'createdAt', cursor: undefined, limit: 10 } as const;
+
 const readers = [
   {
     name: 'Владелец читает Private Wishlist',
@@ -202,6 +222,73 @@ layer(serviceLayer, { timeout: '60 seconds' })('WishlistsService', (it) => {
         const read = yield* service.getReadableById(ownerId, id);
 
         expect(read.occasionDate).toBe('2020-02-29');
+      }),
+    );
+  });
+
+  describe('listOwn', () => {
+    it.effect('Свои Wishlist обеих visibility', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const ownPrivate = yield* service.create(ownerId, body());
+        const ownPublic = yield* service.create(
+          ownerId,
+          body({ visibility: 'public' }),
+        );
+        yield* service.create(otherId, body());
+        yield* service.create(otherId, body({ visibility: 'public' }));
+
+        const page = yield* service.listOwn(ownerId, firstPage);
+
+        expect(page.items).toHaveLength(2);
+        expect(page.items).toEqual(
+          expect.arrayContaining([ownPrivate, ownPublic]),
+        );
+        expect(page.nextCursor).toBeNull();
+      }),
+    );
+
+    it.effect('Разные createdAt', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const w1 = '00000000-0000-4000-8000-000000000001';
+        const w2 = '00000000-0000-4000-8000-000000000002';
+        const w3 = '00000000-0000-4000-8000-000000000003';
+        // Вставка не в порядке дат: порядок ответа задаёт ORDER BY, а не порядок INSERT.
+        yield* insertWishlist(ownerId, {
+          id: w2,
+          createdAt: '2026-10-02T10:00:00.000Z',
+        });
+        yield* insertWishlist(ownerId, {
+          id: w1,
+          createdAt: '2026-10-01T10:00:00.000Z',
+        });
+        yield* insertWishlist(ownerId, {
+          id: w3,
+          createdAt: '2026-10-03T10:00:00.000Z',
+        });
+
+        const page = yield* service.listOwn(ownerId, firstPage);
+
+        expect(page.items.map((wishlist) => wishlist.id)).toEqual([w3, w2, w1]);
+      }),
+    );
+
+    it.effect('Равные createdAt', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const low = '00000000-0000-4000-8000-000000000001';
+        const high = '00000000-0000-4000-8000-000000000002';
+        yield* insertWishlist(ownerId, { id: low });
+        yield* insertWishlist(ownerId, { id: high });
+
+        const page = yield* service.listOwn(ownerId, firstPage);
+
+        expect(page.items.map((wishlist) => wishlist.id)).toEqual([high, low]);
       }),
     );
   });

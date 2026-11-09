@@ -7,6 +7,12 @@ import type {
   Wishlist,
   WishlistId,
 } from '#modules/wishlists/schemas/wishlist.schema.js';
+import type {
+  CreatedAtCursor,
+  OccasionDateCursor,
+  PageSort,
+  WithCursor,
+} from '#modules/wishlists/wishlists.sorts.js';
 
 import { WishlistRepository } from '#modules/wishlists/repository/wishlists.repository.js';
 import { WishlistNotFoundError } from '#modules/wishlists/wishlists.errors.js';
@@ -20,6 +26,13 @@ export interface WishlistsServiceShape {
     viewerId: UserId,
     id: WishlistId,
   ) => Effect.Effect<Wishlist, OperationFailed | WishlistNotFoundError>;
+  readonly listOwn: (
+    viewerId: UserId,
+    page: PageSort,
+  ) => Effect.Effect<
+    WithCursor<Wishlist, CreatedAtCursor | OccasionDateCursor | null>,
+    OperationFailed
+  >;
 }
 
 export class WishlistsService extends Context.Service<
@@ -33,6 +46,7 @@ export const WishlistsServiceLive = Layer.effect(
     const repository = yield* WishlistRepository;
 
     const create: WishlistsServiceShape['create'] = repository.create;
+    const listOwn: WishlistsServiceShape['listOwn'] = repository.listOwn;
 
     const getReadableById: WishlistsServiceShape['getReadableById'] = (
       viewerId,
@@ -47,6 +61,6 @@ export const WishlistsServiceLive = Layer.effect(
         );
       });
 
-    return { create, getReadableById };
+    return { create, getReadableById, listOwn };
   }),
 );

@@ -30,7 +30,7 @@ type KeyCastType = keyof KeyCastTypes;
 
 // Параметры вычисляемого ключа для шага 3б. Пресет `occasionDate` объявит `{ asOf: 'date' }`. Тогда в JS
 // `ParamValues` даст `{ asOf: '2026-10-18' }`, а `rule` получит `ParamExpression`: `{ asOf: cast($n as date) }`.
-type ParamSpec = Record<string, KeyCastType>;
+export type ParamSpec = Record<string, KeyCastType>;
 type ParamValues<Spec extends ParamSpec> = {
   [K in keyof Spec]: KeyCastTypes[Spec[K]];
 };
@@ -41,6 +41,11 @@ type Params<Cursor, Spec extends ParamSpec> = {
   first: Effect.Effect<ParamValues<Spec>>;
   fromCursor: (cursor: Cursor) => ParamValues<Spec>;
   types: Spec;
+};
+
+export type PageCursor<Cursor> = {
+  readonly cursor: Cursor | undefined;
+  readonly limit: number;
 };
 
 /** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */

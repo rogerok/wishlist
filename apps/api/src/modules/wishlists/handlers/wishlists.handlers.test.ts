@@ -380,6 +380,9 @@ const readers = [
 const unexpectedRead: WishlistsServiceShape['getReadableById'] = () =>
   Effect.die(new Error('Unexpected call: getReadableById'));
 
+const unexpectedList: WishlistsServiceShape['listOwn'] = () =>
+  Effect.die(new Error('Unexpected call: listOwn'));
+
 const secret = 'db-password=hunter2';
 
 const createFailures = [
@@ -889,6 +892,7 @@ describe('wishlists HTTP', () => {
               const app = yield* acquireApp({
                 create: () => failure,
                 getReadableById: unexpectedRead,
+                listOwn: unexpectedList,
               });
 
               const response = yield* postWishlist(

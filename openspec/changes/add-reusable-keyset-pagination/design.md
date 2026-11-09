@@ -77,6 +77,12 @@ Schema значений курсора обязана принимать тол�
 Используются `Schema.StringFromBase64Url` и `Schema.fromJsonString`, точные имена проверяются по типам 4.0.4. Тот же
 кодек кодирует `nextCursor`, поэтому формат описан в одном месте и симметричен.
 
+Поле `sort` входит в тип курсора пресета (`CreatedAtCursor = { sort: 'createdAt'; createdAt; id }`), и `cursorOf`
+пресета ставит его сам. Решение владельца 2026-11-09: курсор одной формы в query, repository и `nextCursor`, handler
+не перекладывает поля. Отклонённый вариант: `sort` только на границе HTTP, handler снимает его с входящего курсора и
+добавляет к `nextCursor`. Пропуск такой перекладки `check-types` не ловит, а клиент получает 400 на следующей
+странице. Цена выбранного варианта: в repository `cursor.sort` повторяет `page.sort`, keyset-модуль поле не читает.
+
 Query-Schema списка — структура `sort`, `cursor`, `limit`. Модуль даёт детали (`makeCursorCodec`, `LimitQueryParam`,
 `cursorMatchesSort`), а Struct собирает потребитель. Обобщённую фабрику Struct Effect 4.0.4 не типизирует:
 `Schema.Literals` от параметра типа теряет литералы, а фильтр на уровне структуры с полями-параметрами не видит

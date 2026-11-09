@@ -84,7 +84,7 @@
 
 ## 5. Список Wishlist
 
-- [ ] 5.1 Объявить пресеты `createdAt` и `occasionDate` в модуле Wishlist; добавить метод repository и service
+- [x] 5.1 Объявить пресеты `createdAt` и `occasionDate` в модуле Wishlist; добавить метод repository и service
       «список своих Wishlist» с областью `owner_id = viewerId`, декодированием строк и `OperationFailed` по образцу
       `getReadableById`. Service-тест поверх PostgreSQL проверяет «Свои Wishlist обеих visibility», «Разные createdAt»,
       «Равные createdAt». Доказательство:
