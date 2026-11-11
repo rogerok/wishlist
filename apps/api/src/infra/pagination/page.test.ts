@@ -8,7 +8,7 @@ const TestItem = Schema.Struct({
   createdAt: Schema.DateFromString,
 });
 
-const TestPage = makePageSchema(TestItem);
+const TestPage = makePageSchema(TestItem, Schema.String);
 
 const encode = Schema.encodeUnknownResult(TestPage);
 const decode = Schema.decodeUnknownResult(TestPage);

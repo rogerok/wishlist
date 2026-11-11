@@ -77,6 +77,32 @@ Schema значений курсора обязана принимать тол�
 Используются `Schema.StringFromBase64Url` и `Schema.fromJsonString`, точные имена проверяются по типам 4.0.4. Тот же
 кодек кодирует `nextCursor`, поэтому формат описан в одном месте и симметричен.
 
+Поле `sort` входит в тип курсора пресета (`CreatedAtCursor = { sort: 'createdAt'; createdAt; id }`), и `cursorOf`
+пресета ставит его сам. Решение владельца 2026-11-09: курсор одной формы в query, repository и `nextCursor`, handler
+не перекладывает поля. Отклонённый вариант: `sort` только на границе HTTP, handler снимает его с входящего курсора и
+добавляет к `nextCursor`. Пропуск такой перекладки `check-types` не ловит, а клиент получает 400 на следующей
+странице. Цена выбранного варианта: в repository `cursor.sort` повторяет `page.sort`, keyset-модуль поле не читает.
+
+`.check(cursorMatchesSort…)` отклоняет курсор чужой сортировки, но тип query не сужает: после декодирования
+`{ sort: 'createdAt' | 'occasionDate'; cursor?: курсор любого пресета }` не подходит под `PageSort`. Решение владельца
+2026-11-10: функция `withCursorMatchingSort` в `infra/pagination/query.ts` применяет одно условие дважды: `check` даёт
+400 с `path: ["cursor"]`, `Schema.refine` с предохранителем (type guard) сужает тип до пары «сортировка и её курсор».
+Отклонены: перекладка в handler (недостижимая ветка и ручная синхронизация), `Schema.Union` двух query (черновик
+2026-11-10: `sort=occasionDate&limit=0` даёт лишнюю ошибку `Expected "createdAt"` в `sort`), сортировка из курсора
+(меняет контракт ради типов). `cursor` в `PageSort` и `PageCursor` становится необязательным: `Schema.optionalKey`
+даёт `cursor?:`, и с `exactOptionalPropertyTypes` такой тип не подходит под обязательное `cursor: X | undefined`.
+Фильтр `cursorMatchesSort` создаётся с `abort: true` (третий аргумент `Schema.makeFilter`). Без него при `errors: 'all'`
+после отказа `check` запускается и `refine`, и клиент получает вторую ошибку `Expected <filter>` в корне query
+(черновик 2026-11-10).
+
+`nextCursor` кодирует Schema ответа: `makePageSchema(item, cursor)` объявляет `nextCursor: NullOr(cursor)`, и HttpApi
+сам превращает объект курсора в строку, как превращает `Date` в ISO-строку у `WishlistResponseSchema`. Handler
+возвращает результат сервиса без перекладки. Отказ кодирования ответа HttpApi передаёт как `HttpApiSchemaError` вида
+`Body`, а `request-validation.ts` превращает его в дефект: 500 через `DefectBoundaryMiddleware`. Решение владельца
+2026-11-11: курсор строит `cursorOf` из строки, уже прошедшей `WishlistSchema`, поэтому отказ возможен только при
+ошибке в коде. Отклонены: кодирование в handler (`encodeEffect` и `orDie` в каждом списке) и переупаковка в
+`OperationFailed` с `reason: 'internal'`.
+
 Query-Schema списка — структура `sort`, `cursor`, `limit`. Модуль даёт детали (`makeCursorCodec`, `LimitQueryParam`,
 `cursorMatchesSort`), а Struct собирает потребитель. Обобщённую фабрику Struct Effect 4.0.4 не типизирует:
 `Schema.Literals` от параметра типа теряет литералы, а фильтр на уровне структуры с полями-параметрами не видит

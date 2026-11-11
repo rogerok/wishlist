@@ -3,7 +3,7 @@ import { Effect, Schema } from 'effect';
 import * as TestClock from 'effect/testing/TestClock';
 
 import { requestParseOptions } from '#infra/api/request-parse-options.js';
-import { CreateWishlistBodySchema } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import { CreateWishlistBodySchema } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 
 // Окно при этом времени: 2026-10-11 … 2031-10-12 включительно.
 const now = Date.parse('2026-10-12T12:00:00Z');

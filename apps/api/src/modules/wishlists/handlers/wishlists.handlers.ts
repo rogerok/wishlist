@@ -49,6 +49,20 @@ export const WishlistsHandlersLive = HttpApiBuilder.group(
               ),
             );
           }),
+        )
+        .handle(WishlistsOperations.listOwn, ({ query }) =>
+          Effect.gen(function* () {
+            const { user } = yield* CurrentSession;
+
+            return yield* service.listOwn(user.id, query).pipe(
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: WishlistsOperations.listOwn,
+                }),
+              ),
+            );
+          }),
         );
     }),
 );

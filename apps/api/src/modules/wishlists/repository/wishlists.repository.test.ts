@@ -2,7 +2,7 @@ import { describe, expect, layer } from '@effect/vitest';
 import { Effect, Layer, Option } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
 
-import type { CreateWishlistBody } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import type { CreateWishlistBody } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';

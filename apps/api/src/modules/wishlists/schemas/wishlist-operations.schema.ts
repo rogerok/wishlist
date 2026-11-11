@@ -9,6 +9,7 @@ export const WishlistsOperationsSchema = makeLiteralUnionSchema([
   'getById',
   'getReadableById',
   'update',
+  'listOwn',
 ]);
 
 export type WishlistsOperations = Schema.Schema.Type<

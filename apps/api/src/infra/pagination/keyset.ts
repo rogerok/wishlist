@@ -30,7 +30,7 @@ type KeyCastType = keyof KeyCastTypes;
 
 // Параметры вычисляемого ключа для шага 3б. Пресет `occasionDate` объявит `{ asOf: 'date' }`. Тогда в JS
 // `ParamValues` даст `{ asOf: '2026-10-18' }`, а `rule` получит `ParamExpression`: `{ asOf: cast($n as date) }`.
-type ParamSpec = Record<string, KeyCastType>;
+export type ParamSpec = Record<string, KeyCastType>;
 type ParamValues<Spec extends ParamSpec> = {
   [K in keyof Spec]: KeyCastTypes[Spec[K]];
 };
@@ -41,6 +41,11 @@ type Params<Cursor, Spec extends ParamSpec> = {
   first: Effect.Effect<ParamValues<Spec>>;
   fromCursor: (cursor: Cursor) => ParamValues<Spec>;
   types: Spec;
+};
+
+export type PageCursor<Cursor> = {
+  readonly limit: number;
+  readonly cursor?: Cursor | undefined;
 };
 
 /** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */
@@ -218,7 +223,7 @@ const toPage = <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
 const applyKeyset =
   <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
     sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
-    page: { readonly cursor: Cursor | undefined; readonly limit: number },
+    page: PageCursor<Cursor>,
     values: ParamValues<Spec>,
   ) =>
   <O>(query: SelectQueryBuilder<DB, TB, O>): SelectQueryBuilder<DB, TB, O> => {
@@ -273,7 +278,7 @@ export const prepareKeyset = <
   Spec extends ParamSpec,
 >(
   sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
-  page: { readonly cursor: Cursor | undefined; readonly limit: number },
+  page: PageCursor<Cursor>,
 ) =>
   Effect.gen(function* () {
     const values =

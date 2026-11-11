@@ -75,9 +75,19 @@ export const SessionRepositoryLive = Layer.effect(
       expiresAt,
     ) =>
       Effect.gen(function* () {
+        // `created_at` берётся из того же Clock, что и `expiresAt` в сервисе. С `DEFAULT now()` PostgreSQL ставил
+        // настоящее время, и под TestClock проверка `expires_at > created_at` падала, как только реальная дата
+        // обгоняла `expiresAt`.
+        const now = yield* Clock.currentTimeMillis;
+
         const [row] = yield* db
           .insertInto('sessions')
-          .values({ userId, tokenDigest: Buffer.from(tokenDigest), expiresAt })
+          .values({
+            userId,
+            tokenDigest: Buffer.from(tokenDigest),
+            createdAt: new Date(now),
+            expiresAt,
+          })
           .returning(sessionSelection)
           .pipe(Effect.mapError(mapSessionCreateSqlError));
 
