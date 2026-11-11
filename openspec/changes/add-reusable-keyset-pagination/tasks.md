@@ -89,7 +89,7 @@
       `getReadableById`. Service-тест поверх PostgreSQL проверяет «Свои Wishlist обеих visibility», «Разные createdAt»,
       «Равные createdAt». Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/service/wishlists.service.test.ts` проходит.
-- [ ] 5.2 Добавить операцию и эндпоинт `GET /api/wishlists` с query-Schema из модуля и Schema ответа страницы, handler
+- [x] 5.2 Добавить операцию и эндпоинт `GET /api/wishlists` с query-Schema из модуля и Schema ответа страницы, handler
       и перевод технических отказов через существующий обработчик. HTTP-тесты в `wishlists.handlers.test.ts` покрывают
       все сценарии `api-pagination` и сценарии `wishlists` «Элемент совпадает с записью», «Список без действующей
       Session», «Невалидный query без действующей Session», «Временный отказ чтения списка», «Повреждённая строка в

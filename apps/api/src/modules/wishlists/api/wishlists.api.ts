@@ -1,6 +1,7 @@
 import { HttpApiEndpoint, HttpApiGroup } from 'effect/http-api';
 
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
+import { makePageSchema } from '#infra/pagination/page.js';
 import { SessionAuthentication } from '#modules/auth/api/session-authentication.js';
 import {
   wishlistsByIdPath,
@@ -11,10 +12,15 @@ import { WishlistNotFoundProblem } from '#modules/wishlists/api/wishlists.api.er
 import {
   CreateWishlistBodySchema,
   CreateWishlistResponseSchema,
-} from '#modules/wishlists/schemas/create-wishlist.schema.js';
+} from '#modules/wishlists/schemas/wishlist-create.schema.js';
 import { WishlistsOperations } from '#modules/wishlists/schemas/wishlist-operations.schema.js';
 import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
 import { WishlistIdSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
+
+import {
+  WishlistCursorCodec,
+  WishlistQuerySchema,
+} from '../schemas/wishlists-list-query.schema.js';
 
 export const wishlistsGroup = HttpApiGroup.make(wishlistsGroupIdentifier)
   .add(
@@ -32,5 +38,10 @@ export const wishlistsGroup = HttpApiGroup.make(wishlistsGroupIdentifier)
         error: [...technicalHttpErrors, WishlistNotFoundProblem],
       },
     ),
+    HttpApiEndpoint.get(WishlistsOperations.listOwn, wishlistsCollectionPath, {
+      query: WishlistQuerySchema,
+      success: makePageSchema(WishlistResponseSchema, WishlistCursorCodec),
+      error: technicalHttpErrors,
+    }),
   )
   .middleware(SessionAuthentication);

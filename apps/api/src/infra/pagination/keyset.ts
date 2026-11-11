@@ -44,8 +44,8 @@ type Params<Cursor, Spec extends ParamSpec> = {
 };
 
 export type PageCursor<Cursor> = {
-  readonly cursor: Cursor | undefined;
   readonly limit: number;
+  readonly cursor?: Cursor | undefined;
 };
 
 /** Один элемент пары `(created_at, id)`: его левая и правая сторона в WHERE. Создаётся только через `keyPart`. */
@@ -223,7 +223,7 @@ const toPage = <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
 const applyKeyset =
   <DB, TB extends keyof DB, Row, Cursor, Spec extends ParamSpec>(
     sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
-    page: { readonly cursor: Cursor | undefined; readonly limit: number },
+    page: PageCursor<Cursor>,
     values: ParamValues<Spec>,
   ) =>
   <O>(query: SelectQueryBuilder<DB, TB, O>): SelectQueryBuilder<DB, TB, O> => {
@@ -278,7 +278,7 @@ export const prepareKeyset = <
   Spec extends ParamSpec,
 >(
   sort: KeysetSort<DB, TB, Row, Cursor, Spec>,
-  page: { readonly cursor: Cursor | undefined; readonly limit: number },
+  page: PageCursor<Cursor>,
 ) =>
   Effect.gen(function* () {
     const values =

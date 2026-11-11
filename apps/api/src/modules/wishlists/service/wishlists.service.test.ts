@@ -2,7 +2,7 @@ import { describe, expect, layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
 
-import type { CreateWishlistBody } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import type { CreateWishlistBody } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 
 import { DBLive } from '#infra/db/db.service.js';
 import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
@@ -90,7 +90,7 @@ const insertWishlist = (
     Effect.orDie,
   );
 
-const firstPage = { sort: 'createdAt', cursor: undefined, limit: 10 } as const;
+const firstPage = { sort: 'createdAt', limit: 10 } as const;
 
 const readers = [
   {

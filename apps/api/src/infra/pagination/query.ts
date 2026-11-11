@@ -23,9 +23,37 @@ export const cursorMatchesSort = <
     readonly cursor?: { readonly sort: string };
   },
 >() =>
-  Schema.makeFilter((query: Query) => {
-    if (query.cursor === undefined) return true;
-    if (query.sort === query.cursor?.sort) return true;
+  Schema.makeFilter(
+    (query: Query) => {
+      if (query.cursor === undefined) return true;
+      if (query.sort === query.cursor?.sort) return true;
 
-    return { path: ['cursor'], issue: 'Cursor belongs to another sort' };
-  });
+      return { path: ['cursor'], issue: 'Cursor belongs to another sort' };
+    },
+    undefined,
+    true,
+  );
+
+export type SortedQuery = {
+  readonly sort: string;
+  readonly cursor?: { readonly sort: string };
+};
+
+export type MatchedSort<
+  Q extends SortedQuery,
+  S extends Q['sort'] = Q['sort'],
+> = S extends unknown
+  ? {
+      readonly sort: S;
+      readonly cursor?: Extract<NonNullable<Q['cursor']>, { readonly sort: S }>;
+    } & Omit<Q, 'cursor' | 'sort'>
+  : never;
+
+export const withCursorMatchingSort = <Q extends SortedQuery, E, RD, RE>(
+  schema: Schema.Codec<Q, E, RD, RE>,
+) => {
+  const isMatched = (query: Q): query is MatchedSort<Q> & Q =>
+    query.cursor === undefined || query.sort === query.cursor?.sort;
+
+  return schema.check(cursorMatchesSort<Q>()).pipe(Schema.refine(isMatched));
+};

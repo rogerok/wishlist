@@ -2,7 +2,7 @@ import { Context, Effect, Layer } from 'effect';
 
 import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
-import type { CreateWishlistBody } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import type { CreateWishlistBody } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 import type {
   Wishlist,
   WishlistId,

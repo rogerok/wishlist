@@ -9,6 +9,8 @@ import type { KeysetSort, ParamSpec } from '#infra/pagination/keyset.js';
 
 import { keyPart, NO_PARAMS } from '#infra/pagination/keyset.js';
 
+import type { WishlistQuerySchema } from './schemas/wishlists-list-query.schema.js';
+
 type WishlistRow = Selectable<Wishlists>;
 
 export type WishlistSort<
@@ -29,17 +31,7 @@ export type OccasionDateCursor = {
 };
 
 // Какую страницу просит listOwn: имя пресета выбирает пресет, курсор того же пресета, limit.
-export type PageSort =
-  | {
-      readonly cursor: CreatedAtCursor | undefined;
-      readonly limit: number;
-      readonly sort: 'createdAt';
-    }
-  | {
-      readonly cursor: OccasionDateCursor | undefined;
-      readonly limit: number;
-      readonly sort: 'occasionDate';
-    };
+export type PageSort = typeof WishlistQuerySchema.Type;
 
 export type WithCursor<T, Cursor> = {
   items: ReadonlyArray<T>;

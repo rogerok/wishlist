@@ -3,7 +3,7 @@ import { Context, Effect, Layer, Option, Schema } from 'effect';
 import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { PageCursor, ParamSpec } from '#infra/pagination/keyset.js';
 import type { UserId } from '#modules/users/schemas/user.schema.js';
-import type { CreateWishlistBody } from '#modules/wishlists/schemas/create-wishlist.schema.js';
+import type { CreateWishlistBody } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 import type {
   Wishlist,
   WishlistId,
