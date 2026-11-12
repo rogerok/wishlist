@@ -3,7 +3,7 @@
 ## Context
 
 Мотивация — в proposal.md, контракт — в specs, выбор keyset и формат курсора — в
-[ADR-0008](../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md). Состояние кода, которое определяет подход:
+[ADR-0008](../../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md). Состояние кода, которое определяет подход:
 
 - `wishlists.created_at` — `timestamptz(3)`: миллисекунды, как у JS `Date`, поэтому значение ключа проходит через
   курсор без потери точности. Равные `created_at` возможны.

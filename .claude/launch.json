@@ -11,6 +11,16 @@
         "/home/vyacheslav/my-projects/wishlist/apps/api/dist/infra/bin/server.js"
       ],
       "port": 3000
+    },
+    {
+      "name": "api-db-5434",
+      "cwd": "apps/api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "POSTGRES_URL=$(grep ^POSTGRES_URL= .env.development | cut -d= -f2- | sed 's/:5432\\//:5434\\//') exec /home/vyacheslav/.nvm/versions/node/v26.7.0/bin/node --env-file=.env.development --enable-source-maps dist/infra/bin/server.js"
+      ],
+      "port": 3000
     }
   ]
 }

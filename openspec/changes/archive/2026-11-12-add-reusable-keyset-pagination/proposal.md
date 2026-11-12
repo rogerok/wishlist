@@ -2,11 +2,11 @@
 
 ## Why
 
-Шаг 3.4 [roadmap](../../../learning/roadmap.md#3-owner-only-wishlists) требует список Wishlist со стабильным порядком и
+Шаг 3.4 [roadmap](../../../../learning/roadmap.md#3-owner-only-wishlists) требует список Wishlist со стабильным порядком и
 ограниченной страницей. Списки понадобятся и дальше (Public Profile в Milestone 3, Wishlist Items в Milestone 4),
 поэтому пагинация делается один раз как общий контракт и переиспользуемый модуль, а Wishlist становится его первым
 потребителем. Решения по контракту приняты владельцем 2026-10-18 и записаны в
-[ADR-0008](../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md).
+[ADR-0008](../../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md).
 
 ## What Changes
 
