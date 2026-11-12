@@ -2,7 +2,7 @@
 
 Список своих Wishlist следует общему контракту `api-pagination`. Ниже — только то, что принадлежит Wishlist: какие
 Wishlist входят в список, какие у него сортировки и их порядок. Upcoming и Past Occasion Date определены в
-[CONTEXT.md](../../../../../CONTEXT.md).
+[CONTEXT.md](../../../../../../CONTEXT.md).
 
 ## ADDED Requirements
 

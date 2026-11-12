@@ -4,8 +4,8 @@
 
 ## Сейчас
 
-Шаг: 3.4, keyset-пагинация. Все задачи `add-reusable-keyset-pagination` закрыты, ветка `6.1`.
-Следующее действие: PR ветки `6.1` в `main`, затем архив изменения OpenSpec → `openspec validate --strict` проходит.
+Шаг: 3.4 закрыт: PR #13 влит (`1a0c578`), изменение в архиве `2026-11-12-add-reusable-keyset-pagination`.
+Следующее действие: 3.5 Update, спека OpenSpec (пишет владелец: автор + ревьюер) → `openspec validate --strict`.
 
 ## Проверено
 

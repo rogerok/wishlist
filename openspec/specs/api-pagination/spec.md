@@ -1,15 +1,15 @@
-# Spec Delta
+# api-pagination Specification
 
 ## Purpose
 
 Определяет общий контракт постраничных списков API: как клиент выбирает размер страницы и сортировку, как получает
 следующую страницу по курсору и как API отклоняет неверные query-параметры
-([ADR-0008](../../../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md)).
+([ADR-0008](../../../docs/adr/0008-keyset-pagination-with-opaque-cursor.md)).
 
 Сценарии проверяют контракт на `GET /api/wishlists`; порядок «по умолчанию» в них — сортировка `createdAt` из
 спецификации `wishlists`. Во всех сценариях PostgreSQL доступен, а у User A действует Session.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Форма ответа списка
 
