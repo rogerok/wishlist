@@ -1,5 +1,14 @@
 import { describe, expect, layer } from '@effect/vitest';
-import { Array, Effect, Layer, Option, Order, Stream } from 'effect';
+import {
+  Arbitrary,
+  Array,
+  Effect,
+  Layer,
+  Option,
+  Order,
+  Schema,
+  Stream,
+} from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
 
 import type { UserId } from '#modules/users/schemas/user.schema.js';
@@ -64,6 +73,27 @@ const byCreatedAt = Order.mapInput(
 );
 const byId = Order.mapInput(Order.String, (wishlist: Row) => wishlist.id);
 const wishlistOrder = Order.flip(Order.combine(byCreatedAt, byId));
+
+const createdAtArb = Arbitrary.schema(
+  Schema.Literals([
+    '2026-10-19T10:00:01.000Z',
+    '2026-10-19T10:00:02.000Z',
+    '2026-10-19T10:00:03.000Z',
+  ]),
+);
+
+const rowsArb = Arbitrary.array(createdAtArb, { maxLength: 30 }).pipe(
+  Arbitrary.map((dates) =>
+    dates.map((date, index): Row => ({
+      createdAt: new Date(date),
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    })),
+  ),
+);
+
+const limitArb = Arbitrary.schema(
+  Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
+);
 
 // Все страницы `sort=createdAt` одним потоком. `Stream.paginate` вызывает функцию с курсором предыдущей страницы:
 // первый вызов получает `undefined`, следующие получают `nextCursor`. Поток кончается, когда функция вернёт
@@ -141,6 +171,23 @@ layer(repositoryLayer, { timeout: '60 seconds' })(
             wishlists.map(({ id, createdAt }) => ({ id, createdAt })),
           ).toEqual(expected);
         }, Effect.scoped),
+      );
+
+      it.effect.prop(
+        'Обход любого набора выдаёт каждый Wishlist один раз в порядке Order',
+        { rows: rowsArb, limit: limitArb },
+        ({ rows, limit }) =>
+          Effect.gen(function* () {
+            const ownerId = yield* acquireUser('traversal@example.test');
+            yield* Effect.forEach(rows, (row) => insertWishlist(ownerId, row));
+
+            const wishlists = yield* listAllByCreatedAt(ownerId, limit);
+
+            expect(
+              wishlists.map(({ createdAt, id }) => ({ createdAt, id })),
+            ).toEqual(Array.sort(rows, wishlistOrder));
+          }).pipe(Effect.scoped),
+        { arbitrary: { runs: 50, seed: 42 } },
       );
     });
   },
