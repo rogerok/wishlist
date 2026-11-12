@@ -6,21 +6,18 @@
 
 Шаг: 3.4, keyset-пагинация; 5.1 и 5.2 в `main` (`ed0b315`). Ветка `6.1`.
 
-- 6.1, property-тест обхода. План шагов: (1) обход 5 фиксированных Wishlist через `Stream.paginate` и `listOwn`;
-  (2) ожидаемый порядок из `Order` в тесте; (3) строки и `limit` из генератора, `it.effect.prop` с `seed` и `runs`;
-  (4) второй пресет `occasionDate`.
-  Шаги 1–2 сделаны 2026-11-12: тест шага 1 написал агент, `Order` и `Array.sort(rows)` владелец.
-  Следующее действие: коммит шагов 1–2, затем шаг 3 → `it.effect.prop` зелёный.
-- Расхождение с design, решение 8: `it.effect.prop` 4.0.4 берёт `effect/Arbitrary` и Schema, не fast-check.
+- 6.1 закрыта 2026-11-12: `wishlists.repository.property.test.ts`, `prop` для `createdAt` и `occasionDate`.
+  Шаги 1–2 (`Stream.paginate`, `Order`) писал владелец, шаг 3 вписал по решению агента, шаг 4 написал агент.
+  Следующее действие: 7.1, smoke на живом сервере → статусы и тела совпадают со сценариями.
 
 ## Проверено
 
+- 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
+  переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
 - 5.2: `check-types` чистый, полный `pnpm test` 534 passed, 2026-11-11.
 - 5.1в: `check-types` чистый, `test src/modules/wishlists` 142 passed, 2026-11-09.
 - 5.1а–5.1б: `check-types`, `lint` чистые; полный `pnpm test` 478 passed, 2026-11-01.
-- Мина в тестах Session: `created_at` ставил `now()` PostgreSQL, `expires_at` — TestClock 2026-10-12 + 7 дней;
-  с 2026-10-19 12:00 падали 11 тестов `wishlists.handlers.test.ts` (23514 `sessions_check`), на чистом `4f2ad8c`
-  тоже. Агент: `sesion.repository.ts` пишет `createdAt` из Clock; 471 тест auth/wishlists/infra, 2026-11-01.
+- Session в тестах: `sesion.repository.ts` пишет `createdAt` из Clock, а не `now()`; 471 тест, 2026-11-01.
 
 ## Не проверено
 

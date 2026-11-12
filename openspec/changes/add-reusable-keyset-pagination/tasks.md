@@ -99,12 +99,13 @@
 
 ## 6. Свойство полного обхода
 
-- [ ] 6.1 Property-based тест `apps/api/src/infra/pagination/keyset.property.test.ts` на PostgreSQL по design (решение
-      8): генерируемые строки и `limit`; обход через `Stream.paginate`; оракул — `Order`, объявленный в самом тестовом
-      файле независимо от пресета. Для обоих пресетов
+- [x] 6.1 Property-based тест `apps/api/src/modules/wishlists/repository/wishlists.repository.property.test.ts` на
+      PostgreSQL по design (решение 8): генерируемые строки и `limit`; обход через `Stream.paginate`; оракул — `Order`,
+      объявленный в самом тестовом файле независимо от пресета. Для обоих пресетов
       проверяется требование «Полный обход без пропусков и повторов». Сид и число прогонов зафиксированы в тесте.
-      Доказательство: `pnpm --filter @wishlist/api test src/infra/pagination/keyset.property.test.ts` проходит три раза
-      подряд.
+      Доказательство: `pnpm --filter @wishlist/api test src/modules/wishlists/repository/wishlists.repository.property.test.ts`
+      проходит три раза подряд. Тест лежит рядом с repository, а не в `infra/pagination/`: он вызывает `listOwn`
+      модуля Wishlist, а тесты `infra` модули не импортируют (2026-11-12).
 
 ## 7. Интеграция
 
