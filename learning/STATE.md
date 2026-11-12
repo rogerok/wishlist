@@ -4,12 +4,14 @@
 
 ## Сейчас
 
-Шаг: 3.4, keyset-пагинация. Задачи 5.1 (коммит `02feb16`) и 5.2 (`GET /api/wishlists`, не закоммичена) готовы.
+Шаг: 3.4, keyset-пагинация; 5.1 и 5.2 в `main` (`ed0b315`). Ветка `6.1`.
 
-- 5.2: курсор с `sort` во всех слоях; `withCursorMatchingSort` (check + refine) сужает query до `PageSort`;
-  `nextCursor` кодирует `makePageSchema(item, cursor)`. Решения в design, решение 3. HTTP-тесты написал агент.
-  Следующее действие: убрать импорт `CreatedAtCursor`/`OccasionDateCursor` из `infra/pagination/query.ts`, коммит,
-  затем 6.1 → property-тест обхода зелёный три раза подряд.
+- 6.1, property-тест обхода. План шагов: (1) обход 5 фиксированных Wishlist через `Stream.paginate` и `listOwn`;
+  (2) ожидаемый порядок из `Order` в тесте; (3) строки и `limit` из генератора, `it.effect.prop` с `seed` и `runs`;
+  (4) второй пресет `occasionDate`.
+  Шаги 1–2 сделаны 2026-11-12: тест шага 1 написал агент, `Order` и `Array.sort(rows)` владелец.
+  Следующее действие: коммит шагов 1–2, затем шаг 3 → `it.effect.prop` зелёный.
+- Расхождение с design, решение 8: `it.effect.prop` 4.0.4 берёт `effect/Arbitrary` и Schema, не fast-check.
 
 ## Проверено
 

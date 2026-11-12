@@ -1,0 +1,12 @@
+// vtsls не может взять TypeScript 7 проекта: в пакете нет tsserver.js. Вместо него Zed запускает встроенный в
+// TypeScript 7 language server, пропатченный effect-tsgo, — тот же, что у `pnpm check-types`.
+{
+  "lsp": {
+    "vtsls": {
+      "binary": {
+        "path": "/home/vyacheslav/my-projects/wishlist/node_modules/.bin/tsc",
+        "arguments": ["--lsp", "--stdio"]
+      }
+    }
+  }
+}
