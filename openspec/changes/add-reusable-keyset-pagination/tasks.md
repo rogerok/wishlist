@@ -109,7 +109,7 @@
 
 ## 7. Интеграция
 
-- [ ] 7.1 Smoke на настоящем сервере и локальной БД: signup, создание 3 Wishlist, обход `GET /api/wishlists?limit=2`
+- [x] 7.1 Smoke на настоящем сервере и локальной БД: signup, создание 3 Wishlist, обход `GET /api/wishlists?limit=2`
       по `nextCursor`, `sort=occasionDate`, 400 на `?srot=x`; созданные smoke данные удалить. Добавить пагинацию и индекс
       в `learning/reference/system-map.html`. Доказательство: сценарии smoke дают ожидаемые статусы и тела;
       `pnpm --filter @wishlist/api check-types`, `lint`, `test`, `build`, `db:check` проходят;

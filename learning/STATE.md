@@ -4,29 +4,31 @@
 
 ## Сейчас
 
-Шаг: 3.4, keyset-пагинация; 5.1 и 5.2 в `main` (`ed0b315`). Ветка `6.1`.
-
-- 6.1 закрыта 2026-11-12: `wishlists.repository.property.test.ts`, `prop` для `createdAt` и `occasionDate`.
-  Шаги 1–2 (`Stream.paginate`, `Order`) писал владелец, шаг 3 вписал по решению агента, шаг 4 написал агент.
-  Следующее действие: 7.1, smoke на живом сервере → статусы и тела совпадают со сценариями.
+Шаг: 3.4, keyset-пагинация. Все задачи `add-reusable-keyset-pagination` закрыты, ветка `6.1`.
+Следующее действие: PR ветки `6.1` в `main`, затем архив изменения OpenSpec → `openspec validate --strict` проходит.
 
 ## Проверено
 
+- 7.1 smoke, `dist` + локальная БД на порту 5434, 2026-11-12: signup 201; 3 create 201; `?limit=2` → C, B, затем A
+  и `nextCursor: null`; `sort=occasionDate` → A (12-01), B (01-15), C (без даты); `?srot=x` → 400 по `srot`; без
+  cookie 401. Smoke-User удалён, каскад убрал 3 Wishlist и 1 Session. `check-types`, `lint`, `build`, `db:check`,
+  полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
 - 5.2: `check-types` чистый, полный `pnpm test` 534 passed, 2026-11-11.
-- 5.1в: `check-types` чистый, `test src/modules/wishlists` 142 passed, 2026-11-09.
-- 5.1а–5.1б: `check-types`, `lint` чистые; полный `pnpm test` 478 passed, 2026-11-01.
+- 5.1: `check-types`, `lint` чистые; `test src/modules/wishlists` 142 passed, 2026-11-09.
 - Session в тестах: `sesion.repository.ts` пишет `createdAt` из Clock, а не `now()`; 471 тест, 2026-11-01.
 
 ## Не проверено
 
-- Живой сервер: `GET /api/wishlists` ещё не вызывался, это smoke 7.1.
 - `.zed/settings.json` (агент): Zed запускает `tsc --lsp --stdio` TypeScript 7 вместо vtsls; сервер отвечает на
   `initialize`, в самом Zed не проверено. Путь абсолютный — не коммитить или добавить `.zed/` в `.gitignore`.
 - `pg` нужен только `kysely-codegen`: место в `devDependencies`, перенос не сделан.
 
 ## Заметки
+
+- Порт 5432 занят `cms-api-postgres-1` (rtdlab), 5433 — другим процессом. Smoke шёл на 5434 через конфиг
+  `api-db-5434` в `.claude/launch.json`: он подменяет порт в `POSTGRES_URL`, `.env.development` не меняется.
 
 - Ошибки 5.1, которые `check-types` не ловит: `direction` перепутан между пресетами (дважды), ключ без `id`,
   `cursorOf` со spread всей строки, пропущенный `.$call(keyset.apply)`.
