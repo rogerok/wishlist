@@ -83,8 +83,8 @@ sequenceDiagram
     </section>
 
     <section class="card" id="wishlist">
-      <h2>3. Wishlist: create и read под Session</h2>
-      <p>Оба маршрута защищены middleware <code>SessionAuthentication</code>. Владелец и читатель берутся только из <code>CurrentSession</code>: ни тело, ни query их не выбирают.</p>
+      <h2>3. Wishlist: create, read и список под Session</h2>
+      <p>Все три маршрута защищены middleware <code>SessionAuthentication</code>. Владелец и читатель берутся только из <code>CurrentSession</code>: ни тело, ни query их не выбирают.</p>
 <pre class="mermaid">
 sequenceDiagram
   autonumber
@@ -129,12 +129,35 @@ sequenceDiagram
   end
 </pre>
       <p class="diagram-caption">Правило доступа живёт в одном SQL, поэтому скрытый и отсутствующий Wishlist неразличимы: тела 404 совпадают полностью. Технический отказ — 503 или 500 по <a href="../../docs/adr/0005-technical-failure-logging-and-5xx-contract.md">ADR-0005</a>; повреждённая строка не исправляется при чтении, а даёт 500.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Клиент A
+  participant H as HttpApi
+  participant R as WishlistRepository
+  participant K as prepareKeyset
+  participant DB as PostgreSQL
+  C->>H: GET /api/wishlists?limit=2&cursor=…, cookie A
+  H->>H: WishlistQuerySchema: sort, limit 1–100, cursor того же sort
+  alt лишний ключ (?srot=x) или чужой курсор
+    H-->>C: 400 REQUEST_VALIDATION_FAILED
+  end
+  H->>R: listOwn(A, query) через service
+  R->>K: пресет wishlistsSort[sort], cursor, limit
+  K-->>R: apply и toPage
+  R->>DB: WHERE owner_id = A AND (created_at, id) &lt; курсор, ORDER BY, LIMIT 3
+  DB-->>R: до 3 строк
+  R-->>C: 200, items ≤ 2 и nextCursor (base64url) или null
+</pre>
+      <p class="diagram-caption">Keyset-пагинация: следующая страница начинается строго после последней показанной строки, поэтому вставка или удаление между запросами не сдвигает страницы. Лишняя третья строка в <code>LIMIT 3</code> только сообщает, есть ли следующая страница. Пресет <code>occasionDate</code> берёт <code>asOf</code> из Clock на первой странице и везёт его в курсоре. Полный обход без пропусков и повторов проверяет property-тест <a href="../../apps/api/src/modules/wishlists/repository/wishlists.repository.property.test.ts"><code>wishlists.repository.property.test.ts</code></a>.</p>
       <table><thead><tr><th>Слой</th><th>Файл</th></tr></thead><tbody>
         <tr><td>Контракт</td><td><a href="../../apps/api/src/modules/wishlists/api/wishlists.api.ts"><code>api/wishlists.api.ts</code></a></td></tr>
         <tr><td>Handlers</td><td><a href="../../apps/api/src/modules/wishlists/handlers/wishlists.handlers.ts"><code>handlers/wishlists.handlers.ts</code></a></td></tr>
         <tr><td>Service</td><td><a href="../../apps/api/src/modules/wishlists/service/wishlists.service.ts"><code>service/wishlists.service.ts</code></a></td></tr>
         <tr><td>Repository</td><td><a href="../../apps/api/src/modules/wishlists/repository/wishlists.repository.ts"><code>repository/wishlists.repository.ts</code></a></td></tr>
-        <tr><td>Спецификация</td><td><a href="../../openspec/specs/wishlists/spec.md"><code>add-wishlist-create-read</code></a></td></tr>
+        <tr><td>Пресеты сортировки</td><td><a href="../../apps/api/src/modules/wishlists/wishlists.sorts.ts"><code>wishlists.sorts.ts</code></a>, query: <a href="../../apps/api/src/modules/wishlists/schemas/wishlists-list-query.schema.ts"><code>schemas/wishlists-list-query.schema.ts</code></a></td></tr>
+        <tr><td>Пагинация (общая)</td><td><a href="../../apps/api/src/infra/pagination/keyset.ts"><code>infra/pagination/keyset.ts</code></a>, <code>cursor.ts</code>, <code>page.ts</code>, <code>query.ts</code></td></tr>
+        <tr><td>Спецификация</td><td><a href="../../openspec/specs/wishlists/spec.md"><code>add-wishlist-create-read</code></a>, <a href="../../openspec/changes/add-reusable-keyset-pagination/specs/api-pagination/spec.md"><code>api-pagination</code></a></td></tr>
       </tbody></table>
     </section>
 
@@ -194,9 +217,10 @@ erDiagram
     varchar description "NULL или 1-1000"
     date occasion_date "NULL или дата без времени"
     visibility visibility "private или public"
+    timestamptz created_at "индекс (owner_id, created_at DESC, id DESC)"
   }
 </pre>
-      <p class="diagram-caption">Все FK — <code>ON DELETE CASCADE</code>: удаление user удаляет его пароль, сессии и Wishlist. Миграции: <a href="../../apps/api/src/infra/db/migrations/0001_initial.ts"><code>0001</code></a>, <a href="../../apps/api/src/infra/db/migrations/0002_auth.ts"><code>0002</code></a>, <a href="../../apps/api/src/infra/db/migrations/0003_display_name.ts"><code>0003</code></a>, <a href="../../apps/api/src/infra/db/migrations/0004_wishlists.ts"><code>0004</code></a>.</p>
+      <p class="diagram-caption">Все FK — <code>ON DELETE CASCADE</code>: удаление user удаляет его пароль, сессии и Wishlist. Миграции: <a href="../../apps/api/src/infra/db/migrations/0001_initial.ts"><code>0001</code></a>, <a href="../../apps/api/src/infra/db/migrations/0002_auth.ts"><code>0002</code></a>, <a href="../../apps/api/src/infra/db/migrations/0003_display_name.ts"><code>0003</code></a>, <a href="../../apps/api/src/infra/db/migrations/0004_wishlists.ts"><code>0004</code></a>, <a href="../../apps/api/src/infra/db/migrations/0005_wishlists_idx.ts"><code>0005</code></a>. Индекс из <code>0005</code> повторяет порядок <code>sort=createdAt</code>: PostgreSQL встаёт на курсор и читает <code>limit + 1</code> строк, а не все Wishlist владельца. Для <code>sort=occasionDate</code> индекса нет: ключ вычисляется через <code>CASE</code>.</p>
       <p class="callout"><strong>Два правила БД.</strong> <code>occasion_date</code> — тип <code>date</code>: драйвер возвращает строку <code>YYYY-MM-DD</code>, без превращения в момент времени, поэтому часовой пояс процесса её не сдвигает (<a href="../../apps/api/src/infra/db/pg-date.test.ts"><code>pg-date.test.ts</code></a>). Миграции идут только вперёд: обратных нет, локальная БД пересоздаётся.</p>
     </section>
 
