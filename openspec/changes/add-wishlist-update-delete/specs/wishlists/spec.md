@@ -129,9 +129,9 @@
 
 Ответ 400 на Occasion Date вне окна при `PUT /api/wishlists/:id` SHALL иметь тип `application/problem+json` и тело
 ровно из полей `code: WISHLIST_OCCASION_DATE_OUT_OF_WINDOW`, `detail: The occasion date is outside the allowed window`,
-`status: 400`, `title: Occasion date out of window`, `type: /errors/wishlist-occasion-date-out-of-window`,
-`instance: /api/wishlists/<id>` и `errors` из одной записи с `location: "payload"`, `path: ["occasionDate"]` и
-`message: Expected a date between <min> and <max>`, где `<min>` и `<max>` — границы окна в формате `YYYY-MM-DD`.
+`status: 400`, `title: Occasion date out of window`, `type: /errors/wishlist-occasion-date-out-of-window`, запрошенного
+`id`, `instance: /api/wishlists/<id>`, границ окна `min` и `max` в формате `YYYY-MM-DD` и `errors` из одной записи с
+`location: "payload"`, `path: ["occasionDate"]` и `message: Expected a date between <min> and <max>`.
 
 #### Scenario: Тело отказа
 
@@ -142,7 +142,8 @@
 - **THEN** ответ имеет статус 400, тип `application/problem+json`
 - **AND** JSON содержит `code: WISHLIST_OCCASION_DATE_OUT_OF_WINDOW`,
   `detail: The occasion date is outside the allowed window`, `status: 400`, `title: Occasion date out of window`,
-  `type: /errors/wishlist-occasion-date-out-of-window`, `instance: /api/wishlists/<id W>` и `errors` ровно из одной записи; других полей нет
+  `type: /errors/wishlist-occasion-date-out-of-window`, `id: <id W>`, `instance: /api/wishlists/<id W>`,
+  `min: "2026-11-11"`, `max: "2031-11-12"` и `errors` ровно из одной записи; других полей нет
 - **AND** запись `errors` равна
   `{ "location": "payload", "path": ["occasionDate"], "message": "Expected a date between 2026-11-11 and 2031-11-12" }`
 

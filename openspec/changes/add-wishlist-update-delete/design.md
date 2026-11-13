@@ -95,24 +95,30 @@ withTransaction:
 
 ### 4. Окно Occasion Date: одна функция, проверка в service
 
-`occasionDateWindow(now)` экспортируется из `wishlist.schema.ts`; рядом появляется проверка, которая возвращает
-`{ min, max }` при нарушении. `CalendarDateInWindow` (create) и service (PUT) вызывают её, поэтому границы и текст
-`Expected a date between <min> and <max>` совпадают. Сценарий «Тело отказа» сравнивает `message` целиком, поэтому тест
-PUT поймает и расхождение текста с create. Окно в Schema тела PUT не встраивается: Schema не видит
-сохранённую дату и отклонила бы прежнюю Past Occasion Date.
+`checkDateWindow(value, now)` в `wishlist.schema.ts` сама считает окно через `occasionDateWindow(now)` и возвращает
+`Result<string, OccasionDateWindow>`: успех несёт дату, отказ несёт `{ min, max }`. Вызывающий код передаёт только
+«сегодня», поэтому границы нельзя перепутать местами. Текст `Expected a date between <min> and <max>` собирает
+`windowMessage(window)`; её вызывают `CalendarDateInWindow` (create) и `encode` тела 400 (PUT), поэтому текст один.
+Сценарий «Тело отказа» сравнивает `message` целиком. Окно в Schema тела PUT не встраивается: Schema не видит сохранённую
+дату и отклонила бы прежнюю Past Occasion Date.
 
 ### 5. Ошибки и problem-тела
 
-| Доменная ошибка                            | HTTP | Тело                                                                          |
-| ------------------------------------------ | ---- | ----------------------------------------------------------------------------- |
-| `WishlistNotFoundError { id }`             | 404  | существующий `WishlistNotFoundProblem`                                        |
-| `WishlistForbiddenError { id }`            | 403  | `makeForbiddenBody`: тексты + `id`, `instance`                                |
-| `WishlistOccasionDateOutOfWindowError {…}` | 400  | тексты + `instance`, `errors: [RequestValidationIssueSchema]` из одной записи |
+| Доменная ошибка                            | HTTP | Тело                                                                    |
+| ------------------------------------------ | ---- | ----------------------------------------------------------------------- |
+| `WishlistNotFoundError { id }`             | 404  | существующий `WishlistNotFoundProblem`                                  |
+| `WishlistForbiddenError { id }`            | 403  | `makeForbiddenBody`: тексты + `id`, `instance`                          |
+| `WishlistOccasionDateOutOfWindowError {…}` | 400  | `makeBadRequestBody`: тексты + `id`, `instance`, `min`, `max`, `errors` |
 
-`makeForbiddenBody` добавляется в `problem-bodies.ts` по образцу `makeNotFoundBody` (`makeProblemBody(403)`). Тело
-400 не содержит `id`: `instance` уже указывает на Wishlist, а форма `errors` совпадает с `REQUEST_VALIDATION_FAILED`,
-чтобы клиент разбирал поле одинаково. `instance` 400 строится из `id` ошибки (`makeByIdInstance`), а запись `errors`
-из `min`/`max`.
+`makeForbiddenBody` добавляется в `problem-bodies.ts` по образцу `makeNotFoundBody` (`makeProblemBody(403)`).
+
+Тело 400 (решение владельца 2026-11-13) несёт `id`, `min` и `max` отдельными полями: всё, что клиент читает как данные,
+лежит в extension members RFC 9457 §3.2, а `message` остаётся текстом для человека. Поэтому `decode` тела строит
+ошибку `{ id, min, max }` без разбора строк. Отклонён вариант без этих полей: `decode` пришлось бы доставать `id` из
+`instance`, а границы регулярным выражением из `message`, и правка текста молча ломала бы клиент HttpApi.
+`makeBadRequestBody` в infra требует только общие для любого 400 поля `instance` и `errors`; `id`, `min` и `max`
+передаёт модуль Wishlist, и infra не знает про окно дат. `errors` — `Schema.Tuple` из одной записи: `encode` не
+положит ноль или две записи. Форма записи совпадает с `REQUEST_VALIDATION_FAILED`.
 
 ### 6. HTTP
 

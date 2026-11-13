@@ -4,8 +4,11 @@
 
 ## Сейчас
 
-Шаг: 3.4 закрыт: PR #13 влит (`1a0c578`), изменение в архиве `2026-11-12-add-reusable-keyset-pagination`.
-Следующее действие: 3.5 Update, спека OpenSpec (пишет владелец: автор + ревьюер) → `openspec validate --strict`.
+Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
+1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
+Решение владельца: тело 400 окна несёт `id`, `min`, `max` полями (RFC 9457 extension members), а
+`makeBadRequestBody` в infra требует только `instance` и `errors`. Спека, design и proposal поправлены.
+Следующее действие: 2.1, блокировка своей строки и `update` в repository → тесты repository зелёные.
 
 ## Проверено
 
@@ -15,9 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 5.2: `check-types` чистый, полный `pnpm test` 534 passed, 2026-11-11.
-- 5.1: `check-types`, `lint` чистые; `test src/modules/wishlists` 142 passed, 2026-11-09.
-- Session в тестах: `sesion.repository.ts` пишет `createdAt` из Clock, а не `now()`; 471 тест, 2026-11-01.
+- 1.1–1.2 update/delete: `check-types`, `lint` чистые; `test src/modules/wishlists` 207 passed, 2026-11-13.
 
 ## Не проверено
 
@@ -29,7 +30,6 @@
 
 - Порт 5432 занят `cms-api-postgres-1` (rtdlab), 5433 — другим процессом. Smoke шёл на 5434 через конфиг
   `api-db-5434` в `.claude/launch.json`: он подменяет порт в `POSTGRES_URL`, `.env.development` не меняется.
-
 - Ошибки 5.1, которые `check-types` не ловит: `direction` перепутан между пресетами (дважды), ключ без `id`,
   `cursorOf` со spread всей строки, пропущенный `.$call(keyset.apply)`.
 - Объяснение двух `keyPart` на одну колонку сработало через JS: `map` (два `CASE` на строку) → `sort` с `||`.

@@ -16,8 +16,8 @@
 - Отказ не-владельцу на PUT и DELETE: чужой Public Wishlist → 403 `WISHLIST_FORBIDDEN` с `id` и `instance`; чужой
   Private Wishlist и отсутствующий UUID → одинаковый 404 `WISHLIST_NOT_FOUND`, как у GET.
 - Окно Occasion Date при PUT проверяется, только если владелец сменил дату на другую ненулевую. Wishlist с Past
-  Occasion Date можно править, не трогая дату. Нарушение окна → 400 `WISHLIST_OCCASION_DATE_OUT_OF_WINDOW` с одной
-  записью `errors` по `path: ["occasionDate"]`.
+  Occasion Date можно править, не трогая дату. Нарушение окна → 400 `WISHLIST_OCCASION_DATE_OUT_OF_WINDOW` с полями
+  `id`, `min`, `max` и одной записью `errors` по `path: ["occasionDate"]`.
 - Невалидный UUID в `:id`, невалидное поле и лишнее поле тела → 400 `REQUEST_VALIDATION_FAILED`.
 - PUT записывает в `updatedAt` время начала транзакции PostgreSQL и не меняет `createdAt`.
 - Вне объёма: Reservations и Wishlist Items при удалении (шаг 6), точное значение `updatedAt`, условные запросы
@@ -37,7 +37,7 @@
 
 ## Impact
 
-- `apps/api/src/infra/errors/problem-bodies.ts`: фабрика тела 403 рядом с `makeNotFoundBody`.
+- `apps/api/src/infra/errors/problem-bodies.ts`: фабрики тел 403 и 400 рядом с `makeNotFoundBody`.
 - Модуль Wishlist: Schema тела PUT, ошибки `WishlistForbiddenError` и ошибка окна, problem-тела 403 и 400, методы
   repository (блокировка своей строки, update, delete), методы service, эндпоинты и handlers, тесты service и HTTP.
 - `wishlist.schema.ts`: функция окна Occasion Date становится общей для create и PUT, чтобы границы и текст `message`
@@ -49,7 +49,7 @@
 
 - Create отдаёт нарушение окна как `REQUEST_VALIDATION_FAILED` (`CalendarDateInWindow`), PUT по решению владельца
   отдаёт то же нарушение со своим `code`. Тела совпадают по форме `errors`, отличаются `code`, `title`, `detail`,
-  `type`.
+  `type`; у PUT есть ещё поля `id`, `min` и `max`.
 - Ответов 403 в проекте пока нет; `makeNotFoundBody` задаёт `status: 404` жёстко.
 - `WishlistsOperations` уже содержит `update` и `delete`.
 - `PUT /api/users/:id` ставит `` updatedAt: sql`now()` `` (`users.repository.ts:140`); PUT Wishlist следует этому образцу.

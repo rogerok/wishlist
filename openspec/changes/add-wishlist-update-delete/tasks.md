@@ -10,11 +10,11 @@
 
 ## 1. Общие части ошибок и окна
 
-- [ ] 1.1 Экспортировать проверку окна Occasion Date из `apps/api/src/modules/wishlists/schemas/wishlist.schema.ts` и
+- [x] 1.1 Экспортировать проверку окна Occasion Date из `apps/api/src/modules/wishlists/schemas/wishlist.schema.ts` и
       перевести на неё `CalendarDateInWindow` (design, решение 4). Сценарии окна create из основной спеки остаются
       зелёными; новый тест функции проверяет границы `2026-11-11` и `2031-11-12` при «сегодня» `2026-11-12`.
       Доказательство: `pnpm --filter @wishlist/api test src/modules/wishlists/schemas` проходит.
-- [ ] 1.2 Добавить `makeForbiddenBody` в `apps/api/src/infra/errors/problem-bodies.ts`, ошибки
+- [x] 1.2 Добавить `makeForbiddenBody` в `apps/api/src/infra/errors/problem-bodies.ts`, ошибки
       `WishlistForbiddenError` и `WishlistOccasionDateOutOfWindowError` в `wishlists.errors.ts`, problem-тела 403 и 400
       в `api/wishlists.api.errors.ts` (design, решение 5). Тест encode проверяет точный JSON тел из требований «Отказ
       не-владельцу в чужом Public Wishlist» и «Тело отказа по окну Occasion Date». Доказательство:
