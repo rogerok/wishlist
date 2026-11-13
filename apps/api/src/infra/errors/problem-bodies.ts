@@ -27,6 +27,7 @@ const makeProblemBody =
 
 const makeNotFound = makeProblemBody(404);
 const makeConflict = makeProblemBody(409);
+const makeForbidden = makeProblemBody(403);
 
 // Не найдено: id ресурса и instance — URI этого случая.
 export const makeNotFoundBody = <
@@ -46,3 +47,24 @@ export const makeConflictBody = <
   texts: Texts,
   fields: { readonly instance: Instance },
 ) => makeConflict(texts, fields);
+
+export const makeForbiddenBody = <
+  const Texts extends ProblemTexts,
+  Id extends Schema.Top,
+  Instance extends Schema.Top,
+>(
+  texts: Texts,
+  fields: { readonly id: Id; readonly instance: Instance },
+) => makeForbidden(texts, fields);
+
+const makeBadRequest = makeProblemBody(400);
+export const makeBadRequestBody = <
+  const Texts extends ProblemTexts,
+  Fields extends {
+    readonly errors: Schema.Top;
+    readonly instance: Schema.Top;
+  } & Schema.Struct.Fields,
+>(
+  texts: Texts,
+  fields: Fields,
+) => makeBadRequest(texts, fields);
