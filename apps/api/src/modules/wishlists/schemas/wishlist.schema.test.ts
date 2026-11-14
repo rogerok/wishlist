@@ -1,10 +1,11 @@
 import { describe, expect, it } from '@effect/vitest';
-import { Effect, Result, Schema } from 'effect';
+import { DateTime, Effect, Result, Schema } from 'effect';
 import * as TestClock from 'effect/testing/TestClock';
 
 import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
 import {
   CalendarDateInWindow,
+  checkDateWindow,
   WishlistOccasionDateInputSchema,
   WishlistOccasionDateSchema,
   WishlistSchema,
@@ -103,6 +104,26 @@ describe('CalendarDateInWindow', () => {
         }),
       ]);
     }),
+  );
+});
+
+// Окно при «сегодня» 2026-11-12: 2026-11-11 … 2031-11-12 включительно. Те же даты в сценариях окна PUT.
+const putNow = DateTime.makeUnsafe('2026-11-12T12:00:00Z');
+const putWindow = { min: '2026-11-11', max: '2031-11-12' };
+
+describe('checkDateWindow', () => {
+  it.each(['2026-11-11', '2026-11-12', '2031-11-12'])(
+    'returns %s for a date in the window',
+    (value) => {
+      expect(checkDateWindow(value, putNow)).toBeResultSuccess(value);
+    },
+  );
+
+  it.each(['2026-11-10', '2031-11-13', '2025-12-01'])(
+    'returns the window bounds for %s outside the window',
+    (value) => {
+      expect(checkDateWindow(value, putNow)).toEqual(Result.fail(putWindow));
+    },
   );
 });
 

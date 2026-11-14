@@ -150,6 +150,34 @@ sequenceDiagram
   R-->>C: 200, items ≤ 2 и nextCursor (base64url) или null
 </pre>
       <p class="diagram-caption">Keyset-пагинация: следующая страница начинается строго после последней показанной строки, поэтому вставка или удаление между запросами не сдвигает страницы. Лишняя третья строка в <code>LIMIT 3</code> только сообщает, есть ли следующая страница. Пресет <code>occasionDate</code> берёт <code>asOf</code> из Clock на первой странице и везёт его в курсоре. Полный обход без пропусков и повторов проверяет property-тест <a href="../../apps/api/src/modules/wishlists/repository/wishlists.repository.property.test.ts"><code>wishlists.repository.property.test.ts</code></a>.</p>
+<pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Клиент
+  participant WH as WishlistsHandlers
+  participant S as WishlistsService
+  participant DB as PostgreSQL
+  C->>WH: PUT /api/wishlists/:id, cookie, JSON
+  WH->>S: update(viewer, id, body)
+  S->>DB: BEGIN, SELECT WHERE id AND owner_id FOR UPDATE
+  alt своя строка
+    S->>S: новая ненулевая дата вне окна → 400
+    S->>DB: UPDATE … RETURNING, COMMIT
+    S-->>C: 200, JSON из 8 полей
+  else промах: resolveMiss
+    S->>DB: getReadableById(viewer, id)
+    S-->>C: виден (чужой Public) → 403, иначе 404
+  end
+  C->>WH: DELETE /api/wishlists/:id, cookie
+  WH->>S: deleteById(viewer, id)
+  S->>DB: DELETE WHERE id AND owner_id
+  alt удалена 1 строка
+    S-->>C: 204, пустое тело
+  else 0 строк: resolveMiss
+    S-->>C: чужой Public → 403, чужой Private, нет id или повтор → 404
+  end
+</pre>
+      <p class="diagram-caption">Менять и удалять может только владелец: условие <code>owner_id</code> стоит в самом SQL. Промах разбирает <code>resolveMiss</code>: чужой Public Wishlist клиент уже видит через GET, поэтому получает 403; чужой Private остаётся скрытым за 404. Окно Occasion Date для PUT проверяет service, а не Schema: только он знает сохранённую дату, и старая Past Occasion Date проходит без изменений. Спецификация: <a href="../../openspec/specs/wishlists/spec.md"><code>add-wishlist-update-delete</code></a>.</p>
       <table><thead><tr><th>Слой</th><th>Файл</th></tr></thead><tbody>
         <tr><td>Контракт</td><td><a href="../../apps/api/src/modules/wishlists/api/wishlists.api.ts"><code>api/wishlists.api.ts</code></a></td></tr>
         <tr><td>Handlers</td><td><a href="../../apps/api/src/modules/wishlists/handlers/wishlists.handlers.ts"><code>handlers/wishlists.handlers.ts</code></a></td></tr>

@@ -1,4 +1,5 @@
 import { DateTime, Effect, Schema, SchemaGetter } from 'effect';
+import { Result } from 'effect';
 
 import { CalendarDate } from '#infra/schemas/dates.schema.js';
 import {
@@ -30,6 +31,11 @@ export const WishlistVisibilitySchema = makeLiteralUnionSchema([
 
 export const WishlistOccasionDateSchema = Schema.NullOr(CalendarDate);
 
+export type OccasionDateWindow = { readonly max: string; readonly min: string };
+
+export const windowMessage = ({ min, max }: OccasionDateWindow) =>
+  `Expected a date between ${min} and ${max}`;
+
 const occasionDateWindow = (now: DateTime.Utc) => {
   const today = DateTime.startOf(now, 'day');
 
@@ -43,16 +49,22 @@ const occasionDateWindow = (now: DateTime.Utc) => {
   };
 };
 
+export const checkDateWindow = (value: string, now: DateTime.Utc) => {
+  const { min, max } = occasionDateWindow(now);
+
+  return value >= min && value <= max
+    ? Result.succeed(value)
+    : Result.fail({ min, max });
+};
+
 export const CalendarDateInWindow = CalendarDate.pipe(
   Schema.decode({
     decode: SchemaGetter.checkEffect((value: string) =>
       Effect.gen(function* () {
-        const { min, max } = occasionDateWindow(yield* DateTime.now);
-
-        return (
-          (value >= min && value <= max) ||
-          `Expected a date between ${min} and ${max}`
-        );
+        return Result.match(checkDateWindow(value, yield* DateTime.now), {
+          onSuccess: () => true,
+          onFailure: windowMessage,
+        });
       }),
     ),
     encode: SchemaGetter.passthrough(),

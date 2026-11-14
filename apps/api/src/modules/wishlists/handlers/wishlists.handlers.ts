@@ -63,6 +63,36 @@ export const WishlistsHandlersLive = HttpApiBuilder.group(
               ),
             );
           }),
+        )
+        .handle(WishlistsOperations.update, ({ payload, params }) =>
+          Effect.gen(function* () {
+            const { user } = yield* CurrentSession;
+
+            return yield* service.update(user.id, params.id, payload).pipe(
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: WishlistsOperations.update,
+                  meta: { targetWishlistId: params.id },
+                }),
+              ),
+            );
+          }),
+        )
+        .handle(WishlistsOperations.delete, ({ params }) =>
+          Effect.gen(function* () {
+            const { user } = yield* CurrentSession;
+
+            return yield* service.deleteById(user.id, params.id).pipe(
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: WishlistsOperations.delete,
+                  meta: { targetWishlistId: params.id },
+                }),
+              ),
+            );
+          }),
         );
     }),
 );
