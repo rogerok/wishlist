@@ -56,7 +56,7 @@
       «Невалидное поле», «Клиент передаёт серверные поля». Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/handlers/wishlists.handlers.test.ts` и
       `pnpm --filter @wishlist/api check-types` проходят.
-- [ ] 4.2 Покрыть отказы PUT без Session и при сбое persistence по образцу тестов create: «PUT и DELETE без
+- [x] 4.2 Покрыть отказы PUT без Session и при сбое persistence по образцу тестов create: «PUT и DELETE без
       действующей Session» для PUT, «Временный отказ изменения». Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/handlers/wishlists.handlers.test.ts` проходит.
 

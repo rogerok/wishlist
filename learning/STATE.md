@@ -7,8 +7,8 @@
 Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
 1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
 2.1–3.2 сделаны 2026-11-14: repository, `update` и `deleteById` service писал владелец; тесты, Shape и импорты — агент.
-4.1 сделана 2026-11-14: схема, эндпоинт и handler PUT писал владелец; HTTP-тесты — агент.
-Следующее действие: 4.2, PUT без Session и при сбое persistence → HTTP-тесты зелёные.
+4.1–4.2 сделаны 2026-11-14: схема, эндпоинт и handler PUT писал владелец; HTTP-тесты — агент.
+Следующее действие: 5.1, эндпоинт DELETE и handler → HTTP-тесты зелёные.
 
 ## Проверено
 
@@ -18,7 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 4.1: `check-types`, `lint` чистые; `test src/modules/wishlists` 273 passed, 2026-11-14.
+- 4.1–4.2: `check-types`, `lint` чистые; `wishlists.handlers.test.ts` 152 passed, 2026-11-14.
 
 ## Не проверено
 

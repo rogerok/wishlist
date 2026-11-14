@@ -1820,6 +1820,121 @@ describe('wishlists HTTP', () => {
               }),
             ),
         );
+
+        describe('Session и технические отказы PUT', () => {
+          it.effect.each(invalidCookies)(
+            'PUT без действующей Session: 401 $name, instance без query',
+            ({ cookie }) =>
+              atPutNow(
+                Effect.gen(function* () {
+                  const app = yield* acquireApp();
+                  const owner = yield* acquireUser('a@example.test');
+                  const before = yield* createWishlist(app, owner, minimalBody);
+
+                  const response = yield* send(
+                    app,
+                    new Request(
+                      `http://localhost/api/wishlists/${before.id}?source=test`,
+                      {
+                        method: 'PUT',
+                        headers: {
+                          'content-type': 'application/json',
+                          ...(cookie === undefined ? {} : { cookie }),
+                        },
+                        body: JSON.stringify({
+                          ...minimalBody,
+                          title: 'Gifts',
+                        }),
+                      },
+                    ),
+                  );
+
+                  yield* expectInvalidSession(
+                    response,
+                    `/api/wishlists/${before.id}`,
+                  );
+                  expect(yield* selectOnlyWishlist).toEqual(before);
+                }),
+              ),
+          );
+
+          it.effect('PUT с истекшей Session: 401, instance без query', () =>
+            atPutNow(
+              Effect.gen(function* () {
+                const sql = yield* SqlClient;
+                const app = yield* acquireApp();
+                const owner = yield* acquireUser('a@example.test');
+                const before = yield* createWishlist(app, owner, minimalBody);
+                yield* sql`
+                  UPDATE "public"."sessions"
+                  SET "created_at" = '2026-11-10T12:00:00Z',
+                    "expires_at" = '2026-11-11T12:00:00Z'
+                  WHERE "user_id" = ${owner.id}
+                `;
+
+                const response = yield* send(
+                  app,
+                  new Request(
+                    `http://localhost/api/wishlists/${before.id}?source=test`,
+                    {
+                      method: 'PUT',
+                      headers: {
+                        'content-type': 'application/json',
+                        cookie: owner.cookie,
+                      },
+                      body: JSON.stringify({ ...minimalBody, title: 'Gifts' }),
+                    },
+                  ),
+                );
+
+                yield* expectInvalidSession(
+                  response,
+                  `/api/wishlists/${before.id}`,
+                );
+                expect(yield* selectOnlyWishlist).toEqual(before);
+              }),
+            ),
+          );
+
+          it.effect('Временный отказ изменения: 503 без исходной ошибки', () =>
+            Effect.gen(function* () {
+              const owner = yield* acquireUser('a@example.test');
+              const id = '00000000-0000-4000-8000-0000000000aa';
+              const app = yield* acquireApp({
+                create: () => Effect.die(new Error('Unexpected call: create')),
+                getReadableById: unexpectedRead,
+                listOwn: unexpectedList,
+                update: () =>
+                  Effect.fail(
+                    new OperationFailed({
+                      reason: 'unavailable',
+                      source: 'wishlistsRepository',
+                      operation: 'update',
+                      cause: secret,
+                    }),
+                  ),
+                deleteById: unexpectedDelete,
+              });
+
+              const response = yield* putWishlist(
+                app,
+                owner.cookie,
+                id,
+                minimalBody,
+              );
+
+              expectProblem(response, 503);
+              const body = yield* readJson(response);
+              expect(body).toMatchObject({
+                code: 'SERVICE_UNAVAILABLE',
+                status: 503,
+                instance: `/api/wishlists/${id}`,
+                errorId: expect.stringMatching(/^[0-9a-f]{32}$/),
+              });
+              expect(JSON.stringify(body)).not.toContain(secret);
+            }),
+          );
+        });
       });
 
       describe('technical failures', () => {
