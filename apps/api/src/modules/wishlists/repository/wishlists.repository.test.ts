@@ -410,5 +410,75 @@ layer(repositoryLayer, { timeout: '60 seconds' })(
         }).pipe(Effect.scoped),
       );
     });
+
+    // Hard delete своей строки: условие `id AND owner_id`. true — строка удалена, false — своей строки с этим id нет.
+    describe('deleteOwnById', () => {
+      it.effect('deletes the own Wishlist and keeps the others', () =>
+        Effect.gen(function* () {
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('delete-own@example.test');
+          const otherId = yield* acquireUser('delete-own-other@example.test');
+          const target = yield* repository.create(ownerId, body());
+          const sibling = yield* repository.create(ownerId, body());
+          const foreign = yield* repository.create(
+            otherId,
+            body({ visibility: 'public' }),
+          );
+
+          const deleted = yield* repository.deleteOwnById(ownerId, target.id);
+
+          expect(deleted).toBe(true);
+          expect(yield* repository.getReadableById(ownerId, target.id)).toEqual(
+            Option.none(),
+          );
+          expect(
+            yield* repository.getReadableById(ownerId, sibling.id),
+          ).toEqual(Option.some(sibling));
+          expect(
+            yield* repository.getReadableById(otherId, foreign.id),
+          ).toEqual(Option.some(foreign));
+        }).pipe(Effect.scoped),
+      );
+
+      it.effect(
+        'returns false and keeps a Public Wishlist of another User',
+        () =>
+          Effect.gen(function* () {
+            const repository = yield* WishlistRepository;
+            const ownerId = yield* acquireUser('delete-owner@example.test');
+            const otherId = yield* acquireUser('delete-other@example.test');
+            const created = yield* repository.create(
+              ownerId,
+              body({ visibility: 'public' }),
+            );
+
+            const deleted = yield* repository.deleteOwnById(
+              otherId,
+              created.id,
+            );
+
+            expect(deleted).toBe(false);
+            expect(
+              yield* repository.getReadableById(ownerId, created.id),
+            ).toEqual(Option.some(created));
+          }).pipe(Effect.scoped),
+      );
+
+      it.effect('returns false on a repeated delete', () =>
+        Effect.gen(function* () {
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('delete-twice@example.test');
+          const created = yield* repository.create(ownerId, body());
+
+          yield* repository.deleteOwnById(ownerId, created.id);
+          const deletedAgain = yield* repository.deleteOwnById(
+            ownerId,
+            created.id,
+          );
+
+          expect(deletedAgain).toBe(false);
+        }).pipe(Effect.scoped),
+      );
+    });
   },
 );

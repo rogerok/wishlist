@@ -56,6 +56,10 @@ interface WishlistsRepositoryShape {
       'description' | 'occasionDate' | 'title' | 'visibility'
     >,
   ) => Effect.Effect<Option.Option<Wishlist>, OperationFailed>;
+  readonly deleteOwnById: (
+    ownerId: UserId,
+    id: WishlistId,
+  ) => Effect.Effect<boolean, OperationFailed>;
   readonly getReadableById: (
     viewerId: UserId,
     id: WishlistId,
@@ -67,7 +71,6 @@ interface WishlistsRepositoryShape {
     WithCursor<Wishlist, CreatedAtCursor | OccasionDateCursor | null>,
     OperationFailed
   >;
-
   readonly lockOwnById: (
     ownerId: UserId,
     id: WishlistId,
@@ -190,6 +193,27 @@ export const WishlistRepositoryLive = Layer.effect(
         return yield* getSomeOrNone(row, WishlistsOperations.update);
       });
 
-    return { create, getReadableById, listOwn, lockOwnById, update };
+    const deleteOwnById: WishlistsRepositoryShape['deleteOwnById'] = (
+      ownerId: UserId,
+      id: WishlistId,
+    ) =>
+      db
+        .deleteFrom('wishlists')
+        .where('id', '=', id)
+        .where('ownerId', '=', ownerId)
+        .returning('id')
+        .pipe(
+          Effect.mapError(mapRepoError(WishlistsOperations.delete)),
+          Effect.map((rows) => !!rows.length),
+        );
+
+    return {
+      create,
+      getReadableById,
+      listOwn,
+      lockOwnById,
+      update,
+      deleteOwnById,
+    };
   }),
 );

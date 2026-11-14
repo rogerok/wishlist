@@ -7,8 +7,8 @@
 Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
 1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
 Тело 400 окна несёт `id`, `min`, `max` полями (решение владельца, design 5).
-2.1 сделана 2026-11-14: `lockOwnById` и `update` писал владелец (практика), падающие тесты — агент.
-Следующее действие: 2.2, `delete` своей строки → тесты repository зелёные.
+2.1–2.2 сделаны 2026-11-14: `lockOwnById`, `update`, `deleteOwnById` писал владелец, падающие тесты — агент.
+Следующее действие: 3.1, `update` в service с `withTransaction` и `resolveMiss` → тесты service зелёные.
 
 ## Проверено
 
@@ -18,7 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 2.1: `check-types`, `lint` чистые; `wishlists.repository.test.ts` 19 passed, 2026-11-14.
+- 2.1–2.2: `check-types`, `lint` чистые; `wishlists.repository.test.ts` 22 passed, 2026-11-14.
 
 ## Не проверено
 

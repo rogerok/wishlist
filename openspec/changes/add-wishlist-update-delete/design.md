@@ -89,7 +89,7 @@ withTransaction:
 
 ### 3. DELETE одним запросом без транзакции
 
-`DELETE FROM wishlists WHERE id = :id AND owner_id = :viewer` и число удалённых строк. 0 → `resolveMiss`. Транзакция
+`DELETE FROM wishlists WHERE id = :id AND owner_id = :viewer RETURNING id`; ни одной строки → `resolveMiss`. Транзакция
 ничего не защищает: сравнивать перед удалением нечего, а гонка между DELETE и `getReadableById` меняет только код
 отказа (403 вместо 404 или наоборот), данные не трогает.
 

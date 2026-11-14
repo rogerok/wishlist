@@ -28,8 +28,9 @@
       `repository/wishlists.repository.test.ts`: блокировка и update чужой строки возвращают `None`и не меняют её;
       сценарий «updatedAt сдвигается, createdAt нет». Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/repository/wishlists.repository.test.ts` проходит.
-- [ ] 2.2 Добавить `delete` своей строки с числом удалённых строк (design, решение 3). Тесты: своя строка → 1 и
-      строки нет; чужая строка → 0 и строка на месте; повтор → 0. Доказательство:
+- [x] 2.2 Добавить `deleteOwnById` своей строки (design, решение 3); результат `true`, если строка удалена, по образцу
+      `deleteById` у users. Тесты: своя строка → `true` и строки нет; чужая строка → `false` и строка на месте;
+      повтор → `false`. Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/repository/wishlists.repository.test.ts` проходит.
 
 ## 3. Service
@@ -41,7 +42,7 @@
       `WishlistForbiddenError`, в том числе «PUT чужого Public Wishlist с датой вне окна»; B на Private A и
       отсутствующий UUID → `WishlistNotFoundError`, в том числе «PUT чужого Private Wishlist с датой вне окна»; во всех отказах строка не меняется. Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/service/wishlists.service.test.ts` проходит.
-- [ ] 3.2 Добавить `delete` в service: 0 удалённых строк → `resolveMiss`. Тесты: «Владелец удаляет Wishlist»,
+- [ ] 3.2 Добавить `delete` в service: `false` от `deleteOwnById` → `resolveMiss`. Тесты: «Владелец удаляет Wishlist»,
       `WishlistForbiddenError` для Public A, `WishlistNotFoundError` для Private A и «Повторный DELETE владельца».
       Доказательство: `pnpm --filter @wishlist/api test src/modules/wishlists/service/wishlists.service.test.ts`
       проходит.
