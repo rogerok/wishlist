@@ -464,6 +464,9 @@ const unexpectedList: WishlistsServiceShape['listOwn'] = () =>
 const unexpectedUpdate: WishlistsServiceShape['update'] = () =>
   Effect.die(new Error('Unexpected call: update'));
 
+const unexpectedDelete: WishlistsServiceShape['deleteById'] = () =>
+  Effect.die(new Error('Unexpected call: deleteById'));
+
 const secret = 'db-password=hunter2';
 
 const invalidLimits = [
@@ -1479,6 +1482,7 @@ describe('wishlists HTTP', () => {
                 getReadableById: unexpectedRead,
                 listOwn: unexpectedList,
                 update: unexpectedUpdate,
+                deleteById: unexpectedDelete,
               });
 
               const response = yield* postWishlist(
@@ -1532,6 +1536,7 @@ describe('wishlists HTTP', () => {
                   }),
                 ),
               update: unexpectedUpdate,
+              deleteById: unexpectedDelete,
             });
 
             const response = yield* listWishlists(app, owner.cookie);

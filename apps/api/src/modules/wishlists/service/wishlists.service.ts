@@ -46,6 +46,13 @@ export interface WishlistsServiceShape {
     | WishlistNotFoundError
     | WishlistOccasionDateOutOfWindowError
   >;
+  readonly deleteById: (
+    ownerId: UserId,
+    id: WishlistId,
+  ) => Effect.Effect<
+    void,
+    OperationFailed | WishlistForbiddenError | WishlistNotFoundError
+  >;
   readonly getReadableById: (
     viewerId: UserId,
     id: WishlistId,
@@ -133,6 +140,15 @@ export const WishlistsServiceLive = Layer.effect(
           ),
         );
 
-    return { create, getReadableById, listOwn, update };
+    const deleteById: WishlistsServiceShape['deleteById'] = (ownerId, id) =>
+      Effect.gen(function* () {
+        const deleted = yield* repository.deleteOwnById(ownerId, id);
+
+        if (!deleted) {
+          return yield* resolveMiss(ownerId, id);
+        }
+      });
+
+    return { create, getReadableById, listOwn, update, deleteById };
   }),
 );

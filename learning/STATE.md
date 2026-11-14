@@ -6,9 +6,9 @@
 
 Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
 1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
-2.1–3.1 сделаны 2026-11-14: repository и `update` service писал владелец, тесты, контракт Shape и импорты — агент.
+2.1–3.2 сделаны 2026-11-14: repository, `update` и `deleteById` service писал владелец; тесты, Shape и импорты — агент.
 Ошибки 3.1: окно проверяло сохранённую дату; отказ `return` вместо `return yield*` (поймал `check-types`).
-Следующее действие: 3.2, `delete` в service через `resolveMiss` → тесты service зелёные.
+Следующее действие: 4.1, `UpdateWishlistBodySchema`, эндпоинт PUT и handler → HTTP-тесты зелёные.
 
 ## Проверено
 
@@ -18,7 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 3.1: `check-types`, `lint` чистые; `test src/modules/wishlists` зелёный; 2 мутанта service падают, 2026-11-14.
+- 3.1–3.2: `check-types`, `lint` чистые; `test src/modules/wishlists` 236 passed; 2 мутанта service падают, 2026-11-14.
 
 ## Не проверено
 

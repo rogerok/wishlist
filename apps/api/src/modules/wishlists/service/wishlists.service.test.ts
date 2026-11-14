@@ -519,4 +519,76 @@ layer(serviceLayer, { timeout: '60 seconds' })('WishlistsService', (it) => {
         ),
     );
   });
+
+  // Задача 3.2: hard delete своего Wishlist; промах разрешает resolveMiss, как у update.
+  describe('deleteById', () => {
+    it.effect('Владелец удаляет Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const target = yield* service.create(ownerId, body());
+        const sibling = yield* service.create(ownerId, body());
+        const foreign = yield* service.create(otherId, body());
+
+        yield* service.deleteById(ownerId, target.id);
+
+        const ids = (yield* selectWishlists).map((row) => row.id);
+        expect(ids).toHaveLength(2);
+        expect(ids).toEqual(expect.arrayContaining([sibling.id, foreign.id]));
+      }),
+    );
+
+    it.effect('DELETE чужого Public Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const created = yield* service.create(
+          ownerId,
+          body({ visibility: 'public' }),
+        );
+        const before = yield* selectWishlists;
+
+        const error = yield* Effect.flip(
+          service.deleteById(otherId, created.id),
+        );
+
+        expect(error).toEqual(new WishlistForbiddenError({ id: created.id }));
+        expect(yield* selectWishlists).toEqual(before);
+      }),
+    );
+
+    it.effect('DELETE чужого Private Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const created = yield* service.create(ownerId, body());
+        const before = yield* selectWishlists;
+
+        const error = yield* Effect.flip(
+          service.deleteById(otherId, created.id),
+        );
+
+        expect(error).toEqual(new WishlistNotFoundError({ id: created.id }));
+        expect(yield* selectWishlists).toEqual(before);
+      }),
+    );
+
+    it.effect('Повторный DELETE владельца', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const created = yield* service.create(ownerId, body());
+        yield* service.deleteById(ownerId, created.id);
+
+        const error = yield* Effect.flip(
+          service.deleteById(ownerId, created.id),
+        );
+
+        expect(error).toEqual(new WishlistNotFoundError({ id: created.id }));
+      }),
+    );
+  });
 });

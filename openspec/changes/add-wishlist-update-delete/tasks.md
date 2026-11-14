@@ -42,7 +42,7 @@
       `WishlistForbiddenError`, в том числе «PUT чужого Public Wishlist с датой вне окна»; B на Private A и
       отсутствующий UUID → `WishlistNotFoundError`, в том числе «PUT чужого Private Wishlist с датой вне окна»; во всех отказах строка не меняется. Доказательство:
       `pnpm --filter @wishlist/api test src/modules/wishlists/service/wishlists.service.test.ts` проходит.
-- [ ] 3.2 Добавить `delete` в service: `false` от `deleteOwnById` → `resolveMiss`. Тесты: «Владелец удаляет Wishlist»,
+- [x] 3.2 Добавить `delete` в service: `false` от `deleteOwnById` → `resolveMiss`. Тесты: «Владелец удаляет Wishlist»,
       `WishlistForbiddenError` для Public A, `WishlistNotFoundError` для Private A и «Повторный DELETE владельца».
       Доказательство: `pnpm --filter @wishlist/api test src/modules/wishlists/service/wishlists.service.test.ts`
       проходит.
