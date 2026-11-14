@@ -35,7 +35,7 @@
 
 ## 3. Service
 
-- [ ] 3.1 Добавить в `WishlistsService` развилку промаха `resolveMiss` и `update` в `db.withTransaction` с проверкой
+- [x] 3.1 Добавить в `WishlistsService` развилку промаха `resolveMiss` и `update` в `db.withTransaction` с проверкой
       окна только для новой ненулевой даты (design, решения 1, 2). Тесты в `service/wishlists.service.test.ts` под
       `TestClock` на `2026-11-12T12:00:00Z`: «Правка Wishlist с Past Occasion Date», «Сброс Past Occasion Date», «Новая
       дата в прошлом году», «Пять лет плюс один день», «Границы окна принимаются»; B на Public A →

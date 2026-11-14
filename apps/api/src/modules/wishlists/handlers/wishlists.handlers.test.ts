@@ -461,6 +461,9 @@ const unexpectedRead: WishlistsServiceShape['getReadableById'] = () =>
 const unexpectedList: WishlistsServiceShape['listOwn'] = () =>
   Effect.die(new Error('Unexpected call: listOwn'));
 
+const unexpectedUpdate: WishlistsServiceShape['update'] = () =>
+  Effect.die(new Error('Unexpected call: update'));
+
 const secret = 'db-password=hunter2';
 
 const invalidLimits = [
@@ -1475,6 +1478,7 @@ describe('wishlists HTTP', () => {
                 create: () => failure,
                 getReadableById: unexpectedRead,
                 listOwn: unexpectedList,
+                update: unexpectedUpdate,
               });
 
               const response = yield* postWishlist(
@@ -1527,6 +1531,7 @@ describe('wishlists HTTP', () => {
                     cause: secret,
                   }),
                 ),
+              update: unexpectedUpdate,
             });
 
             const response = yield* listWishlists(app, owner.cookie);

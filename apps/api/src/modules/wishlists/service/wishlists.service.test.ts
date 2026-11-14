@@ -1,6 +1,7 @@
 import { describe, expect, layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { SqlClient } from 'effect/sql/SqlClient';
+import * as TestClock from 'effect/testing/TestClock';
 
 import type { CreateWishlistBody } from '#modules/wishlists/schemas/wishlist-create.schema.js';
 
@@ -9,7 +10,11 @@ import { TestDatabaseLive } from '#infra/db/test-database.layer.js';
 import { UserIdSchema } from '#modules/users/schemas/user.schema.js';
 import { WishlistIdSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
 import { WishlistsService } from '#modules/wishlists/service/wishlists.service.js';
-import { WishlistNotFoundError } from '#modules/wishlists/wishlists.errors.js';
+import {
+  WishlistForbiddenError,
+  WishlistNotFoundError,
+  WishlistOccasionDateOutOfWindowError,
+} from '#modules/wishlists/wishlists.errors.js';
 import { WishlistsModuleLive } from '#modules/wishlists/wishlists.module.js';
 
 const serviceLayer = WishlistsModuleLive.pipe(
@@ -109,6 +114,24 @@ const readers = [
     byOwner: false,
   },
 ] as const;
+
+// Прямой SQL: create не пропустит Past Occasion Date.
+const insertWithDate = (ownerId: string, occasionDate: string | null) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient;
+    const [row] = yield* sql<{ id: string }>`
+      INSERT INTO "public"."wishlists" ("owner_id", "title", "occasion_date")
+      VALUES (${ownerId}, 'Books', ${occasionDate})
+      RETURNING "id"
+    `;
+
+    return WishlistIdSchema.make(
+      row?.id ?? (yield* Effect.die('INSERT did not return the id')),
+    );
+  }).pipe(Effect.orDie);
+
+const put = (occasionDate: string | null) =>
+  body({ title: 'Gifts', occasionDate });
 
 layer(serviceLayer, { timeout: '60 seconds' })('WishlistsService', (it) => {
   describe('create', () => {
@@ -290,6 +313,210 @@ layer(serviceLayer, { timeout: '60 seconds' })('WishlistsService', (it) => {
 
         expect(page.items.map((wishlist) => wishlist.id)).toEqual([high, low]);
       }),
+    );
+  });
+
+  // Шаг 1 задачи 3.1: владение. Окно Occasion Date проверяет шаг 2, здесь даты не меняются.
+  describe('update', () => {
+    const changes = body({
+      title: 'Gifts',
+      description: 'Art',
+      visibility: 'public',
+    });
+
+    it.effect('Владелец меняет поля', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const created = yield* service.create(ownerId, body());
+
+        const updated = yield* service.update(ownerId, created.id, changes);
+
+        expect(updated).toEqual({
+          ...created,
+          ...changes,
+          updatedAt: expect.any(Date),
+        });
+        expect(yield* selectWishlists).toEqual([
+          {
+            id: created.id,
+            ownerId,
+            title: 'Gifts',
+            description: 'Art',
+            occasionDate: null,
+            visibility: 'public',
+          },
+        ]);
+      }),
+    );
+
+    it.effect('PUT чужого Public Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const created = yield* service.create(
+          ownerId,
+          body({ visibility: 'public' }),
+        );
+        const before = yield* selectWishlists;
+
+        const error = yield* Effect.flip(
+          service.update(otherId, created.id, changes),
+        );
+
+        expect(error).toEqual(new WishlistForbiddenError({ id: created.id }));
+        expect(yield* selectWishlists).toEqual(before);
+      }),
+    );
+
+    it.effect('PUT чужого Private Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const ownerId = yield* acquireUser('a@example.test');
+        const otherId = yield* acquireUser('b@example.test');
+        const created = yield* service.create(ownerId, body());
+        const before = yield* selectWishlists;
+
+        const error = yield* Effect.flip(
+          service.update(otherId, created.id, changes),
+        );
+
+        expect(error).toEqual(new WishlistNotFoundError({ id: created.id }));
+        expect(yield* selectWishlists).toEqual(before);
+      }),
+    );
+
+    it.effect('PUT отсутствующего Wishlist', () =>
+      Effect.gen(function* () {
+        const service = yield* WishlistsService;
+        const viewerId = yield* acquireUser('a@example.test');
+        const id = WishlistIdSchema.make(
+          '00000000-0000-4000-8000-0000000000aa',
+        );
+
+        const error = yield* Effect.flip(service.update(viewerId, id, changes));
+
+        expect(error).toEqual(new WishlistNotFoundError({ id }));
+      }),
+    );
+  });
+
+  // Шаг 2 задачи 3.1: окно проверяется только для новой ненулевой даты, отличной от сохранённой.
+  // «Сегодня» 2026-11-12, окно 2026-11-11 … 2031-11-12.
+  describe('update: Occasion Date window', () => {
+    const now = Date.parse('2026-11-12T12:00:00Z');
+    const window = { min: '2026-11-11', max: '2031-11-12' };
+
+    const atNow = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      TestClock.setTime(now).pipe(
+        Effect.andThen(effect),
+        Effect.provide(TestClock.layer()),
+      );
+
+    it.effect('Правка Wishlist с Past Occasion Date', () =>
+      atNow(
+        Effect.gen(function* () {
+          const service = yield* WishlistsService;
+          const ownerId = yield* acquireUser('a@example.test');
+          const id = yield* insertWithDate(ownerId, '2025-12-01');
+
+          const updated = yield* service.update(ownerId, id, put('2025-12-01'));
+
+          expect(updated).toMatchObject({
+            title: 'Gifts',
+            occasionDate: '2025-12-01',
+          });
+        }),
+      ),
+    );
+
+    it.effect('Сброс Past Occasion Date', () =>
+      atNow(
+        Effect.gen(function* () {
+          const service = yield* WishlistsService;
+          const ownerId = yield* acquireUser('a@example.test');
+          const id = yield* insertWithDate(ownerId, '2025-12-01');
+
+          const updated = yield* service.update(ownerId, id, put(null));
+
+          expect(updated.occasionDate).toBeNull();
+        }),
+      ),
+    );
+
+    it.effect.each([
+      { name: 'Новая дата в прошлом году', stored: null, sent: '2025-12-01' },
+      {
+        name: 'Пять лет плюс один день',
+        stored: '2027-01-15',
+        sent: '2031-11-13',
+      },
+      { name: 'Позавчера', stored: null, sent: '2026-11-10' },
+    ])('$name', ({ stored, sent }) =>
+      atNow(
+        Effect.gen(function* () {
+          const service = yield* WishlistsService;
+          const ownerId = yield* acquireUser('a@example.test');
+          const id = yield* insertWithDate(ownerId, stored);
+          const before = yield* selectWishlists;
+
+          const error = yield* Effect.flip(
+            service.update(ownerId, id, put(sent)),
+          );
+
+          expect(error).toEqual(
+            new WishlistOccasionDateOutOfWindowError({ id, ...window }),
+          );
+          expect(yield* selectWishlists).toEqual(before);
+        }),
+      ),
+    );
+
+    it.effect.each(['2026-11-11', '2031-11-12'])(
+      'Граница окна %s принимается',
+      (sent) =>
+        atNow(
+          Effect.gen(function* () {
+            const service = yield* WishlistsService;
+            const ownerId = yield* acquireUser('a@example.test');
+            const id = yield* insertWithDate(ownerId, null);
+
+            const updated = yield* service.update(ownerId, id, put(sent));
+
+            expect(updated.occasionDate).toBe(sent);
+          }),
+        ),
+    );
+
+    // Владение проверяется раньше окна: B не узнаёт ничего о дате чужого Wishlist.
+    it.effect.each([
+      { visibility: 'public', expected: 'forbidden' },
+      { visibility: 'private', expected: 'notFound' },
+    ] as const)(
+      'PUT чужого $visibility Wishlist с датой вне окна',
+      ({ visibility, expected }) =>
+        atNow(
+          Effect.gen(function* () {
+            const service = yield* WishlistsService;
+            const ownerId = yield* acquireUser('a@example.test');
+            const otherId = yield* acquireUser('b@example.test');
+            const created = yield* service.create(
+              ownerId,
+              body({ visibility }),
+            );
+
+            const error = yield* Effect.flip(
+              service.update(otherId, created.id, put('2025-12-01')),
+            );
+
+            expect(error).toEqual(
+              expected === 'forbidden'
+                ? new WishlistForbiddenError({ id: created.id })
+                : new WishlistNotFoundError({ id: created.id }),
+            );
+          }),
+        ),
     );
   });
 });
