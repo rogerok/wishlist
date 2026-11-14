@@ -71,7 +71,7 @@
 
 ## 6. Интеграция
 
-- [ ] 6.1 Smoke на настоящем сервере и локальной БД (конфиг `api-db-5434`): signup A и B; A создаёт Public и Private
+- [x] 6.1 Smoke на настоящем сервере и локальной БД (конфиг `api-db-5434`): signup A и B; A создаёт Public и Private
       Wishlist; A меняет title через PUT → 200; B делает PUT и DELETE на Public A → 403, на Private A → 404; A удаляет
       Wishlist → 204, повторный DELETE → 404. Smoke-данные удалить. Добавить PUT и DELETE в
       `learning/reference/system-map.html`. Доказательство: статусы совпадают с ожидаемыми;
