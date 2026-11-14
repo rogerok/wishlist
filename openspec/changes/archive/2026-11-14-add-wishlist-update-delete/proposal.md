@@ -2,7 +2,7 @@
 
 ## Why
 
-Шаги 3.5 и 3.6 [roadmap](../../../learning/roadmap.md#3-owner-only-wishlists): владелец пока может создать Wishlist,
+Шаги 3.5 и 3.6 [roadmap](../../../../learning/roadmap.md#3-owner-only-wishlists): владелец пока может создать Wishlist,
 но не может исправить его поля или удалить его. Мутация должна затрагивать только Wishlist владельца, а ответ
 не-владельцу не должен раскрывать существование чужого Private Wishlist. Решения по контракту владелец принял
 2026-11-12, умолчания подтвердил в тот же день.
@@ -10,7 +10,7 @@
 ## What Changes
 
 - Новый маршрут `PUT /api/wishlists/:id` с полным телом по
-  [ADR-0007](../../../docs/adr/0007-request-body-contains-every-field.md): `title`, `description`, `occasionDate`,
+  [ADR-0007](../../../../docs/adr/0007-request-body-contains-every-field.md): `title`, `description`, `occasionDate`,
   `visibility`. Ответ 200 с сохранённым Wishlist из 8 полей. `visibility` меняется в обе стороны.
 - Новый маршрут `DELETE /api/wishlists/:id`: hard delete, ответ 204 без тела. Повторный DELETE владельца даёт 404.
 - Отказ не-владельцу на PUT и DELETE: чужой Public Wishlist → 403 `WISHLIST_FORBIDDEN` с `id` и `instance`; чужой

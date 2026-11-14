@@ -177,7 +177,7 @@ sequenceDiagram
     S-->>C: чужой Public → 403, чужой Private, нет id или повтор → 404
   end
 </pre>
-      <p class="diagram-caption">Менять и удалять может только владелец: условие <code>owner_id</code> стоит в самом SQL. Промах разбирает <code>resolveMiss</code>: чужой Public Wishlist клиент уже видит через GET, поэтому получает 403; чужой Private остаётся скрытым за 404. Окно Occasion Date для PUT проверяет service, а не Schema: только он знает сохранённую дату, и старая Past Occasion Date проходит без изменений. Спецификация: <a href="../../openspec/changes/add-wishlist-update-delete/specs/wishlists/spec.md"><code>add-wishlist-update-delete</code></a>.</p>
+      <p class="diagram-caption">Менять и удалять может только владелец: условие <code>owner_id</code> стоит в самом SQL. Промах разбирает <code>resolveMiss</code>: чужой Public Wishlist клиент уже видит через GET, поэтому получает 403; чужой Private остаётся скрытым за 404. Окно Occasion Date для PUT проверяет service, а не Schema: только он знает сохранённую дату, и старая Past Occasion Date проходит без изменений. Спецификация: <a href="../../openspec/specs/wishlists/spec.md"><code>add-wishlist-update-delete</code></a>.</p>
       <table><thead><tr><th>Слой</th><th>Файл</th></tr></thead><tbody>
         <tr><td>Контракт</td><td><a href="../../apps/api/src/modules/wishlists/api/wishlists.api.ts"><code>api/wishlists.api.ts</code></a></td></tr>
         <tr><td>Handlers</td><td><a href="../../apps/api/src/modules/wishlists/handlers/wishlists.handlers.ts"><code>handlers/wishlists.handlers.ts</code></a></td></tr>

@@ -6,8 +6,8 @@
 
 Шаг: 3.5–3.6 закрыты; изменение `add-wishlist-update-delete` выполнено полностью (10 из 10 задач).
 Код repository, service, эндпоинтов и handler PUT/DELETE писал владелец; тесты и карту системы писал агент.
-Следующее действие: архивировать `add-wishlist-update-delete` и открыть PR ветки `feat/wishlist-update-delete` →
-PR смёрджен, `openspec/specs/wishlists/spec.md` содержит update и delete. После этого 3.7, vertical smoke.
+Изменение заархивировано 2026-11-14: `openspec/changes/archive/2026-11-14-add-wishlist-update-delete`.
+Следующее действие: открыть PR ветки `feat/wishlist-update-delete` → PR смёрджен в `main`. Затем 3.7, vertical smoke.
 
 ## Проверено
 
