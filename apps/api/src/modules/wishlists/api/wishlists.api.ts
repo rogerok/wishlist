@@ -8,7 +8,11 @@ import {
   wishlistsCollectionPath,
   wishlistsGroupIdentifier,
 } from '#modules/wishlists/api/wishlists.api.constants.js';
-import { WishlistNotFoundProblem } from '#modules/wishlists/api/wishlists.api.errors.js';
+import {
+  WishlistForbiddenProblem,
+  WishlistNotFoundProblem,
+  WishlistOccasionDateOutOfWindowProblem,
+} from '#modules/wishlists/api/wishlists.api.errors.js';
 import {
   CreateWishlistBodySchema,
   CreateWishlistResponseSchema,
@@ -17,6 +21,10 @@ import { WishlistsOperations } from '#modules/wishlists/schemas/wishlist-operati
 import { WishlistResponseSchema } from '#modules/wishlists/schemas/wishlist-response.schema.js';
 import { WishlistIdSchema } from '#modules/wishlists/schemas/wishlist.schema.js';
 
+import {
+  UpdateWishlistBodySchema,
+  UpdateWishlistResponseSchema,
+} from '../schemas/wishlist-update.schema.js';
 import {
   WishlistCursorCodec,
   WishlistQuerySchema,
@@ -42,6 +50,17 @@ export const wishlistsGroup = HttpApiGroup.make(wishlistsGroupIdentifier)
       query: WishlistQuerySchema,
       success: makePageSchema(WishlistResponseSchema, WishlistCursorCodec),
       error: technicalHttpErrors,
+    }),
+    HttpApiEndpoint.put(WishlistsOperations.update, wishlistsByIdPath, {
+      params: { id: WishlistIdSchema },
+      payload: UpdateWishlistBodySchema,
+      success: UpdateWishlistResponseSchema,
+      error: [
+        ...technicalHttpErrors,
+        WishlistNotFoundProblem,
+        WishlistForbiddenProblem,
+        WishlistOccasionDateOutOfWindowProblem,
+      ],
     }),
   )
   .middleware(SessionAuthentication);

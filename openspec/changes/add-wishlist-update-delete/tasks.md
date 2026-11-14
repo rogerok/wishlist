@@ -49,7 +49,7 @@
 
 ## 4. HTTP PUT
 
-- [ ] 4.1 Добавить `UpdateWishlistBodySchema` (design, решение 6) и эндпоинт `PUT /api/wishlists/:id` с handler.
+- [x] 4.1 Добавить `UpdateWishlistBodySchema` (design, решение 6) и эндпоинт `PUT /api/wishlists/:id` с handler.
       HTTP-тесты в `handlers/wishlists.handlers.test.ts`: «Владелец меняет все поля», «Public становится Private»,
       «Другие Wishlist не меняются», «Ответ PUT соответствует записи», «Тело отказа», «PUT чужого Public Wishlist»,
       «PUT чужого Private Wishlist», «Одинаковое тело 404 для одного id при PUT», «Невалидный UUID» для PUT, матрица

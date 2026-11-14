@@ -7,8 +7,8 @@
 Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
 1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
 2.1–3.2 сделаны 2026-11-14: repository, `update` и `deleteById` service писал владелец; тесты, Shape и импорты — агент.
-Ошибки 3.1: окно проверяло сохранённую дату; отказ `return` вместо `return yield*` (поймал `check-types`).
-Следующее действие: 4.1, `UpdateWishlistBodySchema`, эндпоинт PUT и handler → HTTP-тесты зелёные.
+4.1 сделана 2026-11-14: схема, эндпоинт и handler PUT писал владелец; HTTP-тесты — агент.
+Следующее действие: 4.2, PUT без Session и при сбое persistence → HTTP-тесты зелёные.
 
 ## Проверено
 
@@ -18,7 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 3.1–3.2: `check-types`, `lint` чистые; `test src/modules/wishlists` 236 passed; 2 мутанта service падают, 2026-11-14.
+- 4.1: `check-types`, `lint` чистые; `test src/modules/wishlists` 273 passed, 2026-11-14.
 
 ## Не проверено
 
@@ -28,11 +28,11 @@
 
 ## Заметки
 
+- Ошибки 3.1–4.1: окно по сохранённой дате; `return` ошибки без `yield*`; путь коллекции вместо `:id`; окно в Schema PUT.
 - Порт 5432 занят `cms-api-postgres-1` (rtdlab), 5433 — другим процессом. Smoke шёл на 5434 через конфиг
   `api-db-5434` в `.claude/launch.json`: он подменяет порт в `POSTGRES_URL`, `.env.development` не меняется.
 - Ошибки 5.1, которые `check-types` не ловит: `direction` перепутан между пресетами (дважды), ключ без `id`,
   `cursorOf` со spread всей строки, пропущенный `.$call(keyset.apply)`.
-- Объяснение двух `keyPart` на одну колонку сработало через JS: `map` (два `CASE` на строку) → `sort` с `||`.
 - Фабрика с выводом типа курсора невозможна: TypeScript не выводит `Cursor` внутрь вложенных вызовов `keyPart`
   (три черновика, 2026-11-01). Поэтому псевдоним `WishlistSort<Cursor, Spec>`.
 - vtsls в Zed показывал `any`: в `typescript` 7.0.2 нет `tsserver.js`, vtsls берёт встроенный 5.x.

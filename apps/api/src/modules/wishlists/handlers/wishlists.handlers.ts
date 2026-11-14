@@ -63,6 +63,21 @@ export const WishlistsHandlersLive = HttpApiBuilder.group(
               ),
             );
           }),
+        )
+        .handle(WishlistsOperations.update, ({ payload, params }) =>
+          Effect.gen(function* () {
+            const { user } = yield* CurrentSession;
+
+            return yield* service.update(user.id, params.id, payload).pipe(
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: WishlistsOperations.update,
+                  meta: { targetWishlistId: params.id },
+                }),
+              ),
+            );
+          }),
         );
     }),
 );
