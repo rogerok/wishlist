@@ -23,7 +23,7 @@
 
 ## 2. Repository
 
-- [ ] 2.1 Добавить в `WishlistRepository` блокировку своей строки (`SELECT … WHERE id AND owner_id FOR UPDATE`) и
+- [x] 2.1 Добавить в `WishlistRepository` блокировку своей строки (`SELECT … WHERE id AND owner_id FOR UPDATE`) и
       `update` (`UPDATE … WHERE id AND owner_id … RETURNING`, `` updatedAt: sql`now()` ``) по design, решение 2. Тесты в
       `repository/wishlists.repository.test.ts`: блокировка и update чужой строки возвращают `None`и не меняют её;
       сценарий «updatedAt сдвигается, createdAt нет». Доказательство:

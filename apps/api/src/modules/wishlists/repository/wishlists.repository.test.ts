@@ -242,5 +242,173 @@ layer(repositoryLayer, { timeout: '60 seconds' })(
           }).pipe(Effect.scoped),
       );
     });
+
+    // Блокировка своей строки перед update. Условие `id AND owner_id`: чужая строка не блокируется и не видна,
+    // даже Public. Сама блокировка (FOR UPDATE) держится до конца транзакции service, здесь проверяется выбор строки.
+    describe('lockOwnById', () => {
+      const lockMatrix = [
+        {
+          name: 'the owner locks a private',
+          visibility: 'private',
+          locker: 'owner',
+          found: true,
+        },
+        {
+          name: 'the owner locks a public',
+          visibility: 'public',
+          locker: 'owner',
+          found: true,
+        },
+        {
+          name: 'another User locks a public',
+          visibility: 'public',
+          locker: 'other',
+          found: false,
+        },
+        {
+          name: 'another User locks a private',
+          visibility: 'private',
+          locker: 'other',
+          found: false,
+        },
+      ] as const;
+
+      it.effect.each(lockMatrix)(
+        '$name Wishlist → found: $found',
+        ({ visibility, locker, found }) =>
+          Effect.gen(function* () {
+            const repository = yield* WishlistRepository;
+            const ownerId = yield* acquireUser(
+              `lock-owner-${visibility}-${locker}@example.test`,
+            );
+            const otherId = yield* acquireUser(
+              `lock-other-${visibility}-${locker}@example.test`,
+            );
+            const created = yield* repository.create(
+              ownerId,
+              body({ visibility }),
+            );
+
+            const result = yield* repository.lockOwnById(
+              locker === 'owner' ? ownerId : otherId,
+              created.id,
+            );
+
+            expect(result).toEqual(
+              found ? Option.some(created) : Option.none(),
+            );
+          }).pipe(Effect.scoped),
+      );
+
+      it.effect('returns none for an id that does not exist', () =>
+        Effect.gen(function* () {
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('lock-missing@example.test');
+
+          const result = yield* repository.lockOwnById(
+            ownerId,
+            WishlistIdSchema.make('00000000-0000-4000-8000-0000000000ff'),
+          );
+
+          expect(result).toEqual(Option.none());
+        }).pipe(Effect.scoped),
+      );
+    });
+
+    // Update своей строки: условие `id AND owner_id`, все четыре поля из тела, `updatedAt` — время PostgreSQL.
+    describe('update', () => {
+      const changes = body({
+        title: 'Gifts',
+        description: 'Art',
+        occasionDate: '2027-01-15',
+        visibility: 'public',
+      });
+
+      it.effect('replaces the four fields of the own Wishlist', () =>
+        Effect.gen(function* () {
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('update-own@example.test');
+          const created = yield* repository.create(ownerId, body());
+
+          const result = yield* repository.update(ownerId, created.id, changes);
+
+          expect(result).toEqual(
+            Option.some({
+              ...created,
+              ...changes,
+              updatedAt: expect.any(Date),
+            }),
+          );
+          expect(
+            yield* repository.getReadableById(ownerId, created.id),
+          ).toEqual(result);
+        }).pipe(Effect.scoped),
+      );
+
+      it.effect(
+        'returns none and keeps a Public Wishlist of another User',
+        () =>
+          Effect.gen(function* () {
+            const repository = yield* WishlistRepository;
+            const ownerId = yield* acquireUser('update-owner@example.test');
+            const otherId = yield* acquireUser('update-other@example.test');
+            const created = yield* repository.create(
+              ownerId,
+              body({ visibility: 'public' }),
+            );
+
+            const result = yield* repository.update(
+              otherId,
+              created.id,
+              changes,
+            );
+
+            expect(result).toEqual(Option.none());
+            expect(
+              yield* repository.getReadableById(ownerId, created.id),
+            ).toEqual(Option.some(created));
+          }).pipe(Effect.scoped),
+      );
+
+      it.effect('returns none for an id that does not exist', () =>
+        Effect.gen(function* () {
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('update-missing@example.test');
+
+          const result = yield* repository.update(
+            ownerId,
+            WishlistIdSchema.make('00000000-0000-4000-8000-0000000000ff'),
+            changes,
+          );
+
+          expect(result).toEqual(Option.none());
+        }).pipe(Effect.scoped),
+      );
+
+      // Сценарий спеки «updatedAt сдвигается, createdAt нет».
+      it.effect('moves updatedAt forward and keeps createdAt', () =>
+        Effect.gen(function* () {
+          const sql = yield* SqlClient;
+          const repository = yield* WishlistRepository;
+          const ownerId = yield* acquireUser('update-time@example.test');
+          const past = new Date('2026-01-01T00:00:00.000Z');
+          const [row] = yield* sql<{ id: string }>`
+            INSERT INTO "public"."wishlists" ("owner_id", "title", "created_at", "updated_at")
+            VALUES (${ownerId}, 'Books', ${past.toISOString()}, ${past.toISOString()})
+            RETURNING "id"
+          `;
+
+          const result = yield* repository.update(
+            ownerId,
+            WishlistIdSchema.make(row?.id ?? ''),
+            changes,
+          );
+
+          const updated = Option.getOrThrow(result);
+          expect(updated.createdAt).toEqual(past);
+          expect(updated.updatedAt.getTime()).toBeGreaterThan(past.getTime());
+        }).pipe(Effect.scoped),
+      );
+    });
   },
 );

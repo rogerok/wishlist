@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, Option, Schema } from 'effect';
+import { sql } from 'kysely';
 
 import type { OperationFailed } from '#infra/errors/operation-failed.js';
 import type { PageCursor, ParamSpec } from '#infra/pagination/keyset.js';
@@ -47,6 +48,14 @@ interface WishlistsRepositoryShape {
     ownerId: UserId,
     input: CreateWishlistBody,
   ) => Effect.Effect<Wishlist, OperationFailed>;
+  readonly update: (
+    ownerId: UserId,
+    id: WishlistId,
+    input: Pick<
+      Wishlist,
+      'description' | 'occasionDate' | 'title' | 'visibility'
+    >,
+  ) => Effect.Effect<Option.Option<Wishlist>, OperationFailed>;
   readonly getReadableById: (
     viewerId: UserId,
     id: WishlistId,
@@ -58,6 +67,11 @@ interface WishlistsRepositoryShape {
     WithCursor<Wishlist, CreatedAtCursor | OccasionDateCursor | null>,
     OperationFailed
   >;
+
+  readonly lockOwnById: (
+    ownerId: UserId,
+    id: WishlistId,
+  ) => Effect.Effect<Option.Option<Wishlist>, OperationFailed>;
 }
 
 export class WishlistRepository extends Context.Service<
@@ -137,6 +151,45 @@ export const WishlistRepositoryLive = Layer.effect(
         return yield* listPage(viewerId, wishlistsSort.occasionDate, page);
       });
 
-    return { create, getReadableById, listOwn };
+    const lockOwnById: WishlistsRepositoryShape['lockOwnById'] = (
+      ownerId,
+      id,
+    ) =>
+      Effect.gen(function* () {
+        const [row] = yield* db
+          .selectFrom('wishlists')
+          .selectAll()
+          .where('id', '=', id)
+          .where('ownerId', '=', ownerId)
+          .forUpdate()
+          .pipe(Effect.mapError(mapRepoError(WishlistsOperations.update)));
+
+        return yield* getSomeOrNone(row, WishlistsOperations.update);
+      });
+
+    const update: WishlistsRepositoryShape['update'] = (
+      ownerId,
+      id,
+      { description, occasionDate, title, visibility },
+    ) =>
+      Effect.gen(function* () {
+        const [row] = yield* db
+          .updateTable('wishlists')
+          .set({
+            title,
+            description,
+            occasionDate,
+            visibility,
+            updatedAt: sql`now()`,
+          })
+          .where('id', '=', id)
+          .where('ownerId', '=', ownerId)
+          .returningAll()
+          .pipe(Effect.mapError(mapRepoError(WishlistsOperations.update)));
+
+        return yield* getSomeOrNone(row, WishlistsOperations.update);
+      });
+
+    return { create, getReadableById, listOwn, lockOwnById, update };
   }),
 );

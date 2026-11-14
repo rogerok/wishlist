@@ -6,9 +6,9 @@
 
 Шаг: 3.5–3.6, изменение `add-wishlist-update-delete`, ветка `feat/wishlist-update-delete`.
 1.1 и 1.2 сделаны 2026-11-13: `checkDateWindow`, `windowMessage`, тела 403 и 400; тесты и тело 400 писал агент.
-Решение владельца: тело 400 окна несёт `id`, `min`, `max` полями (RFC 9457 extension members), а
-`makeBadRequestBody` в infra требует только `instance` и `errors`. Спека, design и proposal поправлены.
-Следующее действие: 2.1, блокировка своей строки и `update` в repository → тесты repository зелёные.
+Тело 400 окна несёт `id`, `min`, `max` полями (решение владельца, design 5).
+2.1 сделана 2026-11-14: `lockOwnById` и `update` писал владелец (практика), падающие тесты — агент.
+Следующее действие: 2.2, `delete` своей строки → тесты repository зелёные.
 
 ## Проверено
 
@@ -18,7 +18,7 @@
   полный `test` (537) и `openspec validate --strict` проходят.
 - 6.1: тестовый файл 3 раза подряд 3 passed; полный `pnpm test` 537 passed; без `TestClock.setTime` или с
   переставленными группами Upcoming/Past `prop` `occasionDate` падает, 2026-11-12.
-- 1.1–1.2 update/delete: `check-types`, `lint` чистые; `test src/modules/wishlists` 207 passed, 2026-11-13.
+- 2.1: `check-types`, `lint` чистые; `wishlists.repository.test.ts` 19 passed, 2026-11-14.
 
 ## Не проверено
 
