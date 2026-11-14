@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup } from 'effect/http-api';
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from 'effect/http-api';
 
 import { technicalHttpErrors } from '#infra/errors/technical-http-errors.js';
 import { makePageSchema } from '#infra/pagination/page.js';
@@ -60,6 +60,15 @@ export const wishlistsGroup = HttpApiGroup.make(wishlistsGroupIdentifier)
         WishlistNotFoundProblem,
         WishlistForbiddenProblem,
         WishlistOccasionDateOutOfWindowProblem,
+      ],
+    }),
+    HttpApiEndpoint.delete(WishlistsOperations.delete, wishlistsByIdPath, {
+      params: { id: WishlistIdSchema },
+      success: HttpApiSchema.NoContent,
+      error: [
+        ...technicalHttpErrors,
+        WishlistNotFoundProblem,
+        WishlistForbiddenProblem,
       ],
     }),
   )

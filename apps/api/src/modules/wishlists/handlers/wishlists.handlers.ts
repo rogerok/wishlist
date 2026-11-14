@@ -78,6 +78,21 @@ export const WishlistsHandlersLive = HttpApiBuilder.group(
               ),
             );
           }),
+        )
+        .handle(WishlistsOperations.delete, ({ params }) =>
+          Effect.gen(function* () {
+            const { user } = yield* CurrentSession;
+
+            return yield* service.deleteById(user.id, params.id).pipe(
+              Effect.catchTag(
+                'OperationFailed',
+                makeTechnicalErrorHandler({
+                  operation: WishlistsOperations.delete,
+                  meta: { targetWishlistId: params.id },
+                }),
+              ),
+            );
+          }),
         );
     }),
 );

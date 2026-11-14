@@ -62,7 +62,7 @@
 
 ## 5. HTTP DELETE
 
-- [ ] 5.1 Добавить эндпоинт `DELETE /api/wishlists/:id` с `HttpApiSchema.NoContent` и handler. HTTP-тесты: «Владелец
+- [x] 5.1 Добавить эндпоинт `DELETE /api/wishlists/:id` с `HttpApiSchema.NoContent` и handler. HTTP-тесты: «Владелец
       удаляет Wishlist», «Владелец удаляет Public Wishlist», «DELETE чужого Public Wishlist», «DELETE чужого Private
       Wishlist», «Одинаковое тело 404 для одного id при DELETE», «Повторный DELETE владельца», «Невалидный UUID» для
       DELETE, «PUT и DELETE без действующей Session» для DELETE, «Временный отказ удаления». Доказательство:

@@ -223,6 +223,20 @@ const putWishlist = (app: TestApp, cookie: string, id: string, body: unknown) =>
     }),
   );
 
+const deleteWishlist = (
+  app: TestApp,
+  cookie: string | undefined,
+  id: string,
+  query = '',
+) =>
+  send(
+    app,
+    new Request(`http://localhost/api/wishlists/${id}${query}`, {
+      method: 'DELETE',
+      headers: cookie === undefined ? {} : { cookie },
+    }),
+  );
+
 // Время сценариев PUT в спеке: окно 2026-11-11 … 2031-11-12.
 const putNow = Date.parse('2026-11-12T12:00:00Z');
 
@@ -1935,6 +1949,229 @@ describe('wishlists HTTP', () => {
             }),
           );
         });
+      });
+
+      describe('delete', () => {
+        it.effect('Владелец удаляет Wishlist', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const other = yield* acquireUser('b@example.test');
+              const target = yield* createWishlist(app, owner, minimalBody);
+              const sibling = yield* createWishlist(app, owner, fullBody);
+              const foreign = yield* createWishlist(app, other, fullBody);
+
+              const response = yield* deleteWishlist(
+                app,
+                owner.cookie,
+                target.id,
+              );
+
+              expect(response.status).toBe(204);
+              expect(yield* Effect.promise(() => response.text())).toBe('');
+              const rows = yield* selectWishlists;
+              expect(rows).toHaveLength(2);
+              expect(rows).toEqual(expect.arrayContaining([sibling, foreign]));
+            }),
+          ),
+        );
+
+        it.effect('Владелец удаляет Public Wishlist', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const target = yield* createWishlist(app, owner, {
+                ...minimalBody,
+                visibility: 'public',
+              });
+
+              const response = yield* deleteWishlist(
+                app,
+                owner.cookie,
+                target.id,
+              );
+
+              expect(response.status).toBe(204);
+              expect(yield* selectWishlists).toHaveLength(0);
+            }),
+          ),
+        );
+
+        it.effect('DELETE чужого Public Wishlist', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const other = yield* acquireUser('b@example.test');
+              const before = yield* createWishlist(app, owner, {
+                ...minimalBody,
+                visibility: 'public',
+              });
+
+              const response = yield* deleteWishlist(
+                app,
+                other.cookie,
+                before.id,
+              );
+
+              expectProblem(response, 403);
+              expect(yield* readJson(response)).toEqual(
+                forbiddenBody(before.id),
+              );
+              expect(yield* selectOnlyWishlist).toEqual(before);
+            }),
+          ),
+        );
+
+        it.effect('DELETE чужого Private Wishlist', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const other = yield* acquireUser('b@example.test');
+              const before = yield* createWishlist(app, owner, minimalBody);
+
+              const response = yield* deleteWishlist(
+                app,
+                other.cookie,
+                before.id,
+              );
+
+              expectProblem(response, 404);
+              expect(yield* readJson(response)).toEqual(
+                notFoundBody(before.id),
+              );
+              expect(yield* selectOnlyWishlist).toEqual(before);
+            }),
+          ),
+        );
+
+        it.effect('Одинаковое тело 404 для одного id при DELETE', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const sql = yield* SqlClient;
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const other = yield* acquireUser('b@example.test');
+              const hidden = yield* createWishlist(app, owner, minimalBody);
+              const hiddenBody = yield* readJson(
+                yield* deleteWishlist(app, other.cookie, hidden.id),
+              );
+              yield* sql`DELETE FROM "public"."wishlists" WHERE "id" = ${hidden.id}`;
+
+              const response = yield* deleteWishlist(
+                app,
+                other.cookie,
+                hidden.id,
+              );
+
+              expectProblem(response, 404);
+              expect(yield* readJson(response)).toEqual(hiddenBody);
+            }),
+          ),
+        );
+
+        it.effect('Повторный DELETE владельца', () =>
+          atPutNow(
+            Effect.gen(function* () {
+              const app = yield* acquireApp();
+              const owner = yield* acquireUser('a@example.test');
+              const target = yield* createWishlist(app, owner, minimalBody);
+              yield* deleteWishlist(app, owner.cookie, target.id);
+
+              const response = yield* deleteWishlist(
+                app,
+                owner.cookie,
+                target.id,
+              );
+
+              expectProblem(response, 404);
+              expect(yield* readJson(response)).toEqual(
+                notFoundBody(target.id),
+              );
+            }),
+          ),
+        );
+
+        it.effect('Невалидный UUID при DELETE', () =>
+          Effect.gen(function* () {
+            const app = yield* acquireApp();
+            const owner = yield* acquireUser('a@example.test');
+
+            const response = yield* deleteWishlist(
+              app,
+              owner.cookie,
+              'not-a-uuid',
+            );
+
+            expectProblem(response, 400);
+            expect(yield* readJson(response)).toMatchObject({
+              code: 'REQUEST_VALIDATION_FAILED',
+              instance: '/api/wishlists/not-a-uuid',
+            });
+          }),
+        );
+
+        it.effect.each(invalidCookies)(
+          'DELETE без действующей Session: 401 $name, instance без query',
+          ({ cookie }) =>
+            atPutNow(
+              Effect.gen(function* () {
+                const app = yield* acquireApp();
+                const owner = yield* acquireUser('a@example.test');
+                const before = yield* createWishlist(app, owner, minimalBody);
+
+                const response = yield* deleteWishlist(
+                  app,
+                  cookie,
+                  before.id,
+                  '?source=test',
+                );
+
+                yield* expectInvalidSession(
+                  response,
+                  `/api/wishlists/${before.id}`,
+                );
+                expect(yield* selectOnlyWishlist).toEqual(before);
+              }),
+            ),
+        );
+
+        it.effect('Временный отказ удаления: 503 без исходной ошибки', () =>
+          Effect.gen(function* () {
+            const owner = yield* acquireUser('a@example.test');
+            const id = '00000000-0000-4000-8000-0000000000aa';
+            const app = yield* acquireApp({
+              create: () => Effect.die(new Error('Unexpected call: create')),
+              getReadableById: unexpectedRead,
+              listOwn: unexpectedList,
+              update: unexpectedUpdate,
+              deleteById: () =>
+                Effect.fail(
+                  new OperationFailed({
+                    reason: 'unavailable',
+                    source: 'wishlistsRepository',
+                    operation: 'delete',
+                    cause: secret,
+                  }),
+                ),
+            });
+
+            const response = yield* deleteWishlist(app, owner.cookie, id);
+
+            expectProblem(response, 503);
+            const body = yield* readJson(response);
+            expect(body).toMatchObject({
+              code: 'SERVICE_UNAVAILABLE',
+              status: 503,
+              instance: `/api/wishlists/${id}`,
+              errorId: expect.stringMatching(/^[0-9a-f]{32}$/),
+            });
+            expect(JSON.stringify(body)).not.toContain(secret);
+          }),
+        );
       });
 
       describe('technical failures', () => {
